@@ -85,7 +85,7 @@ test('repeated bad credentials persist a temporary login lock', { skip: !connect
   }
 });
 
-test('HTTP API enrolls a synthetic shop, accepts one journal event, and revokes its bearer session', { skip: !connection }, async()=>{
+test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its bearer session', { skip: !connection }, async()=>{
   const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool); const server=createApiServer(service); const deviceId=randomUUID(); let enrollment;
   await new Promise((resolve)=>server.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -93,7 +93,10 @@ test('HTTP API enrolls a synthetic shop, accepts one journal event, and revokes 
     const health=await fetch(`${base}/health`); assert.equal(health.status,200);
     const registered=await fetch(`${base}/v1/register`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:`http-${randomUUID()}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'HTTP Owner',businessName:'HTTP Business',shopName:'HTTP Shop',deviceId,deviceLabel:'HTTP Test'})});
     assert.equal(registered.status,201); enrollment=await registered.json();
-    const event={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`ui-sale-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:0,payload:{...projectionDelta([{productId:'chai',quantity:4}]),orders:[{
+    const expenseId=randomUUID();
+    const event={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`ui-sale-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:0,payload:{...projectionDelta([{productId:'chai',quantity:4}]),expenses:[{
+      expenseId,category:'utilities',amountPaise:25050,method:'cash',status:'staff_declared'
+    }],orders:[{
       orderNumber:12,fulfillment:'GIVEN',payment:'STAFF_DECLARED',paidPaise:2000,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,
       salePosted:true,voided:false,revision:1,createdAtEpochMs:1000,
       lines:[{productId:'chai',quantity:2,deliveredQuantity:2,refundedQuantity:0,unitPricePaise:1000}]
@@ -111,8 +114,21 @@ test('HTTP API enrolls a synthetic shop, accepts one journal event, and revokes 
     assert.equal(performance.products[0].productId,'chai'); assert.equal(performance.products[0].netDeliveredUnits,2);
     assert.equal(performance.products[0].netDeliveredItemValuePaise,2000); assert.equal(performance.products[0].stockQuantity,4);
     assert.match(performance.evidence.itemValue,/not recognized profit/);
+    const activity=await fetch(`${base}/v1/dashboard/activity?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(activity.status,200); const daily=await activity.json();
+    assert.equal(daily.shopId,enrollment.shopId); assert.equal(daily.serverRevision,1);
+    assert.equal(daily.acceptedEventCount,1); assert.equal(daily.totals.staffDeclaredExpensesPaise,25050);
+    assert.deepEqual(daily.expenseCategories,[{category:'utilities',count:1,amountPaise:25050}]);
+    assert.equal(daily.daily.reduce((sum,day)=>sum+day.staffDeclaredExpensesPaise,0),25050);
+    assert.match(daily.evidence.expenses,/not a profit calculation/);
+    const duplicate=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
+    assert.equal(duplicate.status,200); assert.equal((await duplicate.json()).results[0].status,'duplicate');
+    const afterRetry=await fetch(`${base}/v1/dashboard/activity?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal((await afterRetry.json()).totals.staffDeclaredExpensesPaise,25050,'an exact event retry must not double-count expense activity');
     const wrongShop=await fetch(`${base}/v1/dashboard/overview?shopId=${randomUUID()}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(wrongShop.status,401);
+    const wrongActivityShop=await fetch(`${base}/v1/dashboard/activity?shopId=${randomUUID()}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(wrongActivityShop.status,401);
     const logout=await fetch(`${base}/v1/logout`,{method:'POST',headers:{authorization:`Bearer ${enrollment.token}`}}); assert.equal(logout.status,200);
     const denied=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[{...event,eventId:randomUUID(),commandId:`retry-${randomUUID()}`,baseRevision:1}]})});
     assert.equal(denied.status,401);

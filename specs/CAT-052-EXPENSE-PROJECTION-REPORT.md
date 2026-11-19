@@ -20,13 +20,15 @@ The owner Sales Activity API groups accepted expenses by server receipt date in 
 ## Verification
 
 - Prototype Node: 52 passed, 0 failed.
-- Backend Node: 16 passed, 0 failed, 4 PostgreSQL-dependent tests skipped.
+- Backend Node and isolated PostgreSQL integration: 20 passed, 0 failed, 0 skipped. The test database was a separate temporary PostgreSQL 17 cluster; the system service was not used. See `../test-evidence/2026-11-19/backend-postgres-tests.log`.
 - Kotlin JVM: 56 passed, 0 failed.
 - Debug APK and instrumentation APK build tasks: passed.
 - Android lint: 0 errors, 161 warnings.
+
+The PostgreSQL-backed HTTP test sends an accepted synthetic expense event, reads it through the owner activity endpoint, checks server revision, daily and category totals, verifies an exact retry remains a duplicate without increasing the aggregate, and rejects a different shop ID. The test runs with a non-superuser API role and a separate admin cleanup connection.
 - Changed JavaScript syntax checks: passed.
 
-Evidence logs: `../test-evidence/2026-11-19/prototype-current-node.log`, `backend-expense-projection-tests.log`, and `android-expense-projection-host-tests.log`.
+Evidence logs: `../test-evidence/2026-11-19/prototype-current-node.log`, `backend-expense-projection-tests.log`, `backend-postgres-tests.log`, and `android-expense-projection-host-tests.log`.
 
 The test suite explicitly verifies that notes, phone-like strings, and drawer-session links are absent from the serialized expense projection; the API accepts a valid minimal expense and rejects unknown/private fields, invalid amounts, invalid categories, and invalid tenders. Legacy v1 payloads without an `expenses` array remain valid.
 

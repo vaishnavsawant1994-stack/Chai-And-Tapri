@@ -2,11 +2,11 @@
 
 ## Superseding current-source verification — 19 November 2026
 
-The earlier note below that Android instrumentation stalled is superseded by a later full run on the same current source. `testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL**: Kotlin JVM **56/56**, Android API 37 instrumentation **89/89**, debug and test APK build tasks passed, and lint reported **0 errors / 161 warnings**. The prototype Node suite passed **52/52**; backend Node tests passed **16**, failed **0**, and skipped **4** PostgreSQL-dependent cases because `DATABASE_URL` was not configured. Changed JavaScript syntax checks passed. Total: **213 passed, 0 failed, 4 skipped** across distinct suites.
+The earlier note below that Android instrumentation stalled is superseded by a later full run on the same current source. `testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL**: Kotlin JVM **56/56**, Android API 37 instrumentation **89/89**, debug and test APK build tasks passed, and lint reported **0 errors / 161 warnings**. The prototype Node suite passed **52/52**; backend tests passed **20/20** on a separate temporary PostgreSQL 17 cluster using synthetic data and the restricted runtime role. Changed JavaScript syntax checks passed. Total: **217 passed, 0 failed** across distinct suites.
 
 The first full instrumentation attempt on this run had one receivable-projection assertion failure in `liveOrdersUdharSelectsSavedCustomerAndSettlesOrderDue`; its focused rerun passed, and the subsequent full run passed 89/89. The assertion diagnostic was improved to include both paise values. The intermittent first-run failure was not root-caused, so retain it as a stability observation rather than claiming a proven product defect or root-cause fix. Current XML: `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`; JVM XMLs: `../android/app/build/test-results/testDebugUnitTest/`; lint: `../android/app/build/reports/lint-results-debug.txt`.
 
-CAT-051B's focused maintenance-barrier test and synthetic financial restore test each passed 1/1 on current source. This does not repeat the complete SAF UI clean-install drill. Earlier same-emulator uninstall/reinstall evidence remains documented in the CAT-051B report. Low-storage and hard-interruption, hardware Keystore invalidation, second-device/person recovery, and independent review remain open. Docker's local Linux engine was unavailable, so PostgreSQL integration remains unqualified and the four DB tests were skipped.
+CAT-051B's current-source synthetic recovery was subsequently exercised through the actual Android UI on API 37: a test-generated encrypted archive was selected with SAF, authenticated and previewed, replacement was explicitly confirmed, and the app restored into a clean app installation. After creating a synthetic local owner, the app reopened the restored counter and displayed three restored orders. The focused instrumentation test for that exact rich synthetic dataset passed 1/1 and asserts cash, pending UPI, refund, credit, repayment, stock, audit, outbox and a different local key in an isolated restored store. Screenshot: `../test-evidence/2026-11-19/cat051b-current-ui-orders.png`; UI hierarchy captures are under the same ignored evidence directory. This qualifies the current-source emulator SAF restore workflow for synthetic data; it does not close destructive-failure or security-review gates. Real storage exhaustion, hard process/power interruption, hardware Keystore invalidation, separate-device/person recovery and independent review remain open. PostgreSQL integration ran against a newly initialized loopback-only temporary cluster under `test-evidence/2026-11-19/`; the laptop's existing PostgreSQL service and databases were not used. The cluster was stopped after the run. Test log: `../test-evidence/2026-11-19/backend-postgres-tests.log`.
 
 All previous statements in this file are historical unless explicitly superseded here.
 
@@ -18,13 +18,13 @@ All previous statements in this file are historical unless explicitly superseded
 | Check | Result |
 | --- | --- |
 | Prototype Node | 52 passed, 0 failed |
-| Backend Node | 16 passed, 0 failed, 4 PostgreSQL-dependent tests skipped |
+| Backend Node + isolated PostgreSQL integration | 20 passed, 0 failed, 0 skipped |
 | Kotlin JVM | 56 passed, 0 failed |
 | Debug and instrumentation APK build tasks | Passed |
 | Android lint | 0 errors, 161 warnings |
 | Changed JavaScript syntax | Passed |
-| Android API 37 full instrumentation | Not qualified on current source; full run stalled during connected tests and was stopped before final XML |
-| Focused financial restore | Not evaluated; no test runner started before emulator shell became unresponsive |
+| Android API 37 full instrumentation | 89 passed, 0 failed, 0 skipped |
+| Focused maintenance barrier / financial restore | 1/1 each passed |
 
 Evidence logs are under `../test-evidence/2026-11-19/`.
 
@@ -36,16 +36,16 @@ See `CAT-052-EXPENSE-PROJECTION-REPORT.md` and `OW-02-DAILY-SALES-ACTIVITY-REPOR
 
 ## Recovery qualification status
 
-The source contains the SAF export/restore UI, maintenance barrier, encrypted staging and restore journal. Earlier API 37 evidence documents a synthetic same-emulator uninstall/reinstall SAF backup/restore. On 19 November, an Android host build passed, but a full connected run stalled without final results. A focused write-barrier test had passed in the previous source baseline; a current focused restore invocation did not start the runner. Current-source CAT-051B is therefore not newly requalified by this audit.
+The source contains the SAF export/restore UI, maintenance barrier, encrypted staging and restore journal. On current source, a test-generated rich synthetic encrypted backup was selected via the SAF picker on API 37, authenticated, previewed, explicitly approved for replacement and restored into a clean app installation. The focused current-source financial restore instrumentation passed 1/1; after creating a synthetic local owner, the app reopened and displayed all three restored orders. The instrumentation assertions also cover cash, pending UPI, partial refund, credit, repayment, stock, audit, outbox, idempotency and new local-key material in the isolated restore store. Evidence screenshot: `../test-evidence/2026-11-19/cat051b-current-ui-orders.png`; UI hierarchy captures and the generated archive are in ignored `../test-evidence/2026-11-19/` artifacts. This is synthetic API 37 emulator qualification of the SAF restore UI path.
 
-Still open: real storage exhaustion, hard process kill/power loss and filesystem behavior, hardware-backed Keystore invalidation, second-device and second-person recovery, OEM backup behavior, independent security review, and a clean current-source financial restore run.
+Still open: real storage exhaustion, hard process kill/power loss and filesystem behavior, hardware-backed Keystore invalidation, second-device and second-person recovery, OEM backup behavior, independent security review, and production security qualification. The current-source UI drill selected and restored a test-generated archive; a new full UI-driven export followed by uninstall/reinstall was not repeated on 19 November.
 
 ## Six-wave product position
 
 - **Wave 1 recovery/security:** prototype features exist; recovery and independent security gates remain open.
 - **Wave 2 Android shopkeeper:** many connected partial workflows exist, but the full CT-01–CT-32 product and complete day-to-day operation are not qualified.
-- **Wave 3 sync:** server enrollment, journal, projections, outbox, session and worker code exist. This run skipped all four PostgreSQL integration tests; authenticated Android-to-PostgreSQL end-to-end delivery remains unqualified.
-- **Wave 4 owner dashboard:** partial overview, product performance, inventory, and sales activity with expense breakdown. Database-backed and browser visual review remain pending.
+- **Wave 3 sync:** server enrollment, journal, projections, outbox, session and worker code exist. The complete backend suite passed on an isolated temporary PostgreSQL cluster using its restricted runtime role. Authenticated Android-to-PostgreSQL end-to-end delivery remains unqualified.
+- **Wave 4 owner dashboard:** partial overview, product performance, inventory, and sales activity with expense breakdown. Synthetic PostgreSQL integration now covers accepted event projection through the activity endpoint, expense-category totals and idempotent retry. Other dashboard integrations and browser visual review remain pending.
 - **Wave 5 selling modes:** quick sale and reviewed single-utterance speech exist; continuous Bluetooth, barcode/QR and real noisy-counter reconciliation are incomplete.
 - **Wave 6 release:** physical device/field trials, independent review, deployment, operations and release qualification remain open.
 
