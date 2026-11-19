@@ -39,7 +39,9 @@ class CustomerCreditActivity : Activity() {
             content.addView(label("Customers & Udhar Ledger · CT-21/23", 24f))
             content.addView(label("Local encrypted customer records only. Repayments are staff-declared cash. Contact information is stored only with recorded consent; messaging is not available.", 14f))
             message?.let { content.addView(label(it, 14f)) }
-            val accounts = current.customerCredits().groupBy { it.customerId }.toSortedMap()
+            val allCredits = current.customerCredits()
+            val accounts = allCredits.groupBy { it.customerId }.toSortedMap()
+            val allOrders = current.allOrders()
             val profiles = current.customerProfiles().associateBy { it.customerId }
             val search = EditText(this).apply {
                 hint = "Search customer accounts"
@@ -62,6 +64,10 @@ class CustomerCreditActivity : Activity() {
                     card.addView(button("Edit profile / contact consent") { editCustomerProfile(current, profile) })
                 }
                 card.addView(label("Outstanding credit: ${money(balance)}", 17f))
+                if (balance > 0) {
+                    val oldestCreditOrder = CreditAging.oldestOutstandingOrderCreatedAt(allCredits, allOrders, customerId)
+                    card.addView(label(CreditAging.description(oldestCreditOrder, System.currentTimeMillis()), 13f))
+                }
                 entries.forEach { credit ->
                     card.addView(label("Order #${credit.orderNumber} · credit ${money(credit.amountPaise)} · repaid ${money(credit.repaidPaise)} · reversed ${money(credit.reversedPaise)} · due ${money(credit.outstandingPaise)}", 13f))
                 }

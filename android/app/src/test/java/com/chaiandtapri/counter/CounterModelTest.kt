@@ -11,6 +11,32 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 
 class CounterModelTest {
+    @Test fun creditAgingUsesOldestOpenOrderAndNeverInventsOverdueStatus() {
+        val day = 24L * 60L * 60L * 1000L
+        val now = 10L * day
+        val credits = listOf(
+            CustomerCredit("closed", "ramesh", 1, 500, 500),
+            CustomerCredit("reversed", "ramesh", 2, 400, 0, 400),
+            CustomerCredit("older-open", "ramesh", 3, 700, 200),
+            CustomerCredit("newer-open", "ramesh", 4, 900, 0),
+            CustomerCredit("other-customer", "sita", 5, 300, 0)
+        )
+        val orders = listOf(
+            CounterOrder(1, mutableListOf(), createdAtEpochMs = 2L * day),
+            CounterOrder(2, mutableListOf(), createdAtEpochMs = 1L * day),
+            CounterOrder(3, mutableListOf(), createdAtEpochMs = 4L * day),
+            CounterOrder(4, mutableListOf(), createdAtEpochMs = 8L * day),
+            CounterOrder(5, mutableListOf(), createdAtEpochMs = 0L)
+        )
+
+        val oldest = CreditAging.oldestOutstandingOrderCreatedAt(credits, orders, "ramesh")
+        assertEquals(6L, CreditAging.elapsedDays(oldest!!, now))
+        assertTrue(CreditAging.description(oldest, now).contains("Oldest open credit: 6 days since order"))
+        assertTrue(CreditAging.description(null, now).contains("Age unavailable"))
+        assertNull(CreditAging.elapsedDays(11L * day, now))
+        assertFalse(CreditAging.description(oldest, now).contains("overdue"))
+    }
+
     @Test fun nestedMaintenanceRestoresOuterLabelUntilTheWritePauseEnds() {
         assertNull(BusinessWriteBarrier.currentMaintenance())
         val result = BusinessWriteBarrier.duringMaintenance("outer snapshot") {

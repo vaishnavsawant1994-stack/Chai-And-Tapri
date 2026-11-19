@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Current Progress Audit
 
+## Superseding customer-credit slice verification — 19 November 2026
+
+CT-23 now shows age context for each customer's oldest outstanding credit order. This is elapsed time from the saved order timestamp using the device clock; the screen explicitly says there is no recorded due date and does not label balances overdue. JVM behavior tests and a focused API 37 screen test passed. Current work-session results: Node 52/52, Kotlin JVM 58/58, focused Android instrumentation 1/1, debug and test APK tasks passed, lint 0 errors / 161 warnings. A broad 90-test instrumentation rerun had 20 failures while repeated Android System UI ANR dialogs obstructed UI automation; therefore the broad suite is not qualified by this run. Full details: `CT-21-23-24-CUSTOMER-CREDIT-AGING-REPORT.md`; evidence is under ignored `../test-evidence/2026-11-19/`. This slice does not finish CT-21–24 or the product.
+
 ## Superseding current-source verification — 19 November 2026
 
 The current-source regression now includes the CT-32 owner shop-profile settings UI test. Prototype Node passed 52/52; backend tests passed 20/20 against a temporary isolated PostgreSQL 17 cluster; Kotlin JVM passed 56/56; API 37 instrumentation passed 90/90; APK tasks passed; lint reported 0 errors / 161 warnings. Total: 218 passed, 0 failed across the four distinct test suites.
