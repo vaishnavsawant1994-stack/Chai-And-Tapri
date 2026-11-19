@@ -1240,11 +1240,30 @@ class SqliteCounterPersistenceTest {
                 return names.toList()
             }
             fun clickText(text: String) {
-                var target: AccessibilityNodeInfo? = findNode(textPrefix = text)
+                val textNode = findNode(textPrefix = text)
+                var target: AccessibilityNodeInfo? = textNode
                 var clicked = false
                 while (target != null && !clicked) {
                     if (target.isClickable) clicked = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     target = target.parent
+                }
+                if (!clicked) {
+                    val bounds = android.graphics.Rect()
+                    textNode.getBoundsInScreen(bounds)
+                    if (!bounds.isEmpty) {
+                        val x = bounds.exactCenterX()
+                        val y = bounds.exactCenterY()
+                        val downTime = android.os.SystemClock.uptimeMillis()
+                        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
+                        val up = MotionEvent.obtain(downTime, downTime + 80, MotionEvent.ACTION_UP, x, y, 0)
+                        try {
+                            automation.injectInputEvent(down, true)
+                            clicked = automation.injectInputEvent(up, true)
+                        } finally {
+                            down.recycle()
+                            up.recycle()
+                        }
+                    }
                 }
                 assertTrue("Could not click $text; picker text=${visibleNames().joinToString(" | ")}", clicked)
             }
@@ -1268,10 +1287,10 @@ class SqliteCounterPersistenceTest {
             val pickerDeadline = System.currentTimeMillis() + 10_000
             while (System.currentTimeMillis() < pickerDeadline) {
                 pickerText = visibleNames().joinToString(" | ")
-                if (pickerText.contains("Files in Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true)) break
+                if (pickerText.contains("Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true)) break
                 Thread.sleep(100)
             }
-            assertTrue("CreateDocument must open in Downloads before export: $pickerText", pickerText.contains("Files in Downloads", ignoreCase = true))
+            assertTrue("CreateDocument must open in Downloads before export: $pickerText", pickerText.contains("Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true))
             val filenameField = runCatching { findNode(hintPrefix = "File name") }.getOrNull()
             filenameField?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "cat051b-saf-roundtrip-${System.currentTimeMillis()}.ctbackup")
@@ -1286,6 +1305,66 @@ class SqliteCounterPersistenceTest {
                 Thread.sleep(100)
             }
             assertTrue("The real SAF export flow should finish successfully; status=$completion", completion.startsWith("Encrypted backup created"))
+
+            // Reopen the same artifact through Android's real OpenDocument picker and
+            // complete the authenticated, explicit-replacement restore flow.
+            instrumentation.runOnMainSync { menuMethod.invoke(activity) }
+            clickText("Restore from backup")
+            var restorePicker = ""
+            val restorePickerDeadline = System.currentTimeMillis() + 15_000
+            var backupRow = ""
+            while (System.currentTimeMillis() < restorePickerDeadline) {
+                val names = visibleNames()
+                restorePicker = names.joinToString(" | ")
+                backupRow = names.firstOrNull { it.startsWith("Preview the file ", ignoreCase = true) && it.endsWith(".ctbackup", ignoreCase = true) }.orEmpty()
+                if (backupRow.isNotBlank() && restorePicker.contains("Downloads", ignoreCase = true)) break
+                Thread.sleep(100)
+            }
+            assertTrue("OpenDocument should show the newly exported archive in Downloads: $restorePicker", backupRow.isNotBlank())
+            val backupName = backupRow.removePrefix("Preview the file ")
+            clickText(backupName)
+            var pickerHasOpen = false
+            val openButtonDeadline = System.currentTimeMillis() + 10_000
+            while (System.currentTimeMillis() < openButtonDeadline) {
+                pickerHasOpen = visibleNames().any { it.equals("Open", ignoreCase = true) }
+                if (pickerHasOpen) break
+                Thread.sleep(100)
+            }
+            if (pickerHasOpen) clickText("Open")
+            setText("Recovery secret (12+ characters)", recoverySecret)
+            clickText("Continue")
+            var verificationText = ""
+            val verificationDeadline = System.currentTimeMillis() + 90_000
+            while (System.currentTimeMillis() < verificationDeadline) {
+                verificationText = visibleNames().joinToString(" | ")
+                if (verificationText.contains("Backup verified", ignoreCase = true) || verificationText.contains("Backup verification failed", ignoreCase = true)) break
+                Thread.sleep(100)
+            }
+            assertTrue("The exported archive must authenticate before replacement: $verificationText", verificationText.contains("Backup verified", ignoreCase = true))
+            clickText("Continue")
+            clickText("Replace and restore")
+            var restoreActivityFinished = false
+            var restoreFailure = ""
+            val restoreDeadline = System.currentTimeMillis() + 90_000
+            while (System.currentTimeMillis() < restoreDeadline) {
+                instrumentation.runOnMainSync {
+                    restoreActivityFinished = activity.isFinishing
+                    restoreFailure = status?.text?.toString().orEmpty().takeIf { it.startsWith("Restore failed") }.orEmpty()
+                }
+                if (restoreActivityFinished || restoreFailure.isNotEmpty()) break
+                Thread.sleep(100)
+            }
+            assertTrue("The real SAF restore should finish through the login handoff: $restoreFailure", restoreActivityFinished)
+            val restored = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            try {
+                val restoredOrder = restored.allOrders().single()
+                assertTrue("Restored order should retain the exported product", restoredOrder.lines.any { it.productId == "saf_roundtrip_tea" })
+                assertTrue("Restored order should retain its cash payment", restoredOrder.paidPaise == 3000)
+                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" })
+                assertEquals(6, restored.stockLevels()["saf_roundtrip_tea"])
+            } finally {
+                restored.close()
+            }
             instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
         } finally {
             instrumentation.runOnMainSync { if (!activity.isFinishing) activity.finish(); LocalSessionState.clear() }

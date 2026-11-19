@@ -730,3 +730,7 @@ CT-22 now displays payment and repayment history as a newest-first timeline with
 ## CAT-051B SAF export UI instrumentation - 19 November 2026
 
 The current API 37 source passed the focused UI export test (1/1). It drove the real backup menu, masked recovery-secret confirmation, Android CreateDocument picker, Downloads save, and app success state. Host ADB observed and pulled the resulting 245,884-byte synthetic encrypted-backup file; the artifact remains untracked/ignored. The exact file has not been restored or reconciled, so CAT-051B remains open. Evidence and limitations are recorded in `specs/CAT-051B-IMPLEMENTATION-REPORT.md`.
+
+## CAT-051B same-install SAF round-trip - 19 November 2026
+
+The focused API 37 UI test now passes a real export and restore from the Android Downloads picker, including recovery-secret verification and explicit replacement. It reconciles the restored synthetic order (3,000 paise cash received), payment ledger (one cash collection), and stock (six units remaining). Evidence and limitations are in `specs/CAT-051B-IMPLEMENTATION-REPORT.md`. This does not qualify clean-install recovery or complete CAT-051B.
