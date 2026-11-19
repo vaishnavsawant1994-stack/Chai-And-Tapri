@@ -1,5 +1,11 @@
 # Latest continuation — CAT-052 expense projection and OW-02 activity breakdown — 19 November 2026
 
+## Latest continuation — Current-source regression and CAT-052 expenses — 19 November 2026
+
+The current-source full Android regression completed successfully: prototype Node 52/52; backend Node 16 passed / 4 PostgreSQL-dependent skipped; Kotlin JVM 56/56; API 37 instrumentation 89/89; debug and instrumentation APK build tasks PASS; lint 0 errors / 161 warnings; changed JavaScript syntax PASS. Focused write-barrier and synthetic financial-restore tests passed 1/1 each. An earlier full Android attempt had one receivable-projection assertion failure; focused and subsequent full reruns passed, but the cause remains unknown. The full SAF UI clean-install drill was not repeated this run. CAT-051B, PostgreSQL integration, physical Bluetooth, field trials, authorized browser visual review, and the six-wave product remain incomplete. See [current audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-19.md).
+
+CAT-052 expense projection details follow.
+
 Android outbox projection now sends expense ID, normalized category, amount paise, tender method and declared status; expense notes and drawer-session links remain local. The backend accepts this optional additive v1 array and rejects unknown/private fields. Owner Sales Activity now summarizes accepted staff-declared expenses by UTC server receipt date and category without claiming profit. Verification: prototype Node 52/52, backend Node 16 pass / 4 PostgreSQL-dependent skip, Kotlin JVM 56/56, APK build tasks PASS, lint 0 errors / 161 warnings, changed JS syntax checks pass. The full Android instrumentation run stalled before result XML; the focused financial restore attempt failed to launch its runner. PostgreSQL tests and owner browser visual review remain pending. See [CAT-052 expense projection report](specs/CAT-052-EXPENSE-PROJECTION-REPORT.md), [OW-02 activity report](specs/OW-02-DAILY-SALES-ACTIVITY-REPORT.md), and [19 November audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-19.md). This is a partial source/host-tested slice, not end-to-end sync qualification.
 
 ## Previous continuation — OW-02 Daily Sales Activity — 2 November 2026

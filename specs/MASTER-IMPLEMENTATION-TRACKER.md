@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Superseding current-source verification — 19 November 2026
+
+Full Android Gradle regression completed with BUILD SUCCESSFUL: Kotlin JVM 56/56, API 37 instrumentation 89/89, APK tasks PASS, lint 0 errors / 161 warnings. Prototype Node 52/52; backend Node 16 passed / 4 PostgreSQL-dependent skipped; changed JavaScript syntax PASS. A prior full Android attempt had one receivable-projection assertion failure; focused and later full reruns passed, with cause unresolved. Focused current-source write-barrier and synthetic financial-restore tests each passed 1/1; a full SAF UI clean-install drill was not repeated. PostgreSQL integration, physical recovery failure tests, independent review and full product remain open. See `PROJECT-PROGRESS-AUDIT-2026-11-19.md`.
+
 **Updated:** 19 November 2026  
 **Authority:** Local workspace inspection and test artifacts. Historical claims in the audit remain historical; rows below describe the current implementation state.
 

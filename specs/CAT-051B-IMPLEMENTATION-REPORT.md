@@ -1,4 +1,8 @@
-﻿# CAT-051B - Backup, Restore, Recovery UI and Failure Qualification
+# CAT-051B - Backup, Restore, Recovery UI and Failure Qualification
+
+## Superseding current-source regression — 19 November 2026
+
+The later current-source full Android run completed successfully: Kotlin JVM 56/56, Android API 37 instrumentation 89/89, debug and instrumentation APK build tasks passed, lint 0 errors / 161 warnings. Current focused Android runs also passed `maintenanceBarrierRejectsAndRollsBackBusinessWritesThenReleases` (1/1) and `verifiedBackupRestoresSyntheticFinancialHistoryIntoSeparateStoreWithNewLocalKey` (1/1). The full SAF picker/export/uninstall/reinstall/restore drill was not repeated in this run; earlier same-emulator synthetic evidence remains the basis for that specific claim. This update does not close CAT-051B. Real storage exhaustion, hard process/power interruption, hardware Keystore invalidation, separate-device/person recovery, full current-source SAF UI replay and independent security review remain open. The first full instrumentation attempt had one intermittent receivable-projection assertion failure; focused and subsequent full runs passed, but its cause was not established. See `PROJECT-PROGRESS-AUDIT-2026-11-19.md`.
 
 **Date:** 29 October 2026  
 **Status:** Partial implementation; selected synthetic emulator checks pass. CAT-051B acceptance is **not complete**.

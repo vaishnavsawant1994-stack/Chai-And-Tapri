@@ -1,5 +1,15 @@
 # Chai And Tapri OS — Current Progress Audit
 
+## Superseding current-source verification — 19 November 2026
+
+The earlier note below that Android instrumentation stalled is superseded by a later full run on the same current source. `testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL**: Kotlin JVM **56/56**, Android API 37 instrumentation **89/89**, debug and test APK build tasks passed, and lint reported **0 errors / 161 warnings**. The prototype Node suite passed **52/52**; backend Node tests passed **16**, failed **0**, and skipped **4** PostgreSQL-dependent cases because `DATABASE_URL` was not configured. Changed JavaScript syntax checks passed. Total: **213 passed, 0 failed, 4 skipped** across distinct suites.
+
+The first full instrumentation attempt on this run had one receivable-projection assertion failure in `liveOrdersUdharSelectsSavedCustomerAndSettlesOrderDue`; its focused rerun passed, and the subsequent full run passed 89/89. The assertion diagnostic was improved to include both paise values. The intermittent first-run failure was not root-caused, so retain it as a stability observation rather than claiming a proven product defect or root-cause fix. Current XML: `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`; JVM XMLs: `../android/app/build/test-results/testDebugUnitTest/`; lint: `../android/app/build/reports/lint-results-debug.txt`.
+
+CAT-051B's focused maintenance-barrier test and synthetic financial restore test each passed 1/1 on current source. This does not repeat the complete SAF UI clean-install drill. Earlier same-emulator uninstall/reinstall evidence remains documented in the CAT-051B report. Low-storage and hard-interruption, hardware Keystore invalidation, second-device/person recovery, and independent review remain open. Docker's local Linux engine was unavailable, so PostgreSQL integration remains unqualified and the four DB tests were skipped.
+
+All previous statements in this file are historical unless explicitly superseded here.
+
 **Date:** 19 November 2026  
 **Scope:** Local workspace source and checks executed on this date. Not a production, independent security, or full emulator qualification.
 

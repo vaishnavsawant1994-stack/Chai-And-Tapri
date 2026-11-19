@@ -26,7 +26,8 @@ internal object CounterSnapshotIntegrity {
                 problems += "negative financial projection for order ${order.number}"
             }
             if (order.paidPaise.toLong() + order.creditPaise + order.refundedPaise > deliveredValue) problems += "order ${order.number} is over-allocated"
-            if ((creditsByOrder[order.number].orEmpty().sumOf { it.outstandingPaise }) != order.creditPaise) problems += "order ${order.number} receivable projection differs from credit ledger"
+            val ledgerReceivablePaise = creditsByOrder[order.number].orEmpty().sumOf { it.outstandingPaise }
+            if (ledgerReceivablePaise != order.creditPaise) problems += "order ${order.number} receivable projection ${order.creditPaise}p differs from credit ledger ${ledgerReceivablePaise}p"
             if ((reversalsByOrder[order.number] ?: 0) != order.creditReversedPaise) problems += "order ${order.number} credit reversal differs from ledger"
             if ((cashRefundsByOrder[order.number] ?: 0) != order.cashRefundedPaise) problems += "order ${order.number} cash refund differs from payment ledger"
             if (order.payment == Payment.UPI_PENDING && snapshot.paymentEntries.none { it.orderNumber == order.number && it.method == "upi" && it.status == "pending" }) {

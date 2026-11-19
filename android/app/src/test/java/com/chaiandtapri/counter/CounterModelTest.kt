@@ -495,7 +495,7 @@ class CounterModelTest {
             CounterSnapshotIntegrity.requireConsistent(broken)
             throw AssertionError("A mismatched receivable projection must be rejected")
         } catch (expected: IllegalStateException) {
-            assertTrue(expected.message!!.contains("receivable projection differs"))
+            assertTrue(expected.message!!.contains("receivable projection 1501p differs from credit ledger 1500p"))
         }
         assertEquals(1500, persistence.state!!.orders.single().creditPaise)
     }
