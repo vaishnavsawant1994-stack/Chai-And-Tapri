@@ -862,8 +862,8 @@ class SqliteCounterPersistence internal constructor(
             while (c.moveToNext()) repayments += CreditRepayment(c.getString(0),c.getString(1),c.getInt(2))
         }
         val paymentEntries = mutableListOf<PaymentEntry>()
-        db.rawQuery("SELECT entry_id, order_no, customer_id, amount_paise, method, status, kind, related_entry_id, drawer_session_id FROM payment_entries ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) paymentEntries += PaymentEntry(c.getString(0), if (c.isNull(1)) null else c.getInt(1), if (c.isNull(2)) null else c.getString(2), c.getInt(3), c.getString(4), c.getString(5), c.getString(6), if (c.isNull(7)) null else c.getString(7), if (c.isNull(8)) null else c.getString(8))
+        db.rawQuery("SELECT entry_id, order_no, customer_id, amount_paise, method, status, kind, related_entry_id, drawer_session_id, created_at FROM payment_entries ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) paymentEntries += PaymentEntry(c.getString(0), if (c.isNull(1)) null else c.getInt(1), if (c.isNull(2)) null else c.getString(2), c.getInt(3), c.getString(4), c.getString(5), c.getString(6), if (c.isNull(7)) null else c.getString(7), if (c.isNull(8)) null else c.getString(8), c.getLong(9))
         }
         val confirmedStock = mutableSetOf<String>()
         db.rawQuery("SELECT product_id FROM stock_baseline_confirmations", null).use { c -> while (c.moveToNext()) confirmedStock += c.getString(0) }
@@ -1034,7 +1034,7 @@ class SqliteCounterPersistence internal constructor(
             }) }
             paymentEntries.forEach { entry -> db.insertOrThrow("payment_entries", null, ContentValues().apply {
                 put("entry_id", entry.entryId); put("order_no", entry.orderNumber); put("customer_id", entry.customerId)
-                put("amount_paise", entry.amountPaise); put("method", entry.method); put("status", entry.status); put("kind", entry.kind); put("related_entry_id", entry.relatedEntryId); put("drawer_session_id", entry.drawerSessionId); put("created_at", now)
+                put("amount_paise", entry.amountPaise); put("method", entry.method); put("status", entry.status); put("kind", entry.kind); put("related_entry_id", entry.relatedEntryId); put("drawer_session_id", entry.drawerSessionId); put("created_at", entry.createdAtEpochMs.takeIf { it > 0L } ?: now)
             }) }
             insertSyncOutbox(db, commandId, now, syncPayload)
             db.setTransactionSuccessful()

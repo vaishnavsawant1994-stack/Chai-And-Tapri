@@ -722,3 +722,7 @@ After rebooting the API 37 emulator, the previously ANR-obstructed Android run p
 ## Superseding CT-22 customer detail age context — 19 November 2026
 
 CT-22 details now show age context for the oldest open credit order using the recorded order timestamp and device clock; the wording explicitly says no due date is recorded and does not claim overdue status. The directory-to-details API 37 test verifies the displayed age with a synthetic profile and receivable. Focused test 1/1 and full current-source regression passed: Node 52/52, Kotlin JVM 58/58, API 37 instrumentation 90/90, APK tasks PASS, lint 0 errors/161 warnings. Details: `specs/CT-22-CUSTOMER-DETAILS-REPORT.md`; ignored logs under `test-evidence/2026-11-19/`. Full product and hardware/security/release gates remain open.
+
+## Superseding CT-22 dated customer account timeline — 19 November 2026
+
+CT-22 now displays payment and repayment history as a newest-first timeline with local timestamps read from the existing `payment_entries.created_at` field; no migration was needed. Missing/legacy and future dates are reported unavailable. Open-credit age remains device-clock context and no due date is inferred. Current regression: Node 52/52, Kotlin JVM 59/59, API 37 instrumentation 90/90, APK tasks PASS, lint 0 errors/161 warnings; the focused directory-to-details timeline test passed 1/1. Evidence is in ignored `test-evidence/2026-11-19/ct22-customer-timeline-*`. See `specs/CT-22-CUSTOMER-DETAILS-REPORT.md`. Customer cloud history, trusted time, whole product and release qualification remain open.

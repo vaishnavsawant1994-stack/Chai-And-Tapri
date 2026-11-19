@@ -9,8 +9,24 @@ import org.junit.Test
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.Locale
+import java.util.TimeZone
 
 class CounterModelTest {
+    @Test fun customerTimelineOrdersEventsAndDoesNotInventMissingOrFutureDates() {
+        val events = listOf(
+            PaymentEntry("older", null, "c", 100, "cash", "staff_declared", "customer_repayment", createdAtEpochMs = 1_000L),
+            PaymentEntry("newer", null, "c", 200, "cash", "staff_declared", "customer_repayment", createdAtEpochMs = 2_000L),
+            PaymentEntry("legacy", null, "c", 300, "cash", "staff_declared", "customer_repayment")
+        )
+        assertEquals(listOf("newer", "older", "legacy"), CustomerTimeline.newestFirst(events).map { it.entryId })
+        assertEquals("01 Jan 1970, 00:00 (device local time)", CustomerTimeline.recordedTime(
+            1_000L, 2_000L, Locale.US, TimeZone.getTimeZone("UTC")
+        ))
+        assertEquals("Date unavailable", CustomerTimeline.recordedTime(0L, 2_000L))
+        assertEquals("Date unavailable (device clock mismatch)", CustomerTimeline.recordedTime(3_000L, 2_000L))
+    }
+
     @Test fun creditAgingUsesOldestOpenOrderAndNeverInventsOverdueStatus() {
         val day = 24L * 60L * 60L * 1000L
         val now = 10L * day

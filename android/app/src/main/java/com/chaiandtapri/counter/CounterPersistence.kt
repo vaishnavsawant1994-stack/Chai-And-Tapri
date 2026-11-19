@@ -62,7 +62,9 @@ data class PaymentEntry(
     val status: String,
     val kind: String,
     val relatedEntryId: String? = null,
-    val drawerSessionId: String? = null
+    val drawerSessionId: String? = null,
+    /** Local persistence time; zero denotes a legacy or unavailable timestamp. */
+    val createdAtEpochMs: Long = 0L
 )
 
 data class SupplierRecord(val supplierId: String, val name: String, val phone: String? = null)

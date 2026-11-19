@@ -2,7 +2,7 @@
 
 ## Superseding emulator regression and customer repayment UI — 19 November 2026
 
-After a normal emulator restart cleared the guest System UI ANR, the current-source API 37 instrumentation suite passed 90/90 with no failures, errors or skips. The earlier broad run (20/90 failures) was environmental and is retained in its own log; it is superseded by `ct23-credit-aging-final-full-instrumentation.log` and its current JUnit XML. The customer credit screen test now also drives the repayment dialog, submits a synthetic ₹5 cash repayment, and verifies the updated ₹15 balance plus a separate staff-declared ledger event; focused result 1/1. Refreshed checks: Node 52/52; Kotlin JVM 58/58; API 37 instrumentation 90/90; debug and instrumentation APK build tasks PASS; lint 0 errors / 161 warnings. The six-wave product and CAT-051B destructive/security, physical-device, field, browser-review and production gates remain open.
+After a normal emulator restart cleared the guest System UI ANR, the current-source API 37 instrumentation suite passed 90/90 with no failures, errors or skips. The earlier broad run (20/90 failures) is retained as diagnostic evidence and superseded by later clean runs. The customer credit screen test drives the repayment dialog, submits a synthetic ₹5 cash repayment, and verifies the updated ₹15 balance plus a separate staff-declared ledger event. The CT-22 detail test verifies a newest-first dated account timeline after reopening encrypted storage. Refreshed latest checks: Node 52/52; Kotlin JVM 59/59; API 37 instrumentation 90/90; debug and instrumentation APK build tasks PASS; lint 0 errors / 161 warnings. The six-wave product and CAT-051B destructive/security, physical-device, field, browser-review and production gates remain open.
 
 ## Superseding customer-credit slice verification — 19 November 2026
 
@@ -27,7 +27,7 @@ All previous statements in this file are historical unless explicitly superseded
 | --- | --- |
 | Prototype Node | 52 passed, 0 failed |
 | Backend Node + isolated PostgreSQL integration | 20 passed, 0 failed, 0 skipped |
-| Kotlin JVM | 58 passed, 0 failed |
+| Kotlin JVM | 59 passed, 0 failed |
 | Debug and instrumentation APK build tasks | Passed |
 | Android lint | 0 errors, 161 warnings |
 | Changed JavaScript syntax | Passed |

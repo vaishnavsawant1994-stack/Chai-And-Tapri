@@ -73,11 +73,12 @@ class CustomerDetailsActivity : Activity() {
                 })
                 content.addView(row, matchWidth())
             }
-            content.addView(label("Payment and repayment events", 18f))
+            content.addView(label("Account timeline · newest first; dates use device local time", 18f))
             if (events.isEmpty()) content.addView(label("No payment events are recorded for this account.", 14f))
-            events.forEach { event ->
+            CustomerTimeline.newestFirst(events).forEach { event ->
+                val recordedTime = CustomerTimeline.recordedTime(event.createdAtEpochMs)
                 content.addView(label(
-                    "${event.kind} / ${event.method.uppercase(Locale.ROOT)} / ${money(event.amountPaise)} / ${event.status}" +
+                    "$recordedTime / ${event.kind} / ${event.method.uppercase(Locale.ROOT)} / ${money(event.amountPaise)} / ${event.status}" +
                         (event.orderNumber?.let { " / order #$it" } ?: ""), 14f
                 ))
             }
