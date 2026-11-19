@@ -1,0 +1,3 @@
+﻿# scenario	total_paise	refund_paise	net_cash_paise	open_credit_paise	customer_balance_paise	refunded_total_paise	order_payment	chai_stock_delta	samosa_stock_delta	cash_refund_ledger	credit_reversal_ledger	receivable_reversed_paise
+multi_item_partial_return	3000	2000	1000	0	0	2000	STAFF_DECLARED	-1	0	-500	-1500	1500
+upi_pending_cancel_return	2000	2000	0	0	0	2000	CANCELLED	-2	0	0	0	0

@@ -1,0 +1,700 @@
+# Latest continuation — CAT-052 expense projection and OW-02 activity breakdown — 19 November 2026
+
+Android outbox projection now sends expense ID, normalized category, amount paise, tender method and declared status; expense notes and drawer-session links remain local. The backend accepts this optional additive v1 array and rejects unknown/private fields. Owner Sales Activity now summarizes accepted staff-declared expenses by UTC server receipt date and category without claiming profit. Verification: prototype Node 52/52, backend Node 16 pass / 4 PostgreSQL-dependent skip, Kotlin JVM 56/56, APK build tasks PASS, lint 0 errors / 161 warnings, changed JS syntax checks pass. The full Android instrumentation run stalled before result XML; the focused financial restore attempt failed to launch its runner. PostgreSQL tests and owner browser visual review remain pending. See [CAT-052 expense projection report](specs/CAT-052-EXPENSE-PROJECTION-REPORT.md), [OW-02 activity report](specs/OW-02-DAILY-SALES-ACTIVITY-REPORT.md), and [19 November audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-19.md). This is a partial source/host-tested slice, not end-to-end sync qualification.
+
+## Previous continuation — OW-02 Daily Sales Activity — 2 November 2026
+
+Added owner-only `/v1/dashboard/activity` for 7/30/90 UTC-day projections plus an owner-web Sales Activity view. It reconstructs accepted order state before the range, reports net delivered-item value changes and separately labels staff-declared tenders and pending-UPI attempts. It does not claim profit, verified payment, or current pending balance. Current backend suite: 15 passed, 0 failed, 4 PostgreSQL-dependent skipped; evidence is `test-evidence/2026-11-02/ow02-backend-node-tests.log`. PostgreSQL integration and browser visual qualification remain open; temporary-cluster setup was rejected before execution, leaving the existing database untouched. See `specs/OW-02-DAILY-SALES-ACTIVITY-REPORT.md`. The full product remains incomplete.
+
+## Previous continuation — OW-06 Inventory Snapshot — 2 November 2026
+
+Added the authenticated owner-only Inventory Snapshot API and owner-web tab. It displays latest accepted per-product stock state, recent deduplicated movements and source revisions; known, unknown and unreported quantities remain separate. The sync contract does not carry unit metadata, so product quantities are not added or compared across IDs. The UI does not infer low stock, reorder amounts, losses or profit. Backend Node tests passed 13/13 with 4 PostgreSQL-dependent tests skipped; Node syntax checks passed. PostgreSQL-backed integration and browser visual qualification remain open. See [OW-06 report](specs/OW-06-INVENTORY-SNAPSHOT-REPORT.md). The entire six-wave product remains incomplete.
+
+## Current Android continuation — CT-09 open-order item addition — 2 November 2026
+
+Order Details now lets authenticated operators add an owner-confirmed catalogue item with canonical pricing, quantity confirmation, a unique command ID, order revision checking, and an actor-attributed audit event. This does not hand over the item, post a payment, or move stock. Focused API 37 regression passed 1/1; see [CT-09 evidence](test-evidence/2026-11-02/ct09-order-item-add-focused.xml). The latest full 89-case API 37 run passed 87 and hit two 45-second `startActivitySync` timeouts (Device Permissions and Cloud Sync); both screens subsequently passed focused tests 1/1. Split cash/Udhar and Quick Sale dialog tests also passed individually after coordinate-based timing fixes with archived XML. Current checks: prototype Node 52/52; Kotlin JVM 56/56; backend 13 passed / 4 PostgreSQL-dependent skipped; debug/instrumentation APK and lint tasks pass; lint 0 errors / 161 warnings. Full Android suite stability remains unqualified. See [current verification record](test-evidence/2026-11-02/ct09-add-item-android-verification.md). CT-09 and the six-wave product remain partial; recovery/security, sync, hardware, field and release qualification remain open.
+
+## Historical CT-09 audited unhanded-line correction — 2 November 2026
+
+Order Details now lets managers/owners remove an unhanded quantity from an open order through the existing revision-checked transaction command. The screen requires confirmation and says prior handovers, payments and stock movements remain unchanged. SQLCipher rejects direct cashier removal commands; the accepted correction creates an actor-attributed audit event. The API 37 UI test exercises the actual button and dialog, and the updated full suite passes 88/88. Current checks: Node 52/52, Kotlin JVM 56/56, backend 11 passed / 4 PostgreSQL-dependent skipped, debug/instrumentation APK builds PASS, lint 0 errors / 161 warnings. See [CT-09 report](specs/CT-09-ORDER-DETAILS-REPORT.md), [JUnit XML](test-evidence/2026-11-02/ct09-order-line-correction-full-instrumentation.xml), and [Gradle log](test-evidence/2026-11-02/ct09-order-line-correction-full-gradle.log). CT-09 and the six-wave product remain partial; full correction workflows, recovery/security, sync, hardware, field and release qualification remain open.
+
+## Historical continuation — direct customer-profile authorization — 2 November 2026
+
+Customer profile create/update writes require an authenticated manager or owner at the persistence layer. That run passed Node 52/52, Kotlin JVM 56/56, Android API 37 instrumentation 87/87, backend 11 passed / 4 PostgreSQL-dependent skipped; APK builds PASS; lint 0 errors / 161 warnings. It was superseded by the 88-case CT-09 regression above. Details: [CT-03 report](specs/CT-03-STAFF-ACCESS-REPORT.md) and [prior run evidence](test-evidence/2026-11-02/ct03-manager-customer-profile-full-gradle.log). CT-03 remains a local prototype; comprehensive authorization, session revocation and privacy review remain open.
+
+## Historical latest continuation — CT-03 local staff access — 2 November 2026
+
+CT-03 now stores the authenticated local actor ID on shared business-command audit records. SQLCipher schema v25 adds nullable `audit_events.actor_id`; v24 history is preserved with null actor values. Tests verify cashier-attributed sale audit data survives encrypted reopen and legacy schema migration preserves old audit records. Current tests: Node 52/52, Kotlin JVM 56/56, Android instrumentation 87/87, backend 11 passed / 4 PostgreSQL-dependent skipped; debug and instrumentation APK builds passed, lint 0 errors / 161 warnings. Actor attribution still does not cover all direct persistence/admin events or remote identity; session timeout and server-side revocation remain open. See [CT-03 staff access report](specs/CT-03-STAFF-ACCESS-REPORT.md), [actor verification](test-evidence/2026-11-02/ct03-actor-attribution-verification.md), and tracker.
+
+Current audit: [2 November project progress audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-02.md).
+
+Current-source recovery was rechecked against the API 37 JUnit report: all 83 full-suite instrumentation cases passed, including deterministic export/restore failure and journal recovery scenarios. An additional focused cashier UI instrumentation case passed 1/1. Same-emulator SAF uninstall/reinstall recovery evidence remains at the synthetic scope documented in [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md); physical key loss, real low-storage/power-loss, second-device/person and independent-review gates remain open. Evidence: `test-evidence/2026-11-02/ct03-staff-full-instrumentation.xml` and `test-evidence/2026-11-02/ct03-staff-login-ui-focused.xml`.
+
+## Historical verification — supplier contact slice — superseded 2 November 2026
+
+This 81/81 result was superseded by the CT-03 owner and staff access continuations above, which passed the full Android API 37 suite at 83/83. Supplier migration/UI behavior remains covered. Current Android evidence: `test-evidence/2026-11-02/ct03-staff-full-instrumentation.xml`.
+
+## Latest full verification — 1 November 2026
+
+The current local source passes Node 52/52, Kotlin JVM 56/56, and API 37 Android instrumentation 80/80. Debug and instrumentation APK builds pass; lint reports 0 errors and 155 warnings. Backend tests report 11 passed and 4 PostgreSQL-dependent cases skipped because no test database was configured. The complete current-source instrumentation JUnit result is `test-evidence/2026-11-01/ct19-20-current-full-instrumentation.xml`; the 80 tests passed with no failures, errors, or skips. The full product remains incomplete: recovery still has hardware/security gates, Wave 2 screens are partial, authenticated Android-to-PostgreSQL sync is not end-to-end qualified, and owner screens OW-02 onward, continuous Bluetooth, barcode and field/release qualification remain outstanding. See `specs/PROJECT-PROGRESS-AUDIT-2026-11-01.md` and `specs/MASTER-IMPLEMENTATION-TRACKER.md`.
+
+## Superseding continuation - OW-05 product performance - 1 November 2026
+
+Wave 4 now has two partial owner views: OW-01 overview and OW-05 Product Performance. OW-05 uses an owner-authenticated endpoint over accepted sync events, keeps product units separate, subtracts returned quantities, excludes voided/unposted orders, distinguishes unknown/unreported stock, and discloses that accepted sync history is incomplete and item value is not profit. Isolated synthetic PostgreSQL backend tests: 15/15 passed, 0 failed/skipped. The dashboard JavaScript syntax and HTTP route/static tests passed. Browser visual review and Android-to-server runtime integration were not performed. OW-02 through OW-04 and OW-06 through OW-20 remain outstanding. Details: `specs/OW-05-PRODUCT-PERFORMANCE-REPORT.md`.
+## Superseding continuation - CT-29 local report export - 1 November 2026
+
+The CT-29 Daily Reports screen now offers an Android Storage Access Framework CSV export. The CSV is generated from a fresh local SQLCipher snapshot, identifies its lifetime/local scope, distinguishes cash declared by staff from pending UPI, and protects text cells from spreadsheet formula injection. Kotlin JVM 50/50 passed; debug and instrumentation APK build tasks passed; lint 0 errors/146 warnings. ADB has no connected device, so the picker and destination-write flow are not yet emulator-qualified. CT-29 remains partial: no trusted date filters, profit, tax export or complete business reporting. Evidence: `specs/CT-29-CSV-EXPORT-REPORT.md` and `test-evidence/2026-11-01/ct29-csv-export-gradle-final.log`.
+## Superseding continuation - Wave 4 OW-01 owner overview - 1 November 2026
+
+Implemented a same-origin, owner-authenticated web overview backed by accepted server journal events. The API and dashboard are a limited projection, not complete accounting: customer credit, expenses, supplier records, shifts, offline/blocked events and profit are excluded. `/owner` redirects to `/owner/`. A fresh isolated synthetic PostgreSQL 17 backend rerun passed 13/13 (0 failed, 0 skipped), including route, authentication, tenant and event tests. Current source results: prototype Node 52/52; Kotlin JVM 48/48; Android debug and instrumentation APK build tasks PASS; lint 0 errors / 141 warnings. ADB has no connected device, so the latest Android UI edits are not emulator-qualified. OW-02 through OW-20, visual review, full sync qualification and the six-wave product remain incomplete. Evidence: `specs/OW-01-OVERVIEW-REPORT.md`, `test-evidence/2026-11-01/cat052-owner-route-backend.log`, and `test-evidence/2026-11-01/owner-overview-android-gradle.log`.
+## Wave 4 first slice — OW-01 owner overview — 1 November 2026
+
+Added an authenticated read-only overview API over accepted sync events and a responsive same-origin web screen. It distinguishes delivered item value, staff-declared cash, staff-declared UPI, pending UPI, and stock counts; excludes blocked/unsynced records and customer-linked credit; and does not report profit. Isolated PostgreSQL 17 backend suite: 13/13 passed, including end-to-end synthetic order/payment submission followed by owner overview, wrong-shop denial, RLS and logout. Node 52/52; Kotlin JVM 48/48; APK build tasks PASS; lint 0 errors/141 warnings. The new Android identifier display compiles but awaits emulator runtime because ADB has no device. See [OW-01 report](specs/OW-01-OVERVIEW-REPORT.md) and [tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md). This is the first Wave 4 slice; owner dashboard, sync and full product remain incomplete.
+
+## Current-source continuation — maintenance barrier safety — 1 November 2026
+
+Fixed nested backup/restore maintenance state so an inner maintenance helper restores its outer label until the outer write pause exits. Initial listener callback errors are now contained like subsequent observer errors. JVM tests cover nested operations, action failure, observer failure and write resumption. Node 52/52; Kotlin JVM 48/48; debug/test APK tasks PASS; lint 0 errors/141 warnings. Connected Android tests are blocked because ADB reports no device; prior full API 37 run 75/75 predates the current source. Details: [master tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md), [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md), 	est-evidence/2026-11-01/cat051b-barrier-gradle.log. Project remains incomplete and not production-qualified.
+
+## Current-source continuation — CT-09 audit timeline and SAF export cleanup — 1 November 2026
+
+Added persisted device-local timestamps to Order Details audit entries, with an explicit caveat that device time can be inaccurate and is not server-verified. SAF export now attempts to delete a partial destination after a failed write, and warns when the provider cannot remove it. Latest source checks: Node 52/52; Kotlin JVM 46/46; debug/instrumentation APK build tasks PASS; lint 0 errors/141 warnings. The API 37 emulator was unavailable to ADB, so the last full instrumentation result (75/75) predates these UI changes. Neither change is current-source emulator-qualified. Evidence and scope are in [CT-09 report](specs/CT-09-ORDER-DETAILS-REPORT.md), [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md), and 	est-evidence/2026-11-01/ct09-audit-timeline-gradle.log. The overall project remains incomplete; backup recovery/security gates, most planned shop workflows, continuous Bluetooth, field testing, independent review, authenticated sync and the owner dashboard remain open.
+
+# Chai And Tapri OS ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Product and Delivery Plan
+
+**Latest continuation â€” 29 October 2026:** CT-25 now has a manually submitted synthetic expense verified across app process restart. CT-26 Cash Register is implemented as a partial local session workflow in SQLCipher schema v12, with session-linked cash events, counted close and unresolved variance. Latest complete verification: Node 48/48, Kotlin JVM 28/28, Android API 37 instrumentation 20/20 (96 total), APK builds PASS, lint 0 errors / 73 warnings. CT-26 manual open/count/close was exercised on the emulator. This does not complete CT-27 shifts, CT-28 daily closing, the MVP, recovery acceptance, backend/sync, owner dashboard, continuous Bluetooth or real-shop qualification. See [CT-26 report](specs/CT-26-CASH-REGISTER-REPORT.md).
+**Superseding continuation â€” CT-28 session closing review:** Added a native close review that reports only selected closed-session cash records and separately lists current shop exceptions. Review acknowledgement persists in SQLCipher schema v13 and survives process restart. Latest full verification: Node 48/48, Kotlin JVM 28/28, Android API 37 instrumentation 21/21 (97 total), APK builds PASS, lint 0 errors / 74 warnings. The API 37 emulator UI was manually used to acknowledge a synthetic â‚¹50 balanced session and the acknowledgment survived force-stop/relaunch. This is not calendar-day accounting or production closing; CT-27 shifts and accurate day attribution remain open. See [CT-28 report](specs/CT-28-DAILY-CLOSING-REPORT.md).
+
+**Latest continuation â€” CT-27 staff shifts:** Added a native local shift/handover workflow tied atomically to the cash drawer. Staff labels are operator-entered, not authenticated identities; the summary only attributes cash events linked to that drawer. SQLCipher schema v14 adds shift and receiving-label/note fields; v13â†’v14 is additive, v8 migration and encrypted backup restore preserve them. Latest full verification: Node 48/48, Kotlin JVM 28/28, API 37 instrumentation 22/22 (98 total), debug/instrumentation APK builds PASS, lint 0 errors / 75 warnings. Emulator start/count/handover and force-stop/relaunch were manually exercised with synthetic data. CT-27 remains partial; real staff authentication, comprehensive action attribution, multiple registers, calendar-day closing, recovery fault gates, sync/backend, owner dashboard, continuous Bluetooth, physical/field trials, independent security review and production readiness remain open. See [CT-27 report](specs/CT-27-STAFF-SHIFTS-REPORT.md).
+
+**Planning baseline:** 28 October 2026
+**Status (29 October 2026, superseding run):** The current Android slice includes CT-01/02, partial CT-05/06/08-11/13-16, including audited physical stock confirmation, a partial CT-15 overview, a read-only CT-09 detail flow, and partial CT-10 partial cash/Udhar entry. Latest verification: Node 48/48, Kotlin JVM 23/23, Android instrumentation 14/14 (85 total), debug/instrumentation APK builds PASS, lint 0 errors/62 warnings. This supersedes older test counts below. Starter prices remain examples until owner confirmation; unconfirmed stock cannot be sold through strict configured flows. CAT-051B remains partial. Cross-profile/device recovery, low-storage/hard interruption, broader Keystore-loss paths, staff authentication, independent security review and most shop workflows are not qualified. Purchases/receiving, authenticated sync, owner dashboard, continuous Bluetooth and real-shop trials remain pending. See [shop setup report](specs/CT-01-02-IMPLEMENTATION-REPORT.md), [catalogue report](specs/CT-13-14-CATALOGUE-REPORT.md), [CT-09 report](specs/CT-09-ORDER-DETAILS-REPORT.md), [CT-10 report](specs/CT-10-PARTIAL-PAYMENT-UI-REPORT.md), [CT-15/16 report](specs/CT-15-16-OPENING-STOCK-REPORT.md), [CAT-06 report](specs/CT-06-NATIVE-QUICK-SALE-REPORT.md), [CT-08/10 report](specs/CT-08-10-LIVE-ORDERS-REPORT.md), [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md), and [Phase 0 report](specs/PHASE-0-QUALIFICATION-REPORT.md).
+**Latest continuation (supersedes the preceding status line):** CT-21/23/24 now has a partial local customer-credit ledger with persisted balances, repayment events, and cash-repayment entry. Latest full verification: Node 48/48, Kotlin JVM 23/23, API 37 instrumentation 15/15 (86 total), APK tasks PASS, lint 0 errors / 63 warnings. Credit ledger screen rendering is instrumentation-tested; its repayment dialog has not been manually entered. See [customer credit report](specs/CT-21-23-24-CUSTOMER-CREDIT-REPORT.md).
+**Source:** User-provided ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“Chai And Tapri OS Master Product Blueprint ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Version 1.0ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â (894 lines), plus the follow-up discussion defining broad tapri formats, zero-queue sales, and Mode B2 Continuous Bluetooth Voice Counter.
+
+**Implementation specification reviewed:** CAT-ARCH-001 v1.1 (28 October 2026). Its CT-06-first recommendation has been expanded into [the Quick Sale screen and transaction specification](specs/CT-06-QUICK-SALE.md).
+
+**Phase 0 work started:** [CT-06 browser prototype](prototype/index.html) with its [design notes and run guide](prototype/README.md). It uses local browser storage for demonstration only; it is not the Android app, production accounting engine, encrypted offline store, or cloud sync service.
+
+**Latest implementation update (1 November 2026):** CT-18 receipts support an optional, manually entered supplier invoice reference, saved in encrypted SQLite schema v22, included in audit history and checked for duplicate references per supplier. Node 52/52 and Kotlin JVM 55/55 pass; focused API 37 migration and procurement UI tests pass 1/1 each. Debug APKs build and lint passes (0 errors / 154 warnings). The full 77-case Android instrumentation attempt had 14 failures after Pixel Launcher/System UI ANRs; the suite is not green. See [CT-18 report](specs/CT-18-SUPPLIER-INVOICE-REFERENCE-REPORT.md). This reference string is not invoice OCR or supplier verification. CAT-051B recovery/security, complete sync, most Android screens, owner dashboards, Bluetooth hardware/field testing and release readiness remain open.
+
+**Counter foundation:** CT-06 now routes draft and sale actions through [a deterministic transaction engine](prototype/transaction-engine.js). CAT-043/044 checks are documented in code-level behavior and covered by Node tests. CT-07 has a [typed-command queue specification](specs/CT-07-CONTINUOUS-VOICE-COUNTER.md) and a text-only command preview that uses the same engine.
+
+**Audit record:** [CAT-043 CT-06 functional audit](specs/CAT-043-CT06-AUDIT.md) records findings, test coverage, known limitations, and the remaining visual/field-validation gate.
+
+**Transaction states:** [Formal order/payment contract](specs/TRANSACTION-STATES.md) now defines separate fulfillment and payment states, partial handover, partial collections, credit repayment, UPI pending, and audited reversal behavior.
+
+**Speech input:** [CAT-048 browser speech spike](specs/CAT-048-SPEECH-INPUT.md) transcribes a single utterance into the existing reviewed command field. It does not execute recognized commands automatically and does not implement continuous listening or Bluetooth.
+
+**Speech qualification preparation:** [CAT-048B/C device and noise trial protocol](specs/CAT-048-DEVICE-AND-NOISE-TRIALS.md) and its fixture-tested JSONL validator are ready; no physical-device or shop trials have been recorded. [CAT-049 Android Bluetooth prototype](specs/CAT-049-ANDROID-BLUETOOTH-SPIKE.md) now has a user-reviewed single-utterance microphone flow and Bluetooth communication-route selection. Actual headset microphone input and device validation remain unverified.
+
+**CAT-049A build gate:** The [CAT-049A report](specs/CAT-049A-ANDROID-BUILD-STATUS.md) contains the historical pre-WHPX diagnosis and the superseding post-restart emulator qualification. The API 37 AVD is available; see the current CAT-050 instrumentation results in the [Phase 0 report](specs/PHASE-0-QUALIFICATION-REPORT.md).
+
+## 1. Executive direction
+
+Build an Android-first, offline-first operating system for owner-operated Indian chai, paan, snack, and convenience shops. It should capture ordinary counter activity quickly, then use those records to support inventory, purchases, customer credit, cash control, closing, and useful reports.
+
+**Product promise:** ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“Dukaan chalao, hisaab apne aap banta rahe.ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â (Run your shop while the system keeps the business records up to date.) This is a design goal, not a promise of automatic or complete records: the product must show what was recorded, confirmed, estimated, or left unresolved.
+
+**Flagship hypothesis:** A shopkeeper can keep a structured, auditable order register using a mix of one-tap input and an explicitly started Bluetooth voice session, without disrupting service. The differentiator to test is the combination of live multi-order handling, fulfillment and payment separation, offline records, and connected shop managementÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Ânot voice billing alone.
+
+**Recommended first customer:** one-location, owner-operated chai/snack or paan/convenience counter with a busy service window, using an Android phone and currently relying on memory, a notebook, calculator, or payment soundbox. Begin with one local market and a small, diverse pilot cohort; do not build for every shop format at once.
+
+## 2. Product principles
+
+1. **Keep the queue moving.** Common sales should take one or two deliberate actions after setup; the fallback is always visible.
+2. **Work offline.** Capture supported sales and operational records locally and sync safely later.
+3. **Keep numbers explainable.** Sales, collections, purchases, expenses, stock, receivables, payables, and profit are different facts.
+4. **Do not guess consequential actions.** Voice proposes a typed command; deterministic rules validate it; the authorized user confirms when needed.
+5. **Make correction safe.** Reversal and adjustment events preserve history and show who changed what and why.
+6. **Start simple and grow by evidence.** The counter is the first product surface; deeper management features stay out of its way.
+7. **Respect shop and customer context.** No customer identity is required for ordinary walk-in sales; language, device, connectivity, staff skills, and local rules matter.
+
+## 3. Product scope and release boundaries
+
+The master blueprint lists 28 modules and 52 screens. Treat that as a destination map, not an MVP checklist. A first usable product should be narrower than the blueprintÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s broad ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“MVPÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â tags.
+
+### Release 0 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Discovery and workflow specification
+
+- Observe actual counter work, opening/closing, purchases, udhar, payment verification, and stock counts.
+- Define a small set of shop archetypes and select the initial segment from evidence.
+- Map current workflows and exceptions; establish baseline measurements before proposing automation.
+- Resolve first-market language, Android device range, shop connectivity, and staff setup assumptions.
+- Produce screen flows, a command grammar, transaction rules, data dictionary, privacy plan, and pilot protocol.
+
+### Release 1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Counter proof of concept
+
+- Shop/product setup with configurable aliases and quick-sale tiles.
+- One-tap sale and a live order queue with multiple open orders.
+- Order status and payment status modeled independently.
+- Explicit staff-declared payment records (cash received, UPI pending, etc.); do not label UPI verified without provider evidence.
+- Bluetooth headset routing/session spike; push-to-talk and touch fallback.
+- Structured voice drafts for a deliberately limited command set, followed by deterministic validation and clear confirmation.
+- Local durable storage, unique operation IDs, retry-safe sync proof, and auditable correction path.
+- Sales register showing source, actor, timestamps, and record confidence/status.
+
+**Exit gate:** Real shopkeepers can complete representative orders with acceptable speed and low harmful error rates; core flows survive airplane mode, app restart, Bluetooth loss, and sync retry without losing or duplicating transactions. If B2 fails its gate, release the reliable tap/scan/manual workflow and keep B2 as a research track.
+
+### Release 2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Minimum viable shop operations
+
+- Android shop app: onboarding, products/units, tap/scan/quick voice sales, basic live orders, sale history and corrections.
+- Basic stock ledger, opening stock, purchase receipt, stock count/adjustment, supplier directory and simple outstanding balance.
+- Cash/UPI-declared/split/credit payment records, customer udhar and repayments, expenses, opening cash, closing cash count.
+- Daily closing that separates verified/recorded/estimated/unresolved data and never silently forces a balance.
+- Basic reports: recorded sales, collections by method, refunds, expenses, stock movements, customer balances, supplier dues. Gross margin only where cost data is adequate; operating profit only where expense coverage is adequate.
+- Encrypted local data, role/PIN controls appropriate to the pilot, backup/export and support diagnostics.
+
+### Release 3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Complete single-shop operations
+
+- Purchase bills, returns/credit notes, purchase-rate history, unit conversions, expiry/lot tracking where needed.
+- Food recipes and production/waste accounting with explicit prevention of double stock deduction.
+- Staff roles/shifts/handover, enhanced cash drawer, richer reports and accountant export.
+- Notifications, audited approvals, document capture as a draft requiring human review.
+
+### Release 4 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Intelligence and integrations
+
+- Owner AI for grounded explanations, summaries, and forecasts with source links and missing-data disclosure.
+- Assisted reorder proposals and invoice extraction; user reviews before posting or sending.
+- Evaluate and integrate authorized merchant payment-provider events; matching remains a reconciliation workflow.
+- Improve language coverage and B2 based on measured error/latency/cost data.
+
+### Release 5 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Multi-shop and ecosystem
+
+- Multi-outlet permissions, transfers, consolidated reports, supplier portal, optional customer-facing food services, and integrations.
+- Add only when single-shop data integrity, sync and support are stable.
+
+## 4. Core counter workflow and transaction contract
+
+### Order lifecycle
+
+`Taken ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Preparing ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Ready ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Given` with `Cancelled` as a reasoned terminal event. Some shops may skip preparation states. Partial preparation/handover must be supported only if pilot research shows it is common enough to justify the additional complexity.
+
+### Payment lifecycle (independent of fulfillment)
+
+Represent one or more allocations per order. Useful states include `Unpaid`, `Partially paid`, `Staff-declared cash`, `UPI pending`, `Provider-verified`, `Credit (udhar)`, `Refund pending/refunded`, and `Disputed/unresolved`. A manual UPI declaration is not provider verification. A payment received is not evidence of which product was sold.
+
+### Voice command processing
+
+Audio session (explicitly started) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ speech hypotheses ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ structured command draft ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ resolve shop aliases/order context ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ validate item, quantity, price, permission and transition ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ask for clarification/confirmation when ambiguous or sensitive ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ append transaction event atomically ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ update projections/order queue ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ brief acknowledgment.
+
+Keep raw audio/transcripts only when necessary and consented; default to transient command processing and retain structured audit data, not ambient conversations. If recognition fails or confidence is low, leave business data unchanged and offer a tap fallback.
+
+### Minimum event envelope
+
+Every committed business action should carry: globally unique operation/event ID; business/shop/device/user/shift IDs; event type and schema version; effective and recorded timestamps; source (tap, scan, voice, import, provider, reconciliation); idempotency key; references to order/payment/stock lot as appropriate; confirmation/evidence classification; and reversal/supersession reference when corrected.
+
+Avoid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“latest edit winsÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â for financial or stock conflicts. Build append-only events and explicit conflict states; define domain-specific resolution rules before multi-device stock editing is released.
+
+## 5. Reporting definitions and trust model
+
+- **Recorded sales:** committed sales events less recorded returns/discounts under the chosen tax treatment.
+- **Collections:** money received/declared, grouped by method and evidence; not interchangeable with sales.
+- **Credit outstanding:** credit entries less repayments/adjustments.
+- **Purchases/payables:** received stock and supplier invoices; settlement of an existing payable is cash outflow, not a second purchase.
+- **Stock:** opening balance plus receipts and adjustments less sales/consumption/returns/transfers, with uncounted/estimated status exposed.
+- **Gross profit:** net sales less cost of goods sold only where unit cost/recipe coverage is sufficient.
+- **Operating profit:** gross profit less recorded operating expenses; present completeness and exclusions.
+- **Cash close:** opening cash + cash received ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ cash paid out ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ cash removed; compare expected and physically counted cash, retain the difference as unresolved until explained.
+- **Verified / recorded / estimated / unresolved:** use consistent labels in sales, payments, stock and reports. Do not present a reconstructed sales number as fact.
+
+## 6. Technical direction to validate
+
+Use a modular monolith initially, with clear domain boundaries and an API contract that can evolve. Avoid premature microservices.
+
+- **Counter:** native Android (Kotlin/Compose is a candidate) with a local database, durable outbox, migrations, and explicit foreground voice session controls.
+- **Backend:** API/service layer plus PostgreSQL (or equivalent relational store) with tenant/shop isolation, append-only financial/stock events, idempotent writes and audit access.
+- **Owner interface:** mobile-friendly web dashboard after counter needs are validated.
+- **Sync:** local source of truth for the shop device; durable queued writes, retry, deduplication, sync status, server acknowledgements, and tested backup/restore. Specify which operations are safe offline and how multi-device conflicts are surfaced.
+- **Voice:** benchmark on-device, cloud streaming, and hybrid recognition. AndroidÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s standard `SpeechRecognizer` docs say it is not intended for continuous recognition; B2 therefore needs a dedicated feasibility and power/background-policy spike. Do not promise continuous listening across arbitrary headsets/devices.
+- **AI boundary:** model outputs typed proposals only. Domain services authorize and validate every state-changing command.
+- **Payments:** initial manual classification. Provider-confirmed payments require an authorized merchant/provider integration and evidence model.
+- **Observability:** sync backlog/failure, duplicate prevention, voice latency/error classes, app crashes, battery impact, data recovery, and audit events. Minimize sensitive payloads in logs.
+
+Technology choices (backend framework, hosting, speech vendor, encryption library, payment provider) remain open until team capability, pilot devices, cost, and data residency/security needs are known.
+
+## 7. Discovery research plan
+
+Recruit an initial 12ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ20 shops as a research target, not a fixed statistical sample: chai stalls, paan/convenience counters, snack/food outlets, at least two shop sizes, more than one shift pattern, and varied phone/headset/connectivity conditions. Do not collect customer audio or personal data during observation unless specifically necessary and consented.
+
+### Research activities
+
+1. Observe opening, peak-hour sales, slower periods, supplier deliveries, credit handling, closing, and stock counts.
+2. Record transaction archetypes and exceptions: one item, mixed basket, repeated item, split payment, unpaid order, order amendment, cancellation/refund, udhar, and bulk sale.
+3. Measure existing methods and baseline time, missed records, reconciliation effort, and willingness to adopt.
+4. Test whether a headset is practical/safe in each environment; identify noise, customer privacy, staff communication, battery and phone-use constraints.
+5. Test local words, aliases, Hindi/Marathi/Hinglish code switching, quantities, number forms, order references, and correction phrases with consented scripted tasks.
+6. Ask what information owners act on and what they currently trust; validate pricing only after value and support costs are better understood.
+
+### Pilot measures
+
+- Median and p95 sale capture time by mode and basket type; taps/actions per common sale.
+- Fraction of eligible orders captured; item and quantity exact-match rate; correction and cancellation rate.
+- Wrong-order mutation and false payment confirmation count (target: zero tolerated in acceptance scenarios).
+- Bluetooth session uptime, reconnect/recovery, command latency, battery drain, noise/language performance, and fallback rate.
+- Offline sale completion, sync recovery, duplicate postings, lost events, and unresolved conflict count.
+- Closing time, cash variance, stock-count variance, and how much is explainable from source records.
+- Weekly active use, staff adoption, owner value rating, support burden, and willingness to pay.
+
+Define thresholds with pilot participants after baseline measurement. Blueprint targets such as ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€šÃ‚Â¤2 actions,ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“100% offline selling,ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â and 12ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ20 shops are hypotheses; they are not promises or release criteria until definitions and device scope are agreed.
+
+## 8. Priority backlog for the first build
+
+### P0 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Product definition
+
+- Select first shop segment and pilot geography.
+- Specify one sale, one live order, correction, refund, payment declaration, udhar, supplier receipt, and close-day flows.
+- Agree order/payment state machines and a data dictionary.
+- Define supported Android versions/devices and offline operations.
+- Prototype quick sale and voice session screens with shopkeeper review.
+
+### P1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Functional proof
+
+- Local shop/product/alias setup; quick tiles; order queue and detail.
+- Deterministic sale/order command schema and validation service.
+- Cash/manual-UPI-pending/credit representations and separate order fulfillment.
+- Append-only correction, audit view, local persistence, idempotent sync prototype.
+- Bluetooth connection/session prototype, explicit mic indicator, pause/stop, push-to-talk/tap fallback.
+- Minimal register and reconciliation view with evidence labels.
+
+### P2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Pilot readiness
+
+- Opening stock and basic movement ledger; purchase receipt; physical count/variance.
+- Customer credit and repayments; simple supplier payable and settlement; expense and closing cash.
+- Staff identity/permissions adequate to pilot, recovery/export, support diagnostics.
+- Device and offline test matrix, data migration/restore procedure, incident response, consent and privacy materials.
+
+## 9. Key risks and controls
+
+| Risk | Control / decision gate |
+|---|---|
+| Voice confuses a customer conversation with a command | Explicit session, command boundary/wake strategy evaluation, confidence gating, visible mic state, no silent commit |
+| Wrong order updated in a queue | Stable spoken order references; ambiguity prompts; never guess target |
+| Payment marked paid without evidence | Separate staff declaration and provider verification; no inferred UPI success |
+| Offline retry duplicates money/stock | Unique IDs/idempotency, atomic posting, retry and restore scenarios |
+| Conflicting edits across devices | Domain-specific conflict queue; no global last-write-wins for ledgers |
+| Recipe inventory deducted twice | Define consumption trigger (preparation vs sale) and reversal/waste behavior before recipes launch |
+| ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ProfitÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â appears precise with incomplete costs | Coverage and completeness warnings; separate gross/operating profit and cashflow |
+| App slows service / headset is impractical | Compare tap, voice and fallback in real shops; B2 is optional and gated |
+| Scope becomes too broad | Release gates and explicit deferred list; no portals/multi-shop before single-shop reliability |
+| Regulated products or personal data handled incorrectly | Product restrictions, no tobacco promotion/loyalty, privacy-by-design, launch-date legal review |
+| Support cost exceeds low-price revenue | Measure onboarding, device support, speech/cloud costs and willingness to pay before setting plans |
+
+## 10. Decisions: baseline vs open
+
+### Use as provisional baselines
+
+- Android-first; one-location pilot; owner-operated target.
+- Hindi, Marathi, Hinglish and English as initial research languages, with availability subject to accuracy testing.
+- Walk-in customer identity optional; supplier participation not required.
+- Manual cash/UPI classification initially; provider verification later.
+- Explicitly started voice session; push-to-talk and touch fallback always available.
+- Corrections append reversal/adjustment events; AI never independently commits financial actions.
+
+### Keep open until evidence or implementation constraints are known
+
+- Whether continuous Bluetooth voice is viable enough for first release or remains a beta.
+- Initial shop archetype/geography and exact device/Android support matrix.
+- Final order statuses, support for partial handover, and whether service is counter-only or kitchen-oriented.
+- Speech engine/provider, offline recognition coverage, latency, cost, audio retention and supported headset controls.
+- Backend framework/hosting, authentication provider, encryption approach and multi-device conflict policy.
+- Payment provider, tax/GST scope, accounting depth, subscription pricing and plan packaging.
+- Legal applicability by shop/location and product category.
+
+## 11. Compliance and source validation notes
+
+This is a product plan, not legal advice. Re-check requirements for the target launch date and states with qualified counsel/accountants and the relevant authorities before shipping compliance claims.
+
+- AndroidÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s `SpeechRecognizer` reference explicitly cautions that it is not intended for continuous recognition; test a dedicated streaming approach and Android foreground/background restrictions on actual devices: [Android SpeechRecognizer reference](https://developer.android.com/reference/android/speech/SpeechRecognizer).
+- NTCP states COTPA restrictions include tobacco sales to persons under 18 and within 100 yards of educational institutions, restrictions on advertising/promotion, and the prohibition on food products containing tobacco or nicotine such as gutkha: [NTCP FAQ](https://ntcp.mohfw.gov.in/faqs). Product rules should be neutral and compliance-reviewed; no tobacco promotions or loyalty incentives.
+- FSSAIÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s March 2026 release reports revised broad turnover thresholds effective 1 April 2026 (registration up to ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹1.5 crore; state licence above that up to ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹50 crore; central licence above ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¹50 crore), with applicability/eligibility qualifications: [FSSAI release](https://www.fssai.gov.in/upload/uploadfiles/files/Press%20Release_FSSAI%20Reforms_130326.pdf). Verify current regulations and any later amendments before presenting guidance in-product.
+- MeitY has published the DPDP Rules 2025 and a phased enforcement timeline; obligations depend on commencement dates and applicability: [MeitY DPDP Rules 2025](https://www.meity.gov.in/documents/act-and-policies/digital-personal-data-protection-rules-2025-gDOxUjMtQWa). Maintain a launch-date privacy/legal review.
+- The blueprintÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s competitor examples and ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“market findingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â were not independently tested in this review. Conduct hands-on product research before making comparative or first-to-market claims.
+
+## 12. Immediate work sequence
+
+1. Validate the first shop segment, geography and pilot access.
+2. Turn observed workflows into the counter state machine and acceptance scenarios.
+3. Produce low-fidelity quick-sale/live-order/closing prototypes and test them with shopkeepers.
+4. Run an Android + Bluetooth + speech feasibility spike on representative low-cost phones/headsets, including noise, screen lock, interruption, battery and offline conditions.
+5. Define the local data/event schema, idempotency contract, sync conflicts, and report definitions.
+6. Build the functional proof of concept only after those contracts are clear; instrument it for the pilot measures.
+7. Gate broader inventory/accounting features on trustworthy transaction and sync results.
+
+The next concrete product artifact is [CT-06 Quick Sale](specs/CT-06-QUICK-SALE.md), including its shared transaction contract. CT-07 should reuse this engine after CT-06 behavior and business policies are validated.
+
+**CAT-051B qualification run (29 October 2026):** Its API 37 emulator run passed 9/9 recovery/transaction instrumentation methods, while Node 48/48, Kotlin JVM 23/23, debug builds and lint (0 errors/45 warnings) passed. Actual SAF export and restore were completed with synthetic records after uninstall/reinstall on the same emulator; the rich backup was authenticated, explicitly approved and its restored order/payment states were visible. The later full project run adds the CT-02 instrumentation method (10 Android tests total). This is not second-device qualification. See [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md).
+
+
+
+
+
+
+## CAT-051A update - 29 October 2026
+
+The CAT-051A encrypted-storage foundation is described in [CAT-051 implementation report](specs/CAT-051-IMPLEMENTATION-REPORT.md). Its earlier test totals are superseded by the latest CAT-051B run below.
+
+
+## CAT-051B update - 29 October 2026
+
+**Status: Partial; CAT-051B acceptance gate not met.** Added SAF document-picker launchers, recovery-secret confirmation/clearing, metadata preflight, explicit replacement confirmation, progress/error states, a process-wide maintenance barrier and a durable restore cutover journal. Financial reconciliation runs before export/restore acceptance; interrupted cutovers recover or fail closed before the database opens.
+
+CAT-051B qualification-run verification: Node 48/48, Kotlin JVM 23/23, Android API 37 instrumentation 9/9, debug APK and instrumentation APK build PASS, lint 0 errors/45 warnings. Actual SAF file creation/selection and same-emulator clean-install restore passed with synthetic records. Evidence includes [backup file](test-evidence/2026-10-29/cat051b-ui-backup.ctbackup), [restored orders screenshot](test-evidence/2026-10-29/cat051b-rich-restored-orders.png), and [instrumentation XML](android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0%28AVD%29%20-%2017.xml). The later full project run adds one profile test for 10 Android tests total. Cross-profile/device restore, true low-storage conditions, hard process kills, KeyStore invalidation, second-person recovery and independent review remain open; authenticated shop-identity mismatch protection is implemented and tested. Do not use real shop data yet.
+
+See the current [complete project progress audit](specs/PROJECT-PROGRESS-AUDIT-2026-10-29.md) for module, screen, milestone, architecture, and qualification coverage as of 29 October 2026.
+
+## Wave 2 progress Ã¢â‚¬â€ CT-01 / CT-02 first vertical slice
+
+The Android launcher now opens CT-01 Welcome with routes to shop setup, the counter prototype and backup/recovery. CT-02 persists a shop name, supported business type, language and INR setting in encrypted local metadata. Saves are atomic, protected by the maintenance barrier, and append an audit event plus pending outbox event. A synthetic profile survived app process restart in the API 37 emulator. Product catalogue, prices, opening stock, staff login and Quick Sale are still separate implementation work; sample engine prices are not approved shop prices. See [CT-01/02 report](specs/CT-01-02-IMPLEMENTATION-REPORT.md) and the [master tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md).
+
+## Current verification update Ã¢â‚¬â€ 29 October 2026
+
+Latest complete run after CT-06 cart decrement and MainActivity resume-refresh changes: `node --test prototype/*.test.cjs` PASS (48/48); `.\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest --console=plain` PASS (Kotlin JVM 23/23, Android instrumentation 12/12, APK tasks pass, lint 0 errors / 54 warnings). The Android instrumentation suite ran on `Medium_Phone_API_37.0`. This is build/JVM/emulator evidence for existing prototype flows, not device or field qualification.
+
+**Superseding verification â€” 29 October 2026:** Following schema v8 stock-confirmation and CT-15 screen work, reran `node --test prototype/*.test.cjs` (48/48) and `android/gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest --console=plain` (Kotlin JVM 23/23, API 37 instrumentation 13/13, debug and instrumentation APK tasks PASS, lint 0 errors / 59 warnings). Instrumentation XML reports 13 tests, 0 failures, 0 errors, 0 skipped. Total automated checks: 84. The emulator UI saved a synthetic Coffee physical count of 5 and opened the Inventory Overview screen; evidence: `test-evidence/2026-10-29/ct13-count-saved.png`, `ct15-inventory.png`. These limited features do not implement complete inventory or purchase receiving. See [CT-15/16 report](specs/CT-15-16-OPENING-STOCK-REPORT.md).
+
+**Latest continuation â€” 29 October 2026:** CT-09 read-only order details are linked from Live Orders and Sales History; the API 37 instrumentation test creates a synthetic cash sale and asserts rendered order, financial, stock movement and audit information. CT-10 now offers an optional rupee amount for partial staff-declared cash and partial customer Udhar through the existing engine. Latest full verification: Node 48/48, Kotlin JVM 23/23, Android instrumentation 14/14 (85 total), debug and instrumentation APK builds PASS, lint 0 errors / 62 warnings. The CT-10 amount-entry UI has not yet been manually exercised. See [CT-09 report](specs/CT-09-ORDER-DETAILS-REPORT.md) and [CT-10 report](specs/CT-10-PARTIAL-PAYMENT-UI-REPORT.md). The details screen does not yet provide a timestamped timeline or refund/edit workflow.
+
+**Latest continuation â€” customer credit:** Added the partial CT-21/23/24 local credit ledger and repayment screen. After a synthetic Udhar sale and partial repayment, API 37 instrumentation opens the screen and verifies the outstanding balance and staff-declared cash repayment event. Latest full tests are Node 48/48, Kotlin JVM 23/23, Android 15/15 (86 total), APK tasks PASS, lint 0 errors / 63 warnings. The repayment input dialog itself remains unmanually tested. See [customer credit report](specs/CT-21-23-24-CUSTOMER-CREDIT-REPORT.md).
+
+## CT-13/16 opening stock safety update â€” 29 October 2026
+
+Schema v8 now starts new catalogue stock at zero and tracks explicit physical stock-baseline confirmation. The v7â†’v8 migration preserves existing balances but marks them unconfirmed; configured sales and handovers reject unconfirmed product stock. The catalogue provides an audited single-product physical count with a reason, idempotency, stock movement, audit event and outbox entry in one persistence transaction. Failed writes roll back memory state; restart and duplicate-command behavior are covered by instrumentation. On the API 37 emulator, a synthetic Coffee count of 5 was saved and displayed in the catalogue. Evidence: `test-evidence/2026-10-29/ct13-count-saved.png` and XML. This is only a limited CT-15/16 slice: no purchase receipts, count sessions, variance reports, reorder tools or full inventory screen. Latest complete verification is recorded in the tracker and updated report; suite run is being rerun after this change. Starter prices remain unconfirmed, and this synthetic count does not make a real product sellable.
+
+A synthetic single-item cash Quick Sale was manually completed in the emulator, and its persisted GIVEN / STAFF_DECLARED order was visible in Live Orders. See [CT-06 report](specs/CT-06-NATIVE-QUICK-SALE-REPORT.md) and [master implementation tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md). CT-06 is still partial; the Android MVP, owner dashboard, authenticated backend/sync, continuous Bluetooth recognition, physical headset testing, independent security review and production release qualification are incomplete.
+
+## CT-05 Shop Home update Ã¢â‚¬â€ 29 October 2026
+
+Added a native local dashboard backed by the encrypted transaction model and opened it on the API 37 emulator. The summary uses lifetime local-ledger totals; it clearly says sync is not configured and profit is unavailable because product costs/expenses are missing. Kotlin/Android instrumentation asserts the totals from synthetic cash, pending UPI and Udhar sales. See [CT-05 report](specs/CT-05-SHOP-HOME-REPORT.md) and `test-evidence/2026-10-29/ct05-shop-home.png` with XML. CT-05 remains partial and is not a daily closing or owner analytics feature.
+
+
+## CT-11 Sales History update â€” 29 October 2026
+
+Added a native local history view using encrypted persisted orders and payment events. It shows line items, sale/paid/credit/refund/due values, fulfillment/payment states, revisions, cancellation reason and payment event types. It does not invent timestamps or daily groupings; the screen states date filtering is unavailable. UI launch and a saved screenshot will be recorded only after the current emulator build/test completes. See `android/app/src/main/java/com/chaiandtapri/counter/SalesHistoryActivity.kt`.
+
+## Procurement vertical slice â€” 29 October 2026
+
+Expanded CT-17â€“20 with a multi-line direct-receipt dialog (up to ten active products), atomically recording stock, payable, audit/idempotency and outbox events; supplier settlement remains staff-declared cash. SQLCipher schema v9 adds procurement tables through an additive v8â†’v9 migration. Latest full verification: Node 48/48, Kotlin JVM 25/25, API 37 instrumentation 17/17, debug and instrumentation APK builds PASS, lint 0 errors / 68 warnings. See [CT-17â€“20 report](specs/CT-17-20-PROCUREMENT-REPORT.md). UI multi-line submission has not yet been exercised. Purchase-order drafts, partial deliveries, returns, supplier payment verification, full dealer workflows, and the shopkeeper MVP remain incomplete. CAT-051B failure/security gates, authenticated sync, owner dashboard, continuous Bluetooth, physical trials, and production qualification remain open.
+
+
+## Superseding procurement and purchase-return verification â€” 29 October 2026
+
+Procurement now includes receipt-linked returns in addition to multi-line direct receipts. Return records are append-only, reduce currently available aggregate stock and unpaid supplier payable, require a reason, and reject quantities beyond the original receipt's remaining balance. SQLCipher schema v10 adds return tables through an additive migration; v8â†’v10 migration preservation is emulator-tested. Latest full suites: Node 48/48, Kotlin JVM 26/26, Android instrumentation 18/18, both APK builds PASS, lint 0 errors / 68 warnings (92 total). The emulator test asserts persisted return history and payable summary; direct interaction with the return dialog is not manually qualified. Product lots are not tracked, so receipt-specific provenance cannot be established from aggregate stock. See procurement report. The overall product and other delivery gates remain incomplete.
+
+
+## CT-25 Expenses vertical slice â€” 29 October 2026
+
+Added a native Expenses screen reachable from Counter and Shop Home. It records an operating category, integer-paise amount, cash/UPI/card staff-declared tender and optional short note. The write is atomic with audit, idempotency and outbox records in encrypted SQLCipher schema v11. Supplier purchases and settlements remain separate from operating expenses. Latest full run: Node 48/48, Kotlin JVM 27/27, API 37 instrumentation 19/19, APK builds PASS, lint 0 errors / 70 warnings (94 tests). Model rollback/validation, encrypted reopen, migration preservation and screen rendering are covered. Manual emulator form submission of synthetic rent â‚¹250.50 appeared in history and remained after force-stop/relaunch; evidence is in `test-evidence/2026-10-29/ct25-saved.png` and `ct25-restart.png`. No dated/daily expense report, approvals, attachment, staff identity or sync is implemented. See [CT-25 report](specs/CT-25-EXPENSES-REPORT.md). CT-26 cash register and CT-28 daily closing remain next; broader product gates remain open.
+
+## Superseding continuation - CT-27 staff shifts, 29 October 2026
+
+CT-27 now offers a local shift start/end flow tied to the cash drawer. Operator and receiving labels are explicitly not authenticated staff identities. Schema v14 adds shift/handover fields additively; v8-to-v14 migration and portable backup restoration are tested. Latest full results: Node 48/48, Kotlin JVM 28/28, API 37 Android instrumentation 22/22 (98 total), APK builds PASS, lint 0 errors / 75 warnings. Emulator start, cash count, handover and post-force-stop persistence were exercised with synthetic data. See [CT-27 report](specs/CT-27-STAFF-SHIFTS-REPORT.md) and `test-evidence/2026-10-29/ct27-restart.png`. This remains a partial workflow. Staff login/roles, comprehensive activity attribution, multiple registers, calendar-day accounting, CAT-051B failure gates, authenticated sync, owner dashboard, continuous Bluetooth, hardware/field tests, independent security review and production readiness remain open.
+
+## CAT-051B key-loss recovery hardening â€” 29 October 2026
+
+Latest complete verification: Node 48/48, Kotlin JVM 28/28, API 37 instrumentation 23/23, APK builds PASS, lint 0 errors / 77 warnings. Synthetic restore after simulated Keystore wrapping-key loss checks authenticated backup identity against a local app-private identity binding, stages under a fresh local key, verifies restored payment/order state and idempotency, and archives old ciphertext. Mismatched identity preserves the original database; partial import writes are fault-injected. See [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md). CAT-051B remains open: real storage exhaustion, hard process kill/power loss, hardware Keystore invalidation, a second-device/second-person drill and independent security review are pending. The complete product remains far from production qualification.
+
+## Superseding CAT-051B verification after recovery UI startup fix â€” 29 October 2026
+
+The recovery screen now opens without attempting to unlock the local database first, and SQLCipher workspace open/refresh are performed away from the Android UI thread. Emulator screenshots and hierarchy evidence are in `test-evidence/2026-10-29/cat051b-recovery-entry.png/.xml` and `cat051b-main-start.png/.xml`. The API 37 full instrumentation rerun after these changes passed 23/23; Kotlin JVM 28/28, Node 48/48, APK builds PASS, lint 0 errors / 77 warnings. CAT-051B still is not complete: storage exhaustion, hard termination/power loss matrix, hardware key invalidation, second-device and second-person recovery, and independent security review remain pending. See the [detailed report](CAT-051B-IMPLEMENTATION-REPORT.md).
+
+## Final CAT-051B continuation verification â€” 29 October 2026
+
+The restore completion path also reopens SQLCipher off the UI thread and closes any newly opened store if the activity is destroyed. After this final lifecycle change, the complete verification command `.\gradlew.bat testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug --console=plain` completed successfully: Kotlin JVM 28/28, Android API 37 instrumentation 23/23, APK builds PASS, lint 0 errors / 77 warnings. `node --test prototype/*.test.cjs` passed 48/48. The API 37 suite ran after the final Android source changes. Evidence: `android/app/build/test-results/testDebugUnitTest/TEST-com.chaiandtapri.counter.CounterModelTest.xml`, `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`, `android/app/build/reports/lint-results-debug.txt`, and `test-evidence/2026-10-29/cat051b-key-loss-recovery-run.txt`.
+
+CAT-051B remains open; this run did not perform a new SAF export/restore UI drill. Actual storage exhaustion, abrupt process/power loss across journal transitions, hardware Keystore invalidation, second-device and second-person recovery, and independent security review remain pending. Do not treat the prototype as production-ready.
+
+## Continuation checkpoint â€” non-blocking shop setup/catalogue and counter trial â€” 29 October 2026
+
+Shop profile and product catalogue SQLCipher reads/writes are now dispatched through the shared serial recovery executor to avoid blocking the Android main thread. Backup-validation errors expose only a sanitized short validation reason. API 37 synthetic UI evidence covers shop setup/opening stock, separate order creation, READY/GIVEN fulfillment and a staff-declared cash payment. The current full run is Node 48/48, Kotlin JVM 28/28, Android instrumentation 23/23, APK build tasks PASS and lint 0 errors/83 warnings. See `specs/CAT-051B-IMPLEMENTATION-REPORT.md` and the evidence list there.
+
+The previously supplied backup artifact failed authenticated-header validation before any replacement; it is not accepted as restore evidence. A fresh UI-based export and clean-install restore have not been completed. CAT-051B remains open. The Android shopkeeper product, backend/sync, owner dashboard, continuous Bluetooth voice, physical trials and release qualification are still in progress/not started as listed in the master tracker; no claim is made that all six waves or the 52 screens are complete.
+
+## 30 October 2026 â€” CT-29 reporting slice and UI-thread database work
+
+CT-29 Daily Reports is now a local encrypted-ledger report screen with sales, staff-declared cash, pending UPI, customer receivables, refunds, expenses, supplier payables and delivered quantities. It marks scope as lifetime/local because reliable date attribution is missing, and it withholds profit because costs/expense attribution are incomplete. The report screen is linked from Main and Shop Home and has persisted-data instrumentation coverage. SQLCipher setup, catalogue and daily-close workflows were moved to the shared serial executor for database reads/writes. Current full verification: Node 48/48, Kotlin 28/28, Android instrumentation 24/24, APK tasks PASS, lint 0 errors/84 warnings. See the current project audit and tracker.
+
+CAT-051B remains open; no fresh SAF export plus clean-install UI restore was achieved. The six delivery waves remain in progress: this work does not implement the authenticated backend, owner dashboard, full CT-01â€“32 screen set, complete CT-30â€“32 settings/reporting, continuous Bluetooth, physical trials or production release controls.
+
+## 30 October 2026 â€” CT-30 grounded alerts and integrated verification
+
+CT-30 Business Alerts now reads current encrypted local state and reports open orders, pending UPI, customer receivables, required opening stock counts, supplier balances, active cash drawer sessions and unresolved drawer differences. It discloses where alert logic is not supportable yet: there are no configured low-stock thresholds, credit due dates or online sync error states. API 37 instrumentation checks the empty state and these limitations. Final complete suites: Node 48/48, Kotlin JVM 28/28, Android instrumentation 25/25, APK tasks PASS, lint 0 errors/84 warnings (101 automated tests). The earlier full-suite CT-28 launch timeout was fixed by moving database loading and review writes off the UI thread; a subsequent full run passed. See the latest progress audit and tracker.
+
+CAT-051B still lacks a new SAF UI export and clean-install UI restore, so Wave 1 is not complete. Waves 2â€“6 remain in progress or not started, including much of CT-01â€“32, authenticated backend/sync, OW-01â€“20, full voice/scan/reconciliation, physical/field qualification and release security review.
+
+## Superseding continuation â€” CT-29/30 integrated qualification â€” 30 October 2026
+
+Added CT-30 Business Alerts alongside the CT-29 Daily Reports screen. Both read the encrypted local ledger and clearly disclose unavailable date attribution, profit calculation, low-stock thresholds, due-date aging, and server-sync alerts. SQLCipher operations for Shop Setup, Product Catalogue and Daily Closing run through the shared serial executor. The complete latest run passed: Node 48/48, Kotlin JVM 28/28, API 37 Android instrumentation 25/25, debug and instrumentation APK tasks PASS, lint 0 errors / 84 warnings (101 tests across three suites). The CT-28 full-suite timeout seen during an earlier attempt was addressed by moving its database work off the UI thread; the final complete run passed. Evidence is in `android/app/build/test-results/testDebugUnitTest/`, `android/app/build/outputs/androidTest-results/connected/debug/`, and `android/app/build/reports/lint-results-debug.txt`.
+
+CAT-051B remains open: a fresh SAF UI backup and clean-install restore were not completed. No claim is made for low-storage or hard-power-loss qualification, hardware Keystore invalidation, second-device/person recovery or independent security review. CT-29/30 are partial local workflows. The six-wave product plan, full Android screen set, authenticated backend/sync, owner dashboard, true continuous Bluetooth, physical/shop trials and production release qualification remain incomplete.
+
+## 30 October 2026 â€” SAF stream ownership and recovery UI finding
+
+Verification and restore now close SAF input streams through `use`. The full test rerun passed after this change: Node 48/48, Kotlin JVM 28/28, API 37 instrumentation 25/25, APK tasks PASS, lint 0 errors/84 warnings. A real emulator UI attempt selected the synthetic encrypted fixture in Downloads and entered the recovery secret, but remained at the busy â€œRecovery operation startingâ€ state without showing authenticated metadata or replacement confirmation. The app did not demonstrate a successful UI restore. See the CAT-051B implementation report and `test-evidence/2026-10-30/` diagnostics. CAT-051B remains open for callback/lifecycle diagnosis and a successful UI export/restore reconciliation, as well as its separate failure/security gates.
+
+## 30 October 2026 â€” CT-31 Voice Settings partial slice
+
+Added a native Voice Settings screen linked from the counter and Shop Home. The screen persists the supported language preference (`hi-IN`, `mr-IN`, `en-IN`) in encrypted metadata and edits shop-specific product aliases through the existing audited catalogue path. It explicitly discloses that recognition requires review and continuous Bluetooth listening is not implemented. Focused persistence instrumentation and the full suite pass: Node 48/48, Kotlin JVM 28/28, API 37 instrumentation 26/26 (102 total); APK tasks pass; lint 0 errors / 92 warnings. See [CT-31 report](specs/CT-31-VOICE-SETTINGS-REPORT.md). CT-31 is a partial settings workflow, not speech qualification. CAT-051B remains open after the user-facing restore attempt stalled before metadata confirmation; backend/sync, the remaining Android screens, owner web dashboard, continuous Bluetooth, physical trials and release qualification remain incomplete.
+
+## 30 October 2026 â€” CAT-051B dialog-cancellation defect fix
+
+The selected SAF secret dialog moves upward when Android's keyboard opens. The earlier coordinate tap dismissed it outside the dialog, and only the explicit Cancel-button handler released the app's busy flag. This left all shop controls disabled before a verification task began. The dialog now clears secret fields and releases the temporary busy state on button cancellation, Back/cancel, and outside dismissal. Regression `dismissingRecoverySecretDialogReleasesBusyStateAndClearsFields` passes on API 37. A valid synthetic backup passed the Activity's asynchronous verification callback test through a real MediaStore content URI; verification did not mutate orders.
+
+A separate manual SAF attempt with the old 201 kB Downloads fixture reached a safe `Backup header authentication failed` result and preserved active data. It is not a restore pass. The latest complete suite after the fix passed Node 48/48, Kotlin JVM 28/28, Android instrumentation 28/28, APK builds, and lint (0 errors / 94 warnings; 104 tests). A focused repeat of the SAF verification callback test passed after an additional busy-release assertion. CAT-051B remains open for a successful current UI export/import plus clean-install reconciliation, interruption/storage/key-loss matrix, second-device/person recovery, and independent security review.
+
+## Final saved full-run evidence â€” 30 October 2026
+
+The final current-tree rerun was captured to disk: `test-evidence/2026-10-30/node-full-final.log` and `gradle-full-final.log`. Node passed 48/48. The Gradle command `testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug --console=plain` completed BUILD SUCCESSFUL in 7m20s. Fresh XML reports show Kotlin JVM 28/28 and API 37 instrumentation 28/28, with zero failures/errors/skips. Both APK tasks passed. Lint: 0 errors / 94 warnings. Total 104 automated tests across three suites. The current instrumentation report includes both recovery-secret cancellation and SAF content-URI verification callback regressions. The latter confirms verification callback completion, not restore completion. CAT-051B remains open for valid UI export/import, replacement confirmation and financial reconciliation.
+
+## Superseding CAT-051B UI recovery result â€” 30 October 2026
+
+A fresh API 37 synthetic clean-install round trip now passes through the actual Android UI. The app created an encrypted backup in Downloads, reopened and verified that UI-exported file, then was uninstalled/reinstalled and restored from the preserved artifact through SAF with explicit replacement confirmation. Restored Sales History, customer credit, and inventory screens showed the expected orders, payment states, repayment/refund/reversal entries, and stock movements. Evidence and artifact hash are recorded in `specs/CAT-051B-IMPLEMENTATION-REPORT.md` and `test-evidence/2026-10-30/`.
+
+Current complete verification: Node 48/48, Kotlin JVM 28/28, Android API 37 instrumentation 28/28, debug/test APK builds PASS, lint 0 errors/94 warnings. CAT-051B's synthetic emulator functional gate is passed. Physical cross-device recovery, real low-storage/hard power interruption, hardware Keystore invalidation, second-person drill, future background writers, and independent security review remain open; do not mark production security or release readiness complete.
+
+Next product slice: complete CT-12 Refund & Correction as a connected native screen using the existing audited transaction engine, then continue the CT-01â€“12 counter workflow qualification.
+
+## Superseding 30 October development result â€” recovery round trip and CT-12
+
+CAT-051B synthetic API 37 UI recovery now passes a full app-generated backup â†’ verify â†’ uninstall/reinstall â†’ restore round trip. The actual SAF-created encrypted export was preserved outside app-private storage, verified by the app, restored through the UI into a fresh install, and its three orders were visible in Sales History. Credit/refund and stock ledgers were also inspected on the preceding restore. The report and SHA-256 evidence are in `specs/CAT-051B-IMPLEMENTATION-REPORT.md` and `test-evidence/2026-10-30/`.
+
+CT-12 Refund & Correction is now a partial native screen linked from Counter and Sales History. It routes cancellation, item refund and amount correction through the revision-checked transaction model; reasons and a second confirmation are required; cash is explicitly staff-declared; returned items are not restocked while no returnability policy is configured. Instrumentation verifies screen rendering. Full dialog submission is not yet emulator-qualified.
+
+Latest full verification after these changes: Node 48/48; Kotlin JVM 28/28; API 37 Android instrumentation 29/29; debug/test APK builds PASS; lint 0 errors/96 warnings (105 automated checks). CAT-051 remains a synthetic prototype foundation, not production-qualified. Hardware/cross-device recovery, hard power-loss/real storage exhaustion, second-person recovery and independent security review remain open. Next: manually qualify CT-12 refund/correction submission, then close remaining CT-01â€“12 gaps before moving further into CT-13â€“32.
+
+## CT-12 UI refund verification â€” 30 October 2026
+
+A full synthetic UI item-refund journey has now been manually completed on API 37. Order #14 returned one Regular Chai for a â‚¹15 cash refund. The shopkeeper entered a reason, explicitly confirmed cash was handed back, reviewed the action and committed. Sales History persisted the negative staff-declared refund and full-refund state; Inventory Overview remained at 98 Regular Chai without restocking the item. Evidence: `test-evidence/2026-10-30/ct12-refund-committed.png`, `ct12-postrefund-history.png`, `ct12-postrefund-inventory.png` and XML hierarchy dumps. Other refund allocations/cancellation paths are not manually qualified.
+
+Latest full suites: Node 48/48, Kotlin JVM 28/28, Android 29/29, APK builds pass, lint 0 errors/96 warnings. CAT-051B same-emulator synthetic recovery and CT-12 cash item-refund paths now have UI evidence. CT-03/04 and remaining Android screens, roles, cross-device recovery, sync, owner dashboard, true continuous voice, device/field/security review remain pending. Next is CT-03/04 scoping and implementation.
+
+## Superseding final run â€” CT-04 permission workflow foundation, 30 October 2026
+
+CT-04 now has a native permission explanation screen reachable from Welcome and Counter. It requests optional microphone and Android 12+ Bluetooth-connect access only after an explicit tap, describes typed fallback, directs operators to system settings, and does not request camera or broad file access before those capabilities exist. Instrumentation verifies the screen content. The allow/deny/permanent-denial UI paths still need emulator interaction qualification. See `specs/CT-04-DEVICE-PERMISSIONS-REPORT.md`.
+
+Final full run after CT-04: Node 48/48, Kotlin JVM 28/28, Android API 37 instrumentation 30/30, APK builds pass, lint 0 errors/99 warnings (106 automated tests across separate suites). CAT-051B UI recovery and one manual CT-12 item cash-refund workflow also have synthetic emulator evidence.
+
+Next: define and implement CT-03 owner/staff access with real local credential handling and explicit authorization boundaries; do not ship a decorative or unauthenticated login. Then qualify CT-04 allow/deny paths and complete the rest of CT-01â€“12.
+
+## Latest continuation â€” CT-03 owner access â€” 30 October 2026
+
+Added a device-local owner enrollment/sign-in gate using SQLCipher schema v15 and a salted PBKDF2-HMAC-SHA256 verifier. Five failed attempts trigger a persisted 60-second lock. The unlocked owner session is memory-only and an explicit Lock action clears it. Protected business activities check the session; MainActivity is non-exported. Recovery remains accessible without owner login for restore, while encrypted backup export requires the session. This is not online identity or staff role authorization.
+
+API 37 manual synthetic UI smoke: first-run owner enrollment, counter opening, explicit lock and successful re-login. Instrumentation verifies wrong-secret rejection, persisted lockout, delayed unlock, additive v14â†’v15 schema migration and record preservation. Current full results: Node 48/48, Kotlin JVM 28/28, Android instrumentation 31/31; debug APK/build, unit tests and instrumentation pass; lint 0 errors / 103 warnings. See `specs/CT-03-LOCAL-OWNER-ACCESS-REPORT.md` and evidence `test-evidence/2026-10-30/ct03-owner-enrollment.png`, `ct03-owner-session.png`, and `ct03-owner-relogin.png` with corresponding XML.
+
+Remaining: no staff accounts or role permissions, no idle timeout/step-up auth/passphrase reset, no cross-device identity, no independent security review. The overall six-wave plan remains incomplete; CAT-051B still has separate recovery/security gates, and the complete shopkeeper MVP, backend sync and owner web dashboard remain unfinished.
+
+## CT-03/CT-04 continuation â€” superseding full run â€” 30 October 2026
+
+CT-03 local owner access and CT-04 permission-denial guidance are implemented as partial native slices. CT-03 uses schema v15, salted PBKDF2-HMAC-SHA256 with 600,000 iterations for new verifiers, persisted five-attempt lockout, memory-only owner session and protected-screen gating. Restore replacement clears the current session. CT-04 distinguishes optional/not-requested, retryable denial and settings-required denial states while keeping typed fallback available. Instrumentation checks denied-permission disclosure and the migration/credential flows.
+
+Final current run: Node 48/48 (`test-evidence/2026-10-30/node-ct03-final.log`); Kotlin JVM 28/28; API 37 Android instrumentation 31/31; debug and instrumentation APK build tasks PASS; lint 0 errors / 104 warnings. Exact reports: `android/app/build/test-results/testDebugUnitTest/TEST-com.chaiandtapri.counter.CounterModelTest.xml`, `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`, `android/app/build/reports/lint-results-debug.html`.
+
+CT-04 live system permission dialog allow/deny and Settings-return paths remain pending manual exercise. CT-03 remains a single local owner prototype, not staff authentication or production authorization. CAT-051B external recovery/security gates, the complete CT-01â€“32 suite, authenticated backend/sync, OW-01â€“20 dashboard, continuous Bluetooth, barcode scanning, physical trials and release qualification remain unfinished.
+
+## CT-04 manual UI closure â€” 30 October 2026
+
+The CT-04 runtime permission flow is now manually exercised on API 37. Microphone and Bluetooth requests were denied; repeat denial led Android to a Settings-required state; the app retained typed fallback; both permissions were granted in Android App Info settings; returning refreshed CT-04 to Granted. The prompt Allow choice itself was not selected. Permissions were revoked after qualification. See `specs/CT-04-DEVICE-PERMISSIONS-REPORT.md` and `test-evidence/2026-10-30/ct04-qualification.txt`. Latest full suites remain Node 48/48, Kotlin 28/28, Android 31/31, builds PASS, lint 0/104. Physical audio and all wider product waves remain open.
+
+## 30 October 2026 â€” restore restart-recovery regression
+
+An API 37 instrumentation test now exercises startup rollback from a durable pending-restore journal after simulating the filesystem state where the original encrypted database was preserved but replacement had not activated. Reopening the regular SQLCipher persistence restores the original synthetic order, amount and audit record, clears the journal, and removes the `.pre-restore` marker. This is deterministic fault-state coverage, not a hard process-kill/power-loss qualification. Full run after the change: Node 48/48; Kotlin JVM 28/28; API 37 instrumentation 32/32; APK build tasks PASS; lint 0 errors / 104 warnings (108 tests). Evidence is in the fresh Android/JVM XML and `android/app/build/reports/lint-results-debug.txt`. CAT-051B remains open for physical interruption/storage/key-loss scenarios and separate review. The six-wave product is not complete; continue the connected CT-01â€“12 Android workflow.
+
+### Superseding run â€” committed restore recovery â€” 30 October 2026
+
+A second API 37 instrumentation case now exercises startup after the durable restore commit marker: the verified active database is kept, its redundant previous copy is removed and the journal is cleared. Both simulated rollback and simulated commit-finalization journal states pass. Final current results: Node 48/48, Kotlin JVM 28/28, Android instrumentation 33/33, debug and instrumentation APK builds PASS, lint 0 errors / 104 warnings (109 automated tests). These tests use deterministic filesystem/journal states; actual process kill, power interruption and storage exhaustion remain unqualified. CAT-051B and the six-wave product plan remain incomplete.
+
+## 30 October 2026 â€” CT-11 order-history search
+
+CT-11 now filters local persisted order history by order number, item text, fulfillment/payment state, cancellation reason and payment event details. The filter does not mutate records and shows an explicit empty result. Date filtering is not offered because the current model does not expose event timestamps. Instrumentation verifies item search, UPI-pending state visibility and unchanged persisted orders. Latest full verification: Node 48/48, Kotlin JVM 28/28, API 37 instrumentation 34/34, APK builds PASS, lint 0 errors / 104 warnings (110 checks total). This does not amount to a manual usability review or completion of CT-11; see tracker and test XML.
+
+### Superseding CT-11 date-range and migration update â€” 30 October 2026
+
+SQLite schema v16 now persists order creation timestamps. The additive v15â†’v16 migration preserves legacy orders with date unknown, and CT-11 has inclusive local date-range controls plus search. Manual date-picker usability review and payment-event date reporting remain open. Fresh full results: Node 48/48, Kotlin JVM 30/30, API 37 instrumentation 34/34, APK builds PASS, lint 0 errors / 104 warnings (112 tests). See `specs/CT-11-ORDER-HISTORY-REPORT.md`.
+
+## Superseding CT-10 payment continuation â€” 30 October 2026
+
+Native PaymentActivity now supports explicit staff-declared settlement of a matching pending UPI attempt, with linked append-only cancellation/collection events, revision and amount checks, idempotency, and no provider-verification claim. Verification: Node 49/49, Kotlin JVM 31/31, Android API 37 instrumentation 36/36 (116 total), APK tasks PASS, lint 0 errors / 107 warnings. CT-10 remains partial; manual dialog interaction, customer directory, split-tender editor, payment history and provider integration remain. See [CT-10 report](specs/CT-10-PAYMENT-FOLLOWUP-REPORT.md) and [master tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md). Broader MVP, recovery, sync, continuous Bluetooth, owner dashboard, field trials and production qualification remain incomplete.
+
+## Superseding verification â€” CT-10 screen interaction and CAT-051B baseline â€” 30 October 2026
+
+CT-10's pending-UPI follow-up was exercised through the native Android UI with accessibility automation. Entering â‚¹7.50 and confirming writes one partial staff-declared UPI receipt, links cancellation of the pending attempt, and leaves provider-verified records at zero. Complete suite: Node 49/49, Kotlin JVM 31/31, API 37 instrumentation 37/37 (117 total); APK tasks PASS; lint 0 errors / 107 warnings. CAT-051B's synthetic same-emulator SAF export and clean-install restore are already demonstrated in recorded UI artifacts; they are not cross-device or production security qualification. See `specs/CT-10-PAYMENT-FOLLOWUP-REPORT.md` and `specs/CAT-051B-IMPLEMENTATION-REPORT.md`.
+
+## Superseding CT-22 implementation â€” 30 October 2026
+
+Customer Directory now opens a dedicated CT-22 details view with persisted balance breakdown, per-order credit links, and payment/repayment events. The repayment action uses validated local business commands and clearly labels cash as staff-declared. API 37 tests validate navigation and rendered synthetic ledger values. Latest complete run: Node 49/49, Kotlin JVM 31/31, Android instrumentation 38/38, APK tasks PASS, lint 0 errors / 107 warnings. Profile/contact creation, search, dates and cloud identity remain future work. See `specs/CT-22-CUSTOMER-DETAILS-REPORT.md`.
+
+## Superseding CT-21 directory search â€” 30 October 2026
+
+The local Customer Directory includes case-insensitive filtering over persisted account IDs and links into CT-22. Instrumentation passes with two synthetic accounts. Current complete verification: Node 49/49, Kotlin JVM 31/31, API 37 instrumentation 39/39, APK tasks PASS, lint 0 errors / 107 warnings. Customer profile creation and names/contact search are not implemented. See `specs/CT-21-CUSTOMER-DIRECTORY-REPORT.md`.
+
+## Superseding CT-21 profile delivery â€” 30 October 2026
+
+Added local customer profile creation with account ID and name, plus optional phone storage gated on explicit recorded consent. The Android directory masks contact values, searches by ID or display name, and links to customer details. The SQLCipher v16â†’v17 migration and synthetic backup restore preserve profiles and financial records. Complete results: Node 49/49, Kotlin JVM 31/31, API 37 instrumentation 42/42, APK tasks PASS, lint 0 errors / 108 warnings. Profile editing/deletion, consent revocation/retention and messaging are still absent.
+
+## Superseding CT-21 profile maintenance â€” 30 October 2026
+
+Customer profiles can now be edited from the local directory. Revoking contact consent clears the stored number, preserves the original creation timestamp, updates the modified timestamp, and writes a redacted audit event plus idempotency receipt and outbox row in one encrypted SQLite transaction. It does not mutate customer credit or transaction records. The UI accessibility test covers profile creation followed by contact revocation; persistence coverage verifies audit redaction and ledger invariance. Latest complete run: Node 49/49, Kotlin JVM 31/31, Android API 37 instrumentation 43/43 (123 total), APK tasks PASS, lint 0 errors / 109 warnings. Profile deletion, retention policy, independent consent evidence, dated CRM timelines, and messaging remain open. Six-wave development and production qualification remain incomplete.
+
+## Superseding CT-24 customer repayment UI â€” 30 October 2026
+
+The directory repayment dialog now has an API 37 accessibility test that submits a synthetic â‚¹5.00 partial staff-declared cash repayment against a â‚¹20.00 balance. Reopening the encrypted database verifies a â‚¹15.00 remaining receivable and the appended repayment event. Full current-tree verification: Node 49/49, Kotlin JVM 31/31, Android instrumentation 43/43, APK tasks PASS, lint 0 errors / 109 warnings. CT-24 remains partial: receipt generation, other payment methods, aging, and broader customer selection/history are not done. Other six-wave implementation and release gates also remain open.
+
+## Superseding CT-16 multi-product count â€” 30 October 2026
+
+Added a dedicated CT-16 physical count activity linked from Inventory Overview. Selected count lines are validated as a group, persisted atomically with movement/audit/idempotency/outbox records, and do not create purchases or payables. API 37 UI coverage verifies route, two products, a zero count and durable stock movement; JVM coverage checks rollback, invalid values and duplicate command rejection. Latest full run: Node 49/49, Kotlin JVM 32/32, API 37 instrumentation 44/44 (125 total), APK tasks PASS, lint 0 errors / 110 warnings. Variance approval, multi-step session history and low-stock thresholds remain future work. The six-wave product remains incomplete.
+
+## Final full verification â€” CT-16 validation feedback â€” 30 October 2026
+
+Invalid stock-count input now leaves the form and other entered values intact while showing a local validation message. The corrected two-product count then persists atomically. Fresh full results after the final source change: Node 49/49, Kotlin JVM 32/32, Android API 37 instrumentation 44/44 (125 total), APK tasks PASS, lint 0 errors / 113 warnings. CT-16 still lacks approval/variance review, count-session history and low-stock thresholds; the six-wave project remains incomplete.
+
+## CAT-052 local authenticated sync journal prototype â€” 30 October 2026
+
+Added a local Node/PostgreSQL service with business/shop/user/device enrollment, scrypt password hashes, expiring revocable hashed-token sessions, login-failure throttling, shop/device authorization, versioned event envelope checks, idempotent event receipts, server revisions and explicit stale-revision conflict records. Additive migration 002 adapts server command IDs to the prefixed string format used by Android while preserving existing event IDs. It is tested against an isolated synthetic PostgreSQL 17 cluster, including an HTTP enrollment/sync/logout journey and least-privilege RLS checks. The service is not connected to Android: the current Android outbox stores IDs/status/time without a versioned payload; there is no Android account/device flow, network worker, acknowledgement persistence or conflict UI. The server journals commands but does not apply them to authoritative financial state. See `specs/CAT-052-SYNC-JOURNAL-REPORT.md`. This is a development foundation, not production synchronization.
+
+## CAT-052 Android payload outbox addendum â€” 30 October 2026
+
+SQLite v18 adds versioned allow-listed `projection_delta.v1` payloads for supported order, stock and non-customer-linked payment-entry mutations. Customer-linked credit and repayment entries are blocked until account IDs are opaque and privacy-reviewed. The v17â†’v18 upgrade preserves old rows but blocks them because their payload cannot be reconstructed. Settings/catalogue/profile edits and unsupported business entities are also blocked with explicit reasons. New supported events use separate UUID event IDs and opaque native command IDs. Validation: Node 49/49, Kotlin JVM 33/33, Android API 37 instrumentation 44/44, APK and lint tasks PASS (lint 0 errors/113 warnings). The full Android test XML is `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`; JVM results are in the matching `TEST-com.chaiandtapri.counter.CounterModelTest.xml`. No network sync has been exercised. CAT-052 remains in progress pending contract completion, account/device enrollment, persisted base server revision, authenticated transport, retry/ack, conflict UI and backend financial projection.
+
+
+## CAT-052 backend payload contract â€” 30 October 2026
+
+The PostgreSQL API now strictly validates `projection_delta.v1` envelopes: exact allow-listed keys, supported order/line/status structures, integer paise and quantities, bounded arrays, nonnegative stock, and no customer-linked identifiers/credit/repayment payloads. It journals accepted events but still does not apply them to server financial projections. A new isolated PostgreSQL 17 run passed all 9 backend tests (5 contract + 4 service/HTTP integration) under the non-superuser runtime role; only synthetic data was used, and the temporary DB server was stopped. No Android-to-server request was made. CAT-052 remains in progress.
+
+## CT-06 search and filter continuation â€” 30 October 2026
+
+Quick Sale now searches case-insensitively across configured product name, stable ID, category and voice/search aliases. A category selector filters all confirmed-price products, favorites or a specific product category. No-match feedback distinguishes an empty result from an empty catalogue. The UI still uses the same confirmed catalogue prices and does not alter the transaction engine. API 37 instrumentation seeded a synthetic favorite product, confirmed its opening quantity, launched Quick Sale, verified mixed-case alias search, category filtering, favorite filtering and the no-match state. Current full verification: Node 49/49, Kotlin JVM 33/33, Android instrumentation 45/45, APK build tasks PASS, lint 0 errors / 114 warnings. Evidence is in `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml` under `quickSaleSearchAndCategoryFiltersUseConfiguredProductAliases`. CT-06 remains partial: no UI-level UPI/Udhar exercise, customer lookup, split tender, receipt, discount policy, or accessibility/manual usability qualification.
+
+## CAT-052 Android envelope mapper â€” 30 October 2026
+
+Added an Android mapper from the v18 allow-listed outbox payload to the backend's `business.command.v1` request envelope. Each event is scoped to business/shop/device IDs; multi-event batches advance the base server revision sequentially, matching backend revision increments. Canonical UUID, event/command uniqueness, payload version/kind, batch-size and revision-overflow checks are covered. Latest Android verification: Kotlin JVM 34/34, API 37 instrumentation 46/46, APK builds PASS, lint 0 errors/114 warnings. Backend projection-contract test file passes 5/5. The mapper is not connected to networking: no account/device enrollment, credential storage, server cursor, transport, retry/ack or conflict UI exists. No Android sync request was sent. Full CAT-052 PostgreSQL integration was last verified 9/9 in the preceding run.
+
+
+## CT-30 configured low-stock alerts â€” 30 October 2026
+
+Added optional per-product reorder thresholds in encrypted SQLite schema v19. The v18â†’v19 migration preserves existing products, stock, and sales; existing products have no threshold until configured. The catalogue editor exposes this setting. CT-30 compares the threshold only with physically confirmed stock and does not infer missing sales or trigger purchases. Focused migration and API 37 low-stock display tests passed. Kotlin JVM 35/35, Node 49/49, backend payload-contract tests 5/5, APK build tasks PASS, lint 0 errors/114 warnings. The latest full Android run was 46/47; an existing customer-profile revocation UI assertion failed in the full run but passed in isolation. The full suite therefore needs a clean rerun. The threshold editor dialog was not directly exercised.
+
+## Superseding continuation â€” Android UI text cleanup and regression â€” 30 October 2026
+
+Corrected mojibake in visible currency and punctuation strings in `MainActivity`, `QuickSaleActivity`, and `ProductCatalogueActivity`. A fresh combined Android unit/build/lint/instrumentation run found that the customer-profile test helper returned early when Android exposed an empty field's hint as its text; the phone-number revocation assertion therefore failed in the full suite. The helper now sends the empty-text action before treating the hint as the empty field display, and the saved profile remains the source of truth for the assertion. The focused test rerun command was rejected by Gradle argument parsing, so only the subsequent full instrumentation run can qualify this fix. Latest separate clean results remain Node 49/49 and backend projection contract 5/5; Android full run is still in progress. Continue recording exact results after completion. The threshold editor submission is not yet end-to-end qualified, and the overall six-wave plan remains incomplete.
+
+## Final verification â€” CT-30/UI regression â€” 30 October 2026
+
+The full rerun completed successfully after correcting the profile test helper so that an empty phone field is actually cleared before save. The UI currency/punctuation repair also compiled and passed the Android suite. Results: Node 49/49, Kotlin JVM 35/35, Android API 37 instrumentation 47/47, backend projection contract 5/5 (136 passing test methods across separate suites); `testDebugUnitTest`, debug and instrumentation APK builds, lint, and emulator tests all passed. Lint has 0 errors / 114 warnings. Instrumentation exit code is 0. Evidence is in the generated test XML, JVM XML and `lint-results-debug.txt`. Threshold editor interaction remains unautomated. This does not complete CAT-051B, CAT-052, the Android MVP, owner dashboard, continuous Bluetooth, or the six-wave plan.
+
+
+## Superseding verification ? CT-30 catalogue threshold editor ? 30 October 2026
+
+Added API 37 instrumentation coverage for the actual catalogue editor path: edit a configured product, save a reorder threshold through the dialog, reopen encrypted storage, and verify the confirmed low-stock model includes the product. The focused emulator test passed. Full Gradle verification then passed: Kotlin JVM 35/35, Android instrumentation 48/48, APK build tasks, and lint (0 errors / 114 warnings). Node was 49/49 and the backend payload contract was 5/5 from the immediately preceding run; total evidence across these separate suites is 137 passing methods. The test and result XMLs are recorded in the Android build outputs. CT-30 now has model, persistence, migration, alert display, and editor-save coverage, but is still a prototype feature. CAT-051B, CAT-052 sync delivery, the complete shopkeeper app, owner dashboard, physical Bluetooth, shop trials, independent security review, and release qualification remain open.
+
+## Superseding continuation â€” CAT-052 durable outbox outcome journal â€” 30 October 2026
+
+Implemented encrypted SQLite schema v20 with a `server_revision` on sync outbox rows and persistence APIs to read sendable pending events, read the current acknowledged server revision, and record accepted/duplicate/conflict outcomes. Event acknowledgement is atomic with row status and the cursor update; repeated identical acknowledgements are idempotent; conflicting or altered replays are rejected. A conflict records the server revision and blocks later queued events from being returned. The follow-up guard now rejects an acknowledgement for any event other than the earliest currently eligible event, preventing an out-of-order response from advancing the cursor past earlier work. Historical non-sendable/blocked rows remain excluded. Added an API 37 instrumentation scenario that downgrades a synthetic database to v19, verifies the additive v19â†’v20 migration preserves queued events, tests out-of-order rejection, accepted/duplicate outcomes, a conflict, durable statuses and cursor blocking. The focused test passed 1/1 after the final guard change.
+
+Verification from this continuation: Node 49/49; Kotlin JVM 35/35; backend projection-contract tests 5/5; debug APK and Android-test APK build tasks PASS; lintDebug PASS with 0 errors (114 warnings). The complete API 37 instrumentation run executed 49 cases and failed 5 UI tests (44 passed): catalogue editor, multi-product inventory count, customer profile dialog, staff-declared UPI receipt, and customer repayment UI. The recorded failures were missing accessibility controls; the payment screen failure also captured a Pixel Launcher not-responding dialog. Two unrelated launch tests (device-permission and daily-report) passed individually after the earlier full run. Therefore the emulator suite is NOT green and overall Android UI qualification remains unresolved. The focused sync-journal instrumentation test passes; it does not clear the five UI failures. Evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`, JVM XML under `android/app/build/test-results/testDebugUnitTest/`, and `android/app/build/reports/lint-results-debug.txt`.
+
+CAT-052 remains a local persistence foundation only. No authenticated network uploader, retry worker, protected server credential, server-side projection application, or remote synchronization was implemented. The stored cursor is a persisted acknowledgement high-water mark; transport/server ordering and crash-safe request delivery still need an end-to-end design and tests. CAT-051B, complete Android MVP, owner dashboard, continuous Bluetooth, physical-device/field trials, independent security review, and release readiness remain open.
+
+## Superseding verification â€” emulator launcher recovery and CAT-052 journal â€” 30 October 2026
+
+The earlier full-suite result with five UI failures was caused by the emulator's Pixel Launcher entering an ANR dialog, which obscured the app from UI automation. Captured evidence at `test-evidence/emulator-launcher-anr.png`; restarting only the emulator launcher cleared the dialog (`test-evidence/emulator-launcher-restarted.png`). The five previously failing UI tests then passed individually. The complete current-tree run subsequently passed: Node 49/49, Kotlin JVM 35/35, API 37 Android instrumentation 49/49 (133 passed across these three app suites), backend projection contract 5/5 (138 method executions across four suites), debug APK and instrumentation APK tasks PASS, lint 0 errors / 114 warnings. Full command: `.\gradlew.bat testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug connectedDebugAndroidTest --console=plain` from `android/`; Node and backend contract commands were run separately. The API 37 XML at `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml` now reports 49 tests, 0 failures, 0 errors, 0 skipped. This verifies the emulator's current test run, not physical-device or field behavior.
+
+CAT-052 update: schema v20 durably records per-event accepted/duplicate/conflict outcome and server revision; the stored server-revision cursor advances monotonically and an out-of-order response cannot acknowledge past the earliest eligible outbox event. The v19â†’v20 migration, retries, conflict blocking, cursor persistence, and this queue-head guard pass an API 37 test. Android network delivery, credential/device enrollment, background retries, conflict-resolution UI, and authoritative server financial projection are still outstanding. CAT-051B functional same-emulator recovery is documented as passed in its implementation report; independent security review, hard power-loss/low-storage qualification and second-device recovery remain open. The six-wave project remains in progress.
+
+## CAT-052 Android sync-runner slice â€” 30 October 2026
+
+Added a manually invokable Android sync runner over the existing allow-listed outbox. It builds the authenticated backend envelope, pushes one event per request in revision order, validates event-correlated responses and persists accepted/duplicate/conflict results through the schema-v20 journal. The HTTP transport requires HTTPS/platform TLS, forbids redirects and credentials in URLs, bounds response sizes, and keeps bearer tokens out of persistent storage/logging. Android INTERNET permission is declared; cleartext remains disabled. Focused API 37 tests passed 4/4. Kotlin JVM 35/35, Node 49/49, backend contract 5/5, APK build tasks PASS, lint 0 errors/114 warnings. The latest full Android run remains flaky: 48/53 passed; the same five accessibility UI tests failed while Pixel Launcher was in ANR. No authenticated network server was contacted. Login/session provisioning, protected token vault, settings/endpoint UX, WorkManager/retry, conflict UI, server projections, and real HTTP integration remain unimplemented. See `CAT-052-ANDROID-SYNC-RUNNER-REPORT.md`.
+### CAT-052 sync continuation â€” Android session vault (30 Oct 2026)
+
+Implemented Android Keystore AES-GCM storage for the synthetic/server-issued sync session envelope and added focused emulator coverage. Session vault: 3/3 instrumentation tests; sync runner: 4/4. Current-source debug and instrumentation APK builds passed. The full Android suite remains unresolved (latest full attempt 48/53 with emulator launcher ANR and five UI failures). Login/enrollment UI, session revocation, endpoint configuration, manual sync UI, background retries, real backend TLS request and server-side financial projection are still open; this does not qualify end-to-end sync.
+
+**Superseding full regression â€” 30 Oct 2026:** After restarting the emulator Pixel Launcher, current full Android instrumentation passed 56/56 (49 existing app cases + 4 sync-runner + 3 session-vault cases). Kotlin JVM 35/35; Node 49/49; backend contract 5/5; debug/instrumentation APK builds PASS; lint 0 errors / 118 warnings. Full XML evidence: `test-evidence/cat052-session-vault/full-instrumentation.xml`. Sync credentials are encrypted at rest, but no login/enrollment UI or remote authenticated request exists; CAT-052 remains in progress.
+
+**Superseding connected-sync UI slice â€” 30 Oct 2026:** Added the Android HTTPS account client and owner-only Cloud Sync screen from Shop Home. The screen supports server account creation, re-login on a device already registered to that shop, manual sync, and confirmed server logout. Account/API contract tests use synthetic server responses; screen visibility/action smoke is emulator-tested. Latest full results: Android 62/62, Kotlin JVM 35/35, prototype Node 49/49, backend 5 passed/4 PostgreSQL tests skipped (database unavailable for this run), APK builds PASS, lint 0 errors/128 warnings. Evidence: `test-evidence/cat052-session-vault/full-instrumentation-with-account-ui.xml`. No live HTTPS server request was made; end-to-end sync, existing-shop new-device enrollment, server projection application, durable WorkManager retries and conflict resolution remain open.
+
+## CAT-052 WorkManager continuation â€” 30 October 2026
+
+Added durable one-time and owner-enabled six-hour background sync scheduling through WorkManager 2.12.0. Jobs require connected network, use exponential backoff, carry no credential or business payload in WorkManager data, and process up to five eligible events per run before queueing a continuation. A process lock serializes manual sync, account/session replacement, logout and the background worker. The worker observes the backup/recovery write barrier, uses the existing Keystore session and encrypted allow-listed outbox, and records only non-sensitive status. Cloud Sync now offers queue, periodic-enable and pause actions; logout cancels queued jobs and waits for in-flight sync before revoking/clearing credentials. Session decryption was moved off the activity main thread.
+
+Final-source verification: Node 49/49; Kotlin JVM 35/35; Android worker instrumentation 3/3; debug and instrumentation APK compilation/build PASS; lint 0 errors / 138 warnings. Backend tests 5 passed / 4 skipped because PostgreSQL integration was not running. Full Android instrumentation did not complete: emulator services failed during the 65-case run, and isolated Cloud Sync screen launches hit a Pixel Launcher ANR before the test could launch the activity. Worker runner and Gradle logs are under `test-evidence/cat052-workmanager/`; launcher ANR screenshots and failing UI XML are recorded there or under Android build outputs. This is not a complete Android regression pass and the modified screen remains emulator-unqualified.
+
+CAT-052 is still not end-to-end sync qualified: no live HTTPS request occurred; server financial projections, new-device enrollment, conflict-resolution UI and production server operation are absent. The full app suite must be rerun on a stable emulator. Physical device behavior, field qualification, independent security review and product release readiness remain open.
+
+Superseding lint verification after the final Cloud Sync main-thread change: `:app:lintDebug` passed with 0 errors and 139 warnings. `:app:testDebugUnitTest` also passed after that change; the JVM report remains 35/35. The warning count supersedes the earlier 138-warning line in this continuation.
+# CT-06/CT-10 saved-customer selection â€” 31 October 2026
+
+Quick Sale and the Payment/Live Orders credit flows now use a shared saved-customer picker instead of asking the operator to type an account ID in the counter workflow. The picker merges customer profiles with legacy credit-ledger accounts, supports search, displays due balances and never creates an account implicitly. API 37 UI tests verified saved-customer Udhar through Quick Sale and Live Orders; the selected customer was attached to the receivable and stock moved once. Full current-source verification: Node 49/49; Kotlin JVM 38/38; Android instrumentation 67/67; debug and instrumentation APK builds passed; lint 0 errors / 138 warnings; backend 5 passed / 4 PostgreSQL integration cases skipped. Details and evidence references are in [CT-06/10 customer picker report](specs/CT-06-10-CUSTOMER-PICKER-REPORT.md). This does not complete CT-21â€“24 or the full app; cloud/backend integration tests, physical device qualification and the larger MVP remain pending.
+## Superseding counter verification â€” 31 October 2026
+
+The current native UI has verified Quick Sale cash and UPI-pending transactions plus saved-customer Udhar from Quick Sale and Live Orders. The shared picker searches saved profiles and legacy credit accounts; payment status remains distinct (cash is staff-declared, UPI remains pending), and the tested handovers deduct stock once. Full current-source run: Node 49/49, Kotlin JVM 38/38, Android API 37 instrumentation 68/68, debug and instrumentation APK builds PASS, lint 0 errors / 138 warnings. Backend tests: 5 passed / 4 PostgreSQL integration tests skipped. See [CT-06/10 report](specs/CT-06-10-CUSTOMER-PICKER-REPORT.md). The full MVP remains incomplete; recovery physical-failure and independent-review gates, most shopkeeper screens, owner web, production sync, continuous Bluetooth and field trials remain open.
+## Superseding Quick Sale split-tender slice â€” 31 October 2026
+
+CT-06 now supports an atomic â€œcash + Udharâ€ split: the operator records a cash amount, selects a saved customer for the remainder, and the engine commits the order, staff-declared cash, receivable, audit/outbox event and stock movement together. Invalid amounts or a missing customer make no sale; injected storage failure rolls back the entire split; duplicate command IDs do not repost. The emulator also verifies cash and UPI-pending Quick Sale states, and saved-customer Udhar from Quick Sale and Live Orders. Current complete verification: Node 49/49, Kotlin JVM 40/40, API 37 instrumentation 69/69, debug and instrumentation APK builds PASS, lint 0 errors / 139 warnings. Backend 5 passed / 4 PostgreSQL-dependent cases skipped. See [counter workflow report](specs/CT-06-10-CUSTOMER-PICKER-REPORT.md). These are partial CT-06/08/10 workflows; full Android MVP, production synchronization, hardware voice and field validation remain ahead.
+
+## Superseding Sales History to refund flow â€” 31 October 2026
+
+Added and verified an API 37 UI test that opens an order from CT-11 Sales History, records a reasoned item refund through CT-12, requires explicit staff-declared cash refund confirmation, and waits for the updated order balance to render. Reopened SQLCipher records verify the cash collection remains, due is zero, one unit is refunded, the refund payment/audit events are appended, and stock is not restocked without a returnability policy. Complete regression: Node 49/49, Kotlin JVM 40/40, Android instrumentation 70/70, debug and instrumentation APK tasks PASS, lint 0 errors / 139 warnings. Backend tests: 5 passed / 4 PostgreSQL-dependent tests skipped because no test database was configured. See `specs/CT-11-SALES-HISTORY-REPORT.md`, `specs/CT-12-REFUND-CORRECTION-REPORT.md`, and `test-evidence/2026-10-31/ct11-ct12-regression.md` with the preserved XML. Remaining MVP, sync, voice hardware, security review and field gates remain open.
+
+**Superseding CT-10 continuation â€” 31 October 2026:** Added an atomic completed-order cash-plus-Udhar split to Kotlin and the browser transaction engine, plus a confirmed Android Payment screen path. Current-source checks: Node 50/50, Kotlin JVM 43/43, API 37 instrumentation 71/71, debug and instrumentation APK builds PASS, lint 0 errors/140 warnings. Backend 5 contract tests passed; 4 PostgreSQL-dependent integration tests skipped without a test database. The tested split was â‚¹5 staff-declared cash + â‚¹10 receivable on a synthetic â‚¹15 order; encrypted SQLite reopen verified balances, ledgers, audit and unchanged stock. This does not finish CT-10, CAT-051B, the shopkeeper MVP or product. See `specs/CT-10-PAYMENT-FOLLOWUP-REPORT.md`; evidence is preserved under `test-evidence/2026-10-31/`.
+## Superseding CT-10 payment history and privacy action â€” 31 October 2026
+
+The native Payment screen now exposes payment history with explicit evidence labels for staff-declared receipts, UPI pending, Udhar, cancelled attempts and reversals/refunds. Customer profile editing also provides an explicit action to clear the saved phone and revoke contact consent through the audited update path. Full-source verification passed: Node 50/50, Kotlin JVM 43/43, API 37 instrumentation 72/72, debug/instrumentation APK builds PASS, lint 0 errors/140 warnings; backend 5 passed and 4 PostgreSQL-dependent tests skipped. Evidence: `test-evidence/2026-10-31/ct10-history-final-gradle.log` and `ct10-history-final-instrumentation.xml`. This remains prototype-level emulator qualification; provider verification, manual usability and full product/security/release gates remain open.
+## Superseding CT-10 payment workflow â€” 31 October 2026
+
+Added native cash-plus-UPI-pending split tender. The operator confirms cash physically received; the balance is an unverified pending UPI attempt. A later UPI follow-up records the observed amount as staff-declared and appends the pending-attempt cancellation. Current full regression: Node 51/51, Kotlin JVM 44/44, API 37 instrumentation 73/73, debug and instrumentation APK builds PASS, lint 0 errors/141 warnings. Backend: 5 pass, 4 PostgreSQL-dependent tests skipped without an isolated database. UI evidence verifies encrypted persistence across activity restart, correct tender allocation, unchanged stock and no provider-verified records. See `specs/CT-10-PAYMENT-FOLLOWUP-REPORT.md` and `test-evidence/2026-10-31/ct10-cash-upi-instrumentation.xml`. This is one additional CT-10 prototype slice; the six-wave project remains incomplete.
+## Superseding CT-10 payment qualification â€” direct UPI receipt â€” 31 October 2026
+
+Added a direct UPI collection path when staff observes receipt without a pre-existing pending attempt. It requires explicit confirmation and is stored as staff-declared; it rejects an unresolved pending attempt, which must use the linked pending-follow-up path. The transaction engine remains idempotent and revision-checked; no provider-verified event is created. Final full regression: Node 52/52, Kotlin JVM 45/45, API 37 instrumentation 74/74, debug/instrumentation APK builds PASS, lint 0 errors/141 warnings. Backend 5 passed and 4 PostgreSQL-dependent tests skipped without an isolated database. Evidence: `test-evidence/2026-10-31/ct10-direct-upi-*`. This completes another partial CT-10 workflow only; project delivery remains in progress.
+
+## Superseding CAT-051B recovery failure coverage â€” 1 November 2026
+
+Added an API 37 synthetic short-write test for an encrypted backup destination that fails after a partial archive has been emitted. It proves the active order is unchanged, private SQLCipher staging files are removed, the global write barrier is released, and the counter accepts a subsequent sale. A profile-consent UI test now waits for UI idle after revocation before verifying encrypted persisted state. Current full-source checks: Node 52/52; Kotlin JVM 45/45; Android API 37 instrumentation 75/75; APK build tasks PASS; lint 0 errors / 141 warnings. Evidence is in `test-evidence/2026-11-01/cat051b-final-gradle-rerun.log`, `test-evidence/2026-10-31/cat051b-final-node.log`, the Android/JVM result XML under `android/app/build/`, and the detailed [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md). CAT-051B remains open for real storage exhaustion, hard interruption/power loss, physical Keystore invalidation, separate-device/person recovery and independent security review. The six-wave product, most Android workflows, live authenticated sync, owner dashboard, continuous Bluetooth and production qualification remain in progress.
+
+### SAF partial-document cleanup follow-up â€” 1 November 2026
+
+The backup UI now best-effort deletes the selected SAF document when export fails after the destination has been created. If the provider cannot delete it, the owner is explicitly told that a partial file may remain and must be removed before retrying. `BackupExportPolicy` JVM coverage verifies cleanup success, cleanup refusal without masking the original export error, and no deletion after a successful write. After this app-source change, Kotlin JVM 46/46, Node 52/52, APK build tasks PASS, lint 0 errors/141 warnings. A focused API 37 recovery-screen run was blocked because the AVD did not register with ADB; the preceding full API 37 75/75 run predates this final UI branch. Do not claim the new cleanup behavior as emulator-qualified until rerun. Details and evidence are in the [CAT-051B report](specs/CAT-051B-IMPLEMENTATION-REPORT.md) and `test-evidence/2026-11-01/`.
+
+
+
+# Current continuation — CT-16 stock count review — 1 November 2026
+
+CT-16 now displays a pre-commit physical-count review with signed variance for confirmed stock baselines and an explicit opening-stock message when no baseline is confirmed. The operator must confirm before the existing atomic stock-only command runs. Current checks: prototype Node 52/52, Kotlin JVM 52/52, backend 11 pass / 4 PostgreSQL tests skipped in the no-database run (separate isolated PostgreSQL 17 OW-05 run 15/15), APK build and instrumentation APK packaging PASS, lint 0 errors/149 warnings. The current source was not run on the emulator because ADB reports no connected device. Report: [CT-16 stock count review](specs/CT-16-STOCK-COUNT-REVIEW-REPORT.md). The six-wave product remains incomplete and not production-qualified.
+
+# Current continuation — CT-17 purchase order drafts and partial receipts — 1 November 2026
+
+The Android procurement screen now supports durable multi-line purchase order drafts, owner-marked sent state, cancellation before deliveries, and partial/final receiving linked to the original order. Draft estimates do not change stock or payables; only posted receipts do. SQLCipher v20→v21 migration is additive. Verification: Kotlin JVM 54/54, prototype Node 52/52, debug/instrumentation APK build tasks PASS, lint 0 errors/154 warnings. The instrumentation migration/delivery test compiled but did not run because ADB has no device. Backend no-PostgreSQL run: 11 pass / 4 skipped; separate OW-05 isolated PostgreSQL run: 15/15. Details: [CT-17 report](specs/CT-17-PURCHASE-ORDER-DRAFT-REPORT.md). The six-wave product remains incomplete and not production-qualified.
+
+
+## Superseding continuation — CT-17 purchase order runtime check — 1 November 2026
+
+The purchase-order draft/partial-receiving slice now has a targeted API 37 result: v20→v21 migration and partial/final receiving passed 1/1, and the procurement receiving-screen test passed 1/1 in separate focused runs. Current source: Node 52/52; Kotlin JVM 54/54; APK build tasks PASS; lint 0 errors/154 warnings. A full 76-case instrumentation attempt before the migration fix passed 58 and failed 18: four were the now-fixed duplicate-table migration issue; the others were UI/test-environment failures with accessibility timeouts and System UI ANRs on the constrained AVD. The full suite was not rerun after correction; it is not qualified. Report: `specs/CT-17-PURCHASE-ORDER-DRAFT-REPORT.md`; evidence under `test-evidence/2026-11-01/`. Chai And Tapri OS remains incomplete and not production-ready.
+
+## Superseding continuation — CT-16/CT-17 full emulator regression — 1 November 2026
+
+The post-fix API 37 instrumentation suite passed 76/76. The regression caught and fixed a duplicate-table migration replay issue in the schema v20→v21 purchase-order migration and a stale CT-16 accessibility assertion. Current source checks: Node 52/52, Kotlin JVM 54/54, API 37 instrumentation 76/76, debug and instrumentation APK builds PASS, lint 0 errors/154 warnings. The debug APK was installed and launched to Welcome; screenshot: `test-evidence/2026-11-01/ct17-emulator-counter-screen.png`. Logs/XML: `test-evidence/2026-11-01/ct17-final-source-gradle.log`, `ct17-full-final-instrumentation.log`, `ct17-full-final-instrumentation.xml`. CT-16 count review and CT-17 purchase drafts/partial receiving have current synthetic emulator coverage. This does not complete CAT-051 external recovery/security gates, the 32-screen shopkeeper MVP, full sync, owner dashboard, continuous Bluetooth, physical shop trials or release qualification.
+
+**Recovery qualification continuation (1 November 2026):** Added and passed an API 37 instrumentation test for the uncommitted post-activation restore-journal state. The startup path restores the original encrypted store and preserves the staged replacement as an interrupted artifact. This exercises deterministic recovery state, not a hard process termination. CAT-051B remains partial: real interruption/storage exhaustion, physical key invalidation, second-device/person recovery and independent review remain open. Current broader Android suite remains 63/77 after system UI ANRs. See `specs/CAT-051B-IMPLEMENTATION-REPORT.md` and `test-evidence/2026-11-01/cat051b-precommit-recovery-focused.xml`.
+
+**CT-20 supplier settlement update (1 November 2026):** Added staff-declared supplier cash/UPI settlement recording in the model and procurement UI. UPI reduces the staff-managed supplier payable but remains explicitly unverified and does not affect drawer cash. Method validation, duplicate command handling, overpayment rejection, persistent ledger history and cash reconciliation are covered. No schema change was needed. Kotlin JVM 56/56; focused API 37 procurement UI test 1/1; APK tasks pass; lint 0 errors/154 warnings. The current-source full Android suite was not rerun; the preceding 63/77 run had System UI/Pixel Launcher ANRs. See `specs/CT-17-20-PROCUREMENT-REPORT.md` and `test-evidence/2026-11-01/ct20-supplier-upi-ui-focused.xml`. Overall project remains incomplete.
+
+**CT-20 supplier payment dialog interaction (1 November 2026):** Extended runtime evidence now covers choosing UPI and submitting the actual dialog, then reopening encrypted persistence to verify staff-declared status, supplier payable reduction, unchanged drawer expected cash and snapshot integrity. Focused API 37 Android instrumentation: 1/1 passed. Evidence: `test-evidence/2026-11-01/ct20-supplier-upi-dialog-focused.xml`; build/unit/lint: `test-evidence/2026-11-01/ct20-supplier-upi-dialog-build-unit-lint.log`. The first emulator attempt failed before test execution because Android system services were still booting; after cold boot, the focused test passed. Full Android suite remains not rerun on current source.
+
+**Historical Android run note (1 November 2026):** Initial full runs were interrupted during the first expensive owner-auth test before JUnit output. Isolated instrumentation passed in 72.346 seconds. The subsequent 80/80 and 81/81 runs are superseded by the latest 82/82 source-qualified report above.
+
+**CT-19/20 supplier directory-to-details workflow (1 November 2026):** Added case-insensitive supplier name/ID filtering and a dedicated owner-gated details view backed by existing encrypted local ledgers. The focused API 37 test searches among two synthetic suppliers, opens the selected supplier, verifies receipts, invoice reference, staff-declared payment and payable, and checks supplier data isolation. PASS 1/1; evidence: `test-evidence/2026-11-01/ct19-supplier-search-details-focused.xml`. No schema migration. Node 52/52, Kotlin JVM 56/56, backend 11 pass / 4 PostgreSQL-dependent skips; debug/instrumentation APK build and lint pass (0 errors / 154 warnings). Full instrumentation remains unresolved and product-wide work remains active.
+
+**CAT-051B encrypted restore regression (1 November 2026):** The focused API 37 case `verifiedBackupRestoresSyntheticFinancialHistoryIntoSeparateStoreWithNewLocalKey` passed 1/1. It restores synthetic order, payment, refund, udhar, repayment, stock, drawer, audit and outbox history into an isolated store, verifies reconciliation/idempotency, and confirms new local key material. Evidence: `test-evidence/2026-11-01/cat051b-rich-backup-restore-focused.xml`. This does not substitute for fresh SAF UI/uninstall-reinstall execution or the documented hardware, interruption, storage exhaustion and independent-review gates.
+
+**Superseding current build/lint results (1 November 2026):** Node 52/52; Kotlin JVM 56/56; backend 11 passed / 4 PostgreSQL-dependent tests skipped; debug and instrumentation APK tasks passed; lint 0 errors / 155 warnings. Focused API 37 cases for supplier details, supplier UPI dialog, financial restore and restore-journal recovery each passed 1/1. Full current-source instrumentation is unresolved. Complete details: `test-evidence/2026-11-01/current-ct19-recovery-verification.md`.
+
+**Historical full emulator regression (1 November 2026):** A prior source passed `connectedDebugAndroidTest` 80/80 on API 37 in 6m52s. It was superseded by later 81/81 and current 82/82 runs recorded at the top of this plan. Earlier 63/77 results remain historical. The product and external qualification gates remain in progress.
+
+## CT-03 actor attribution follow-up — 2 November 2026
+
+Actor attribution now covers shared business transaction commits and direct audited persistence writes where an authenticated local actor is present. Successful owner/staff authentication events carry local actor IDs; failed logins and migrated historical events remain null by design. Selected assertions verify owner login, staff product/shop-profile writes, business transaction persistence across encrypted reopen and the schema v24-to-v25 migration. Final API 37 instrumentation: 87/87 passed. Build/unit/APK/lint verification also passed before the final instrumentation rerun; lint reported 0 errors / 161 warnings. Evidence: `test-evidence/2026-11-02/ct03-actor-attribution-full-instrumentation-final.xml` and `test-evidence/2026-11-02/ct03-actor-attribution-verification.md`. Coverage remains selected, not exhaustive; staff permission completeness, background actor policy, independent security review, physical-device/field qualification and the full product remain open.
+
+## Focused staff actor assertions - 2 November 2026
+
+The local staff credential test now asserts local-owner attribution for account creation, staff-ID attribution for successful login, null actor for failed login, and manager-ID attribution for account disable. Focused API 37 instrumentation passed 1/1; JUnit XML: `test-evidence/2026-11-02/ct03-staff-account-actor-attribution-focused.xml`. Overall full instrumentation remains 87/87; this focused assertion run did not add a test method. Full Wave 2 work continues.
+
+## Current focused follow-up - 2 November 2026
+
+API 37 instrumentation passed the updated staff actor assertion 1/1 and the restored CT-04 permissions screen test 1/1. CT-04 direct permission-prompt Allow remains pending; the earlier manual Settings grant/return evidence is retained. Continue with CT-04 result qualification through a trusted device interaction path, then the remaining CT-01-12 workflows. Overall full product and device/security gates remain open.

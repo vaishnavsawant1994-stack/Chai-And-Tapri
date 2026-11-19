@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#153c32" />
+    <meta name="description" content="Chai And Tapri OS quick-sale counter prototype." />
+    <title>Quick Sale · Chai And Tapri OS</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#sell" aria-label="Chai And Tapri home">
+          <span class="brand-mark" aria-hidden="true"><span>च</span></span>
+          <span><strong>chai & tapri</strong><small>shop OS</small></span>
+        </a>
+        <div class="shop-switcher">
+          <span class="shop-avatar">CT</span>
+          <span class="shop-name"><strong>Chai Corner</strong><small>Camp, Pune</small></span>
+          <span class="chevron">⌄</span>
+        </div>
+        <div class="nav-caption">COUNTER</div>
+        <nav class="nav-list">
+          <button class="nav-item" data-nav="home"><span class="nav-icon">⌂</span>Home</button>
+          <button class="nav-item active" data-nav="sell"><span class="nav-icon">＋</span>Sell <span class="nav-dot"></span></button>
+          <button class="nav-item" data-nav="orders"><span class="nav-icon">▤</span>Orders <span class="nav-count" id="open-order-count">0</span></button>
+          <button class="nav-item" data-nav="stock"><span class="nav-icon">▦</span>Stock</button>
+        </nav>
+        <div class="nav-caption manage-caption">MANAGE</div>
+        <nav class="nav-list">
+          <button class="nav-item" data-nav="history"><span class="nav-icon">◷</span>Sales history</button>
+          <button class="nav-item" data-nav="reports"><span class="nav-icon">▥</span>Reports</button>
+          <button class="nav-item" data-nav="more"><span class="nav-icon">•••</span>More</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="help-card"><span class="help-mark">?</span><span><strong>Need a hand?</strong><small>Quick start guide</small></span><span class="arrow">↗</span></div>
+          <button class="profile-button" id="profile-button"><span class="profile-avatar">AK</span><span><strong>Ajay Kulkarni</strong><small>Owner · Shift 1</small></span><span class="chevron">⌄</span></button>
+        </div>
+      </aside>
+
+      <main class="main-area" id="sell">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Counter</span><span class="crumb-sep">/</span><strong>Quick sale</strong></div>
+          <div class="topbar-actions">
+            <div class="shift-chip"><span class="live-dot"></span><span>Shift open</span><i></i><span>Since 7:02 AM</span></div>
+            <button class="sync-chip" id="network-toggle" title="Toggle the prototype's network status"><span class="sync-icon">⌁</span><span id="network-label">Online · demo</span></button>
+            <button class="icon-button notification-button" id="notification-button" aria-label="Notifications">♧<span class="notification-dot"></span></button>
+          </div>
+        </header>
+
+        <section class="content-wrap">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">WEDNESDAY, 28 OCTOBER 2026 <span class="heading-dot">·</span> COUNTER 01</p>
+              <h1>Quick sale <span class="wave">☀</span></h1>
+              <p class="heading-sub">Serve your customer. We’ll keep the record.</p>
+            </div>
+            <button class="today-summary" id="history-button"><span class="summary-icon">↗</span><span><small>Recorded today</small><strong id="today-total">₹0</strong></span><span class="summary-chevron">›</span></button>
+          </div>
+
+          <div class="workbench">
+            <section class="catalog-panel" aria-label="Product catalogue">
+              <div class="catalog-toolbar">
+                <div class="section-title"><span class="sun-icon">✳</span><h2>Popular products</h2><span class="tiny-count" id="visible-count">08</span></div>
+                <button class="text-button" id="edit-favourites">Edit favourites <span>↗</span></button>
+              </div>
+              <div class="catalog-search-row">
+                <label class="search-box"><span class="search-icon">⌕</span><input id="product-search" type="search" placeholder="Search or scan a product" autocomplete="off" /><kbd>⌘ K</kbd></label>
+                <button class="scan-button" id="scan-button"><span class="scan-icon">▣</span><span>Scan</span></button>
+              </div>
+              <div class="category-row" id="category-row" role="tablist" aria-label="Product categories"></div>
+              <div class="product-grid" id="product-grid"></div>
+              <div class="catalog-footnote"><span class="mini-shield">✓</span>Prices are from your shop catalogue <span class="footnote-divider">·</span> <button id="stock-link">View stock</button></div>
+            </section>
+
+            <aside class="order-panel" aria-label="Current order">
+              <div class="order-panel-head">
+                <div><div class="order-title-line"><h2>Current order</h2><span class="draft-badge" id="draft-badge">DRAFT</span></div><p class="order-subtitle"><span class="order-number">New order</span><span class="subtitle-sep">·</span><span id="order-time">Just now</span></p></div>
+                <button class="more-button" id="order-more" aria-label="Order actions">•••</button>
+              </div>
+              <div class="customer-row">
+                <span class="customer-icon">♙</span><span class="customer-label" id="customer-label">Walk-in customer</span><button class="add-customer" id="customer-button">+ Add</button>
+              </div>
+              <div class="cart-content" id="cart-content"></div>
+              <div class="empty-cart" id="empty-cart"><div class="empty-illustration"><span>＋</span></div><strong>Start a new order</strong><span>Tap a product to add it here</span><small>Walk-in customers stay anonymous</small></div>
+              <div class="cart-bottom" id="cart-bottom">
+                <div class="bill-row"><span>Subtotal</span><strong id="subtotal">₹0</strong></div>
+                <div class="bill-row discount-row" id="discount-row"><span>Discount <button id="discount-button">Add</button></span><strong id="discount-value">−₹0</strong></div>
+                <div class="bill-total"><span>Total</span><strong id="total">₹0</strong></div>
+                <div class="payment-label-row"><span>Payment</span><span class="payment-help">How did they pay?</span></div>
+                <div class="payment-methods" role="group" aria-label="Payment method">
+                  <button class="payment-option selected" data-method="cash"><span class="pay-option-icon cash-icon">₹</span><span>Cash</span><span class="selected-check">✓</span></button>
+                  <button class="payment-option" data-method="upi"><span class="pay-option-icon upi-icon">⌁</span><span>UPI pending</span><span class="selected-check">✓</span></button>
+                  <button class="payment-option" data-method="udhar"><span class="pay-option-icon udhar-icon">◷</span><span>Udhar</span><span class="selected-check">✓</span></button>
+                </div>
+                <div class="credit-picker" id="credit-picker" hidden>
+                  <label for="credit-customer">Choose khata customer <span>*</span></label>
+                  <select id="credit-customer"><option value="">Select customer</option><option value="ramesh">Ramesh Patil</option><option value="neha">Neha Sharma</option><option value="office">Office order · Mehta & Co.</option></select>
+                </div>
+                <button class="complete-button" id="complete-sale" disabled><span>Record sale</span><span class="complete-total" id="button-total">₹0</span><span class="button-arrow">→</span></button>
+                <div class="save-note"><span class="save-check">✓</span><span>Saved on this device first</span><button id="offline-info" aria-label="About offline saving">i</button></div>
+              </div>
+              <button class="voice-link" id="voice-button"><span class="voice-mic">◖</span><span><strong>Use your voice</strong><small>Quick command · B1</small></span><span class="voice-arrow">→</span></button>
+            </aside>
+          </div>
+
+          <div class="bottom-note"><span class="note-spark">✳</span><span>Fast counter, clear hisaab.</span><span class="bottom-note-right">Prototype preview <span>·</span> Not connected to payments or cloud sync</span></div>
+        </section>
+
+        <nav class="mobile-nav" aria-label="Mobile navigation">
+          <button data-nav="home"><span>⌂</span><small>Home</small></button><button class="active" data-nav="sell"><span>＋</span><small>Sell</small></button><button data-nav="orders"><span>▤</span><small>Orders</small></button><button data-nav="stock"><span>▦</span><small>Stock</small></button><button data-nav="more"><span>•••</span><small>More</small></button>
+        </nav>
+      </main>
+    </div>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <dialog class="modal" id="voice-modal"><form method="dialog" class="modal-card voice-modal-card"><button class="modal-close" aria-label="Close">×</button><div class="modal-kicker"><span class="mic-pulse">◖</span> QUICK VOICE · B1</div><h2>Add items by voice</h2><p class="modal-copy">Speech recognition fills the command field only. Review and preview the result before adding items.</p><label class="voice-input-label" for="voice-language">Recognition language</label><select id="voice-language" class="language-select"><option value="hi-IN">Hindi / Hinglish</option><option value="mr-IN">Marathi</option><option value="en-IN">English (India)</option></select><label class="voice-input-label" for="voice-input">Try a counter command</label><div class="voice-input-row"><input id="voice-input" placeholder="e.g. do cutting chai, ek samosa" /><button type="button" id="listen-voice">Speak</button><button type="button" id="parse-voice">Preview</button></div><div class="speech-status" id="voice-speech-status" aria-live="polite">Microphone is off.</div><div class="voice-results" id="voice-results" hidden></div><div class="voice-modal-footer"><span>Order changes stay in draft until you record the sale.</span><button class="quiet-button" value="cancel">Done</button></div><button type="button" class="b2-next" id="open-b2"><span class="b2-icon">⌁</span><span><strong>Continuous Bluetooth Counter</strong><small>Open the typed-command queue preview</small></span><span class="coming-soon">B2</span></button></form></dialog>
+
+    <dialog class="modal" id="b2-modal"><form method="dialog" class="modal-card b2-modal-card"><button class="modal-close" aria-label="Close">×</button><div class="modal-kicker"><span class="b2-icon">⌁</span> MODE B2 · COUNTER SESSION</div><h2>Live order queue</h2><p class="modal-copy">Speak one command or type it. Speech is transcribed for review; run the command only after checking the text.</p><div class="session-notice"><span class="session-dot"></span><span><strong>Session preview active</strong><small>Audio off · changes are local demo records</small></span><button type="button" id="end-b2">End preview</button></div><div class="b2-queue-heading"><strong>Open orders</strong><span id="b2-order-count">0</span></div><div class="b2-order-list" id="b2-order-list"></div><label class="voice-input-label" for="b2-language">Recognition language</label><select id="b2-language" class="language-select"><option value="hi-IN">Hindi / Hinglish</option><option value="mr-IN">Marathi</option><option value="en-IN">English (India)</option></select><label class="voice-input-label" for="b2-command">Enter a counter command</label><div class="voice-input-row b2-command-row"><input id="b2-command" placeholder="e.g. naya order, do cutting chai, ek samosa" autocomplete="off" /><button type="button" id="listen-b2">Speak</button><button type="button" id="run-b2-command">Run command</button></div><div class="speech-status" id="b2-speech-status" aria-live="polite">Microphone is off.</div><div class="b2-feedback" id="b2-feedback" aria-live="polite">Commands with unclear order references do not change records.</div><div class="sample-commands"><span>Try</span><button type="button" data-b2-sample="naya order, do cutting chai, ek samosa">New order</button><button type="button" data-b2-sample="order 101 ready">Mark ready</button><button type="button" data-b2-sample="order 101 de diya">Hand over</button><button type="button" data-b2-sample="order 101 cash mila">Cash</button></div><div class="b2-modal-footer"><span>Tap input remains available in the counter screen.</span><button class="quiet-button" value="cancel">Close</button></div></form></dialog>
+
+    <dialog class="modal" id="history-modal"><form method="dialog" class="modal-card history-card"><button class="modal-close" aria-label="Close">×</button><div class="modal-kicker">TODAY · LOCAL REGISTER</div><h2>Recorded sales</h2><p class="modal-copy">Orders saved in this browser prototype. No server sync.</p><div class="history-list" id="history-list"></div><div class="history-footer"><span id="history-count">0 sales</span><button class="quiet-button" value="cancel">Close</button></div></form></dialog>
+
+    <dialog class="modal" id="message-modal"><form method="dialog" class="modal-card message-card"><button class="modal-close" aria-label="Close">×</button><div class="modal-kicker">PROTOTYPE PREVIEW</div><h2 id="message-title">Coming up next</h2><p class="modal-copy" id="message-copy"></p><button class="primary-small" value="cancel">Got it</button></form></dialog>
+    <script src="./transaction-engine.js"></script>
+    <script src="./voice-counter.js"></script>
+    <script src="./speech-input.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

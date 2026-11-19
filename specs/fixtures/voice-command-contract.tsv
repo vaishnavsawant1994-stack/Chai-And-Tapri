@@ -1,0 +1,13 @@
+# transcript<TAB>type<TAB>order<TAB>product<TAB>quantity<TAB>amountPaise
+Naya order, do cutting chai	create		cutting_chai	2	
+नया ऑर्डर दो कटिंग चाय	create		cutting_chai	2	
+नवीन ऑर्डर दोन चहा	create		chai	2	
+New order, one coffee	create		coffee	1	
+Order 12 preparing hai	preparing	12		1	
+Order 12 ready hai	ready	12		1	
+Order 12 ek chai de diya	partial_given	12	chai	1	
+Order 12 de diya	given	12		1	
+Order 12 mein ek chai add karo	add	12	chai	1	
+Order 12 se samosa hatao	remove	12	samosa	1	
+Order 12 ka 50 cash mila	cash	12		1	5000
+Order 12 UPI pending	upi	12		1	

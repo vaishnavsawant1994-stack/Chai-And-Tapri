@@ -1,0 +1,249 @@
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+import { withTransaction } from './db.mjs';
+import { ApiError } from './errors.mjs';
+import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildShopOverview } from './dashboard.mjs';
+
+export { ApiError } from './errors.mjs';
+
+const scrypt = promisify(scryptCallback);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const hash = (value) => createHash('sha256').update(value).digest();
+const isoAfterHours = (hours) => new Date(Date.now() + hours * 3_600_000);
+const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const hasExactKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+const isText = (value, max = 160) => typeof value === 'string' && value.length > 0 && value.length <= max;
+const isInt = (value, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) => Number.isSafeInteger(value) && value >= min && value <= max;
+const enumIs = (value, values) => typeof value === 'string' && values.includes(value);
+
+/** Validate the only Android payload contract currently eligible for upload. */
+export function validateProjectionDelta(payload) {
+  const requiredTopKeys = ['kind','orders','stock','stockMovements','customerCredits','repayments','paymentEntries'];
+  const allowedTopKeys = [...requiredTopKeys, 'expenses'];
+  if (!object(payload) || requiredTopKeys.some((key) => !Object.hasOwn(payload, key)) ||
+    Object.keys(payload).some((key) => !allowedTopKeys.includes(key)) || payload.kind !== 'projection_delta.v1') throw new ApiError(400, 'invalid_projection_delta');
+  for (const key of requiredTopKeys.slice(1)) if (!Array.isArray(payload[key]) || payload[key].length > 500) throw new ApiError(400, 'invalid_projection_delta');
+  const expenses = payload.expenses ?? [];
+  if (!Array.isArray(expenses) || expenses.length > 500) throw new ApiError(400, 'invalid_projection_delta');
+  if (payload.customerCredits.length !== 0 || payload.repayments.length !== 0) throw new ApiError(400, 'customer_identity_contract_pending');
+  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.paymentEntries.length + expenses.length === 0) throw new ApiError(400, 'empty_projection_delta');
+  if (payload.paymentEntries.some((entry) => object(entry) && Object.hasOwn(entry, 'customerId') && entry.customerId !== null)) throw new ApiError(400, 'customer_identity_contract_pending');
+
+  const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
+  const lineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
+  for (const order of payload.orders) {
+    if (!hasExactKeys(order, orderKeys) || !isInt(order.orderNumber, { min: 1 }) ||
+      !enumIs(order.fulfillment, ['TAKEN','PREPARING','READY','PARTIALLY_GIVEN','GIVEN','CANCELLED']) ||
+      !enumIs(order.payment, ['UNPAID','PARTIALLY_PAID','STAFF_DECLARED','UPI_PENDING','CREDIT','SPLIT','REFUNDED','CANCELLED']) ||
+      !['paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','revision','createdAtEpochMs'].every((key) => isInt(order[key], { min: 0 })) ||
+      typeof order.salePosted !== 'boolean' || typeof order.voided !== 'boolean' || !Array.isArray(order.lines) || order.lines.length > 100) throw new ApiError(400, 'invalid_projection_delta');
+    for (const line of order.lines) {
+      if (!hasExactKeys(line, lineKeys) || !isText(line.productId, 120) || !isInt(line.quantity, { min: 1 }) ||
+        !isInt(line.deliveredQuantity, { min: 0, max: line.quantity }) || !isInt(line.refundedQuantity, { min: 0, max: line.deliveredQuantity }) ||
+        !isInt(line.unitPricePaise, { min: 0 })) throw new ApiError(400, 'invalid_projection_delta');
+    }
+  }
+
+  for (const item of payload.stock) {
+    if (!hasExactKeys(item, ['productId','quantity']) || !isText(item.productId, 120) || (item.quantity !== null && !isInt(item.quantity, { min: 0 }))) throw new ApiError(400, 'invalid_projection_delta');
+  }
+  for (const item of payload.stockMovements) {
+    if (!hasExactKeys(item, ['movementId','productId','quantityDelta','orderNumber']) || !isText(item.movementId, 160) ||
+      !isText(item.productId, 120) || !isInt(item.quantityDelta) || item.quantityDelta === 0 ||
+      (item.orderNumber !== null && !isInt(item.orderNumber, { min: 1 }))) throw new ApiError(400, 'invalid_projection_delta');
+  }
+  const paymentKeys = ['entryId','orderNumber','customerId','amountPaise','method','status','kind','relatedEntryId'];
+  const methods = ['cash','upi','udhar'];
+  const statuses = ['staff_declared','pending','cancelled','staff_declared_refund','receivable','reversed'];
+  const kinds = ['order_collection','payment_attempt','payment_attempt_cancelled','cash_refund','credit_reversal','credit_sale'];
+  for (const entry of payload.paymentEntries) {
+    if (!hasExactKeys(entry, paymentKeys) || !isText(entry.entryId, 160) ||
+      (entry.orderNumber !== null && !isInt(entry.orderNumber, { min: 1 })) || entry.customerId !== null || !isInt(entry.amountPaise) ||
+      !enumIs(entry.method, methods) || !enumIs(entry.status, statuses) || !enumIs(entry.kind, kinds) ||
+      (entry.relatedEntryId !== null && !isText(entry.relatedEntryId, 160))) throw new ApiError(400, 'invalid_projection_delta');
+  }
+  for (const expense of expenses) {
+    if (!hasExactKeys(expense, ['expenseId','category','amountPaise','method','status']) || !isText(expense.expenseId, 160) ||
+      typeof expense.category !== 'string' || expense.category.length < 2 || expense.category.length > 40 || !/^[a-z][a-z0-9 _-]*$/.test(expense.category) ||
+      !isInt(expense.amountPaise, { min: 1, max: 100_000_000 }) || !enumIs(expense.method, ['cash','upi','card']) || expense.status !== 'staff_declared') {
+      throw new ApiError(400, 'invalid_projection_delta');
+    }
+  }
+  return true;
+}
+
+export class SyncService {
+  constructor(pool, { sessionHours = 8, maxEvents = 100, maxPayloadBytes = 64 * 1024 } = {}) {
+    this.pool = pool; this.sessionHours = sessionHours; this.maxEvents = maxEvents; this.maxPayloadBytes = maxPayloadBytes;
+  }
+
+  async register({ email, password, displayName, businessName, shopName, deviceId, deviceLabel }) {
+    email = String(email ?? '').trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 12 || password.length > 256) throw new ApiError(400, 'invalid_registration');
+    for (const [value, min, max] of [[displayName, 2, 100], [businessName, 2, 120], [shopName, 2, 120], [deviceLabel, 1, 80]]) {
+      if (typeof value !== 'string' || value.trim().length < min || value.trim().length > max) throw new ApiError(400, 'invalid_registration');
+    }
+    if (!UUID.test(deviceId ?? '')) throw new ApiError(400, 'invalid_device_id');
+    const salt = randomBytes(16);
+    const passwordHash = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    const token = randomBytes(32).toString('base64url');
+    const result = await withTransaction(this.pool, async (c) => {
+      const user = await c.query('INSERT INTO users(email,display_name,password_salt,password_hash,password_parameters) VALUES($1,$2,$3,$4,$5) RETURNING user_id', [email, displayName.trim(), salt, passwordHash, { algorithm: 'scrypt', N: 16384, r: 8, p: 1, keyLength: 64 }]);
+      const business = await c.query('INSERT INTO businesses(display_name) VALUES($1) RETURNING business_id', [businessName.trim()]);
+      const shop = await c.query('INSERT INTO shops(business_id,display_name) VALUES($1,$2) RETURNING shop_id', [business.rows[0].business_id, shopName.trim()]);
+      await c.query("INSERT INTO shop_memberships(business_id,shop_id,user_id,role) VALUES($1,$2,$3,'owner')", [business.rows[0].business_id, shop.rows[0].shop_id, user.rows[0].user_id]);
+      await c.query('INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)', [deviceId, business.rows[0].business_id, shop.rows[0].shop_id, deviceLabel.trim(), user.rows[0].user_id]);
+      await c.query('INSERT INTO sessions(token_hash,business_id,shop_id,user_id,device_id,expires_at) VALUES($1,$2,$3,$4,$5,$6)', [hash(token), business.rows[0].business_id, shop.rows[0].shop_id, user.rows[0].user_id, deviceId, isoAfterHours(this.sessionHours)]);
+      return { userId: user.rows[0].user_id, businessId: business.rows[0].business_id, shopId: shop.rows[0].shop_id };
+    });
+    return { ...result, token };
+  }
+
+  async login({ email, password, shopId, deviceId }) {
+    email = String(email ?? '').trim().toLowerCase();
+    if (!UUID.test(shopId ?? '') || !UUID.test(deviceId ?? '') || typeof password !== 'string') throw new ApiError(400, 'invalid_login');
+    const result = await withTransaction(this.pool, async (c) => {
+      const lock = await c.query('SELECT failures, locked_until FROM auth_failures WHERE email_key=$1 FOR UPDATE', [email]);
+      if (lock.rows[0]?.locked_until && new Date(lock.rows[0].locked_until) > new Date()) throw new ApiError(429, 'login_temporarily_locked');
+      const found = await c.query('SELECT user_id,display_name,password_salt,password_hash,password_parameters FROM users WHERE email=$1 AND disabled_at IS NULL', [email]);
+      let valid = false;
+      if (found.rowCount) {
+        const params = found.rows[0].password_parameters;
+        const candidate = await scrypt(password, found.rows[0].password_salt, params.keyLength, { N: params.N, r: params.r, p: params.p, maxmem: 64 * 1024 * 1024 });
+        valid = timingSafeEqual(candidate, found.rows[0].password_hash);
+      }
+      if (!valid) {
+        await c.query(`INSERT INTO auth_failures(email_key,failures,window_started_at,locked_until) VALUES($1,1,now(),NULL)
+          ON CONFLICT(email_key) DO UPDATE SET failures=CASE WHEN auth_failures.window_started_at < now()-interval '15 minutes' THEN 1 ELSE auth_failures.failures+1 END,
+          window_started_at=CASE WHEN auth_failures.window_started_at < now()-interval '15 minutes' THEN now() ELSE auth_failures.window_started_at END,
+          locked_until=CASE WHEN auth_failures.failures+1 >= 8 THEN now()+interval '15 minutes' ELSE NULL END`, [email]);
+        return { failed: true };
+      }
+      const membership = await c.query(`SELECT m.business_id,m.shop_id,m.role,d.device_id FROM shop_memberships m JOIN devices d USING(business_id,shop_id)
+        WHERE m.user_id=$1 AND m.shop_id=$2 AND d.device_id=$3 AND d.revoked_at IS NULL`, [found.rows[0].user_id, shopId, deviceId]);
+      if (!membership.rowCount) return { denied: true };
+      await c.query('DELETE FROM auth_failures WHERE email_key=$1', [email]);
+      const token = randomBytes(32).toString('base64url'); const row = membership.rows[0];
+      await c.query('INSERT INTO sessions(token_hash,business_id,shop_id,user_id,device_id,expires_at) VALUES($1,$2,$3,$4,$5,$6)', [hash(token), row.business_id, row.shop_id, found.rows[0].user_id, deviceId, isoAfterHours(this.sessionHours)]);
+      return { token, userId: found.rows[0].user_id, shopId: row.shop_id, businessId: row.business_id, role: row.role };
+    });
+    if (result.failed) throw new ApiError(401, 'invalid_credentials');
+    if (result.denied) throw new ApiError(403, 'shop_or_device_access_denied');
+    return result;
+  }
+
+  async authenticate(token, shopId) {
+    if (!token || !UUID.test(shopId ?? '')) throw new ApiError(401, 'unauthorized');
+    const { rows } = await this.pool.query(`SELECT s.user_id,s.business_id,s.shop_id,s.device_id,m.role FROM sessions s
+      JOIN shop_memberships m USING(business_id,shop_id,user_id) JOIN devices d USING(shop_id,device_id)
+      JOIN users u USING(user_id) WHERE s.token_hash=$1 AND s.shop_id=$2 AND s.revoked_at IS NULL AND s.expires_at>now()
+      AND d.revoked_at IS NULL AND u.disabled_at IS NULL`, [hash(token), shopId]);
+    if (!rows.length) throw new ApiError(401, 'unauthorized');
+    return rows[0];
+  }
+
+  async logout(token) {
+    if (!token) throw new ApiError(401, 'unauthorized');
+    await this.pool.query('UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL', [hash(token)]);
+  }
+
+  async shopOverview(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildShopOverview({
+        shopId: actor.shop_id,
+        shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision),
+        events: journal.rows
+      });
+    });
+  }
+
+  async shopProductPerformance(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildProductPerformance({
+        shopId: actor.shop_id,
+        shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision),
+        events: journal.rows
+      });
+    });
+  }
+
+  async shopInventorySnapshot(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildInventorySnapshot({
+        shopId: actor.shop_id,
+        shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision),
+        events: journal.rows
+      });
+    });
+  }
+
+  async shopDailySalesActivity(actor, days = 30) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildDailySalesActivity({
+        shopId: actor.shop_id,
+        shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision),
+        events: journal.rows,
+        days
+      });
+    });
+  }
+
+  async submitEvents(actor, events) {
+    if (!Array.isArray(events) || events.length < 1 || events.length > this.maxEvents) throw new ApiError(400, 'invalid_event_batch');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT server_revision,business_id FROM shops WHERE shop_id=$1 FOR UPDATE', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const results = [];
+      for (const e of events) {
+        if (!e || e.type !== 'business.command.v1' || e.schemaVersion !== 1 || !UUID.test(e.eventId ?? '') || typeof e.commandId !== 'string' || e.commandId.length < 1 || e.commandId.length > 160 || !UUID.test(e.deviceId ?? '') || e.shopId !== actor.shop_id || e.businessId !== actor.business_id || !Number.isSafeInteger(e.baseRevision) || e.baseRevision < 0 || !e.payload || typeof e.payload !== 'object' || Array.isArray(e.payload)) throw new ApiError(400, 'invalid_event_envelope');
+        validateProjectionDelta(e.payload);
+        if (e.deviceId !== actor.device_id) throw new ApiError(403, 'device_mismatch');
+        const raw = Buffer.from(JSON.stringify(e)); if (raw.length > this.maxPayloadBytes) throw new ApiError(413, 'event_too_large');
+        const payloadHash = hash(raw);
+        const previous = await c.query('SELECT payload_hash,server_revision FROM sync_events WHERE shop_id=$1 AND (event_id=$2 OR command_id=$3)', [actor.shop_id,e.eventId,e.commandId]);
+        if (previous.rowCount) {
+          const same = previous.rows.length === 1 && timingSafeEqual(previous.rows[0].payload_hash,payloadHash);
+          if (same) { results.push({ eventId:e.eventId,status:'duplicate',serverRevision:Number(previous.rows[0].server_revision) }); continue; }
+          throw new ApiError(409, 'event_idempotency_conflict');
+        }
+        const revision = Number(shop.rows[0].server_revision);
+        if (e.baseRevision !== revision) {
+          await c.query(`INSERT INTO sync_conflicts(business_id,shop_id,event_id,command_id,device_id,expected_revision,current_revision,envelope)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.business_id,actor.shop_id,e.eventId,e.commandId,e.deviceId,e.baseRevision,revision,e]);
+          results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
+        }
+        const next = revision + 1;
+        await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,event_type,schema_version,base_revision,payload_hash,envelope)
+          VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,e.type,e.baseRevision,payloadHash,e]);
+        await c.query('UPDATE shops SET server_revision=$2 WHERE shop_id=$1',[actor.shop_id,next]); shop.rows[0].server_revision=next;
+        results.push({ eventId:e.eventId,status:'accepted',serverRevision:next });
+      }
+      return { currentRevision:Number(shop.rows[0].server_revision),results };
+    });
+  }
+}

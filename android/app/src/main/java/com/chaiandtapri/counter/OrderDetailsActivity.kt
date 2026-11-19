@@ -1,0 +1,206 @@
+package com.chaiandtapri.counter
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
+import android.os.Bundle
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.NumberPicker
+import android.widget.ScrollView
+import android.widget.TextView
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
+
+/** CT-09 read-only detail view assembled from the encrypted local transaction ledgers. */
+class OrderDetailsActivity : Activity() {
+    private var model: CounterModel? = null
+    private lateinit var content: LinearLayout
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (!SessionAccessGate.requireCounterAccess(this)) return
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 28, 24, 24) }
+        setContentView(ScrollView(this).apply { addView(content) })
+        render()
+    }
+
+    override fun onResume() { super.onResume(); if (content.childCount > 0) render() }
+
+    private fun render(message: String? = null) {
+        model?.close()
+        content.removeAllViews()
+        try {
+            val current = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
+            model = current
+            val number = intent.getIntExtra(EXTRA_ORDER_NUMBER, -1)
+            val order = current.allOrders().firstOrNull { it.number == number }
+            if (order == null) {
+                content.addView(label("Order not found", 22f))
+                content.addView(label("It may have been removed from this local dataset. No changes were made.", 14f))
+                content.addView(button("Back") { finish() })
+                return
+            }
+
+            content.addView(label("Order #${order.number}", 25f))
+            message?.let { content.addView(label(it, 14f)) }
+            content.addView(label("Fulfillment: ${order.fulfillment} · Payment: ${order.payment}", 16f))
+            content.addView(label("Revision ${order.revision} · ${if (order.voided) "Cancelled" else if (order.salePosted) "Sale posted" else "Not yet handed over"}", 14f))
+
+            content.addView(label("Items", 19f))
+            if (!order.voided && order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY)) {
+                content.addView(button("Add item to order") {
+                    chooseProductToAdd(order.number, order.revision, order.totalPaise)
+                })
+            }
+            order.lines.forEach { line ->
+                content.addView(label("${line.name} · ordered ${line.quantity} · handed over ${line.deliveredQuantity} · returned ${line.refundedQuantity}", 15f))
+                content.addView(label("Unit ${money(line.unitPricePaise)} · delivered value ${money(line.deliveredQuantity * line.unitPricePaise)}", 13f))
+                val remaining = line.quantity - line.deliveredQuantity
+                if (LocalSessionState.isManager && !order.voided && remaining > 0 && order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) {
+                    content.addView(button("Correct unhanded quantity · ${line.name}") {
+                        confirmRemoveUnhanded(order.number, line.productId, line.name, remaining, order.revision)
+                    })
+                }
+            }
+
+            content.addView(label("Financial summary", 19f))
+            content.addView(label("Delivered sale: ${money(order.salePaise)}", 15f))
+            content.addView(label("Collections recorded: ${money(order.paidPaise)}", 15f))
+            content.addView(label("Customer credit: ${money(order.creditPaise)} · credit reversed: ${money(order.creditReversedPaise)}", 15f))
+            content.addView(label("Refunded: ${money(order.refundedPaise)} · cash refund recorded: ${money(order.cashRefundedPaise)}", 15f))
+            content.addView(label("Outstanding due: ${money(order.duePaise)}", 17f))
+            order.cancelReason?.let { content.addView(label("Correction / cancellation reason: $it", 14f)) }
+
+            content.addView(label("Payment and credit events", 19f))
+            val payments = current.paymentHistory().filter { it.orderNumber == number }
+            if (payments.isEmpty()) content.addView(label("No payment events recorded.", 14f))
+            payments.forEach { payment ->
+                content.addView(label("${payment.kind} · ${payment.method.uppercase(Locale.ROOT)} · ${money(payment.amountPaise)} · ${payment.status}${payment.relatedEntryId?.let { " · related $it" }.orEmpty()}", 14f))
+            }
+            val credits = current.customerCredits().filter { it.orderNumber == number }
+            credits.forEach { credit -> content.addView(label("Customer ${credit.customerId} · outstanding ${money(credit.outstandingPaise)}", 14f)) }
+
+            content.addView(label("Inventory movements", 19f))
+            val movements = current.stockMovements().filter { it.orderNumber == number }
+            if (movements.isEmpty()) content.addView(label("No order-linked stock movements recorded.", 14f))
+            movements.forEach { movement ->
+                content.addView(label("${movement.productId} · ${if (movement.quantityDelta > 0) "+" else ""}${movement.quantityDelta} units · ${movement.reason}", 14f))
+            }
+
+            content.addView(label("Audit events", 19f))
+            val orderMarker = Regex("(?<![0-9])#${Regex.escape(number.toString())}(?![0-9])")
+            val audit = current.auditRecords().filter { orderMarker.containsMatchIn(it.event) }
+            if (audit.isEmpty()) content.addView(label("No matching order audit events were found.", 14f))
+            val localTime = SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale.getDefault())
+            audit.forEach { record ->
+                val timestamp = record.createdAtEpochMs.takeIf { it > 0L }?.let { localTime.format(Date(it)) } ?: "Time not recorded"
+                content.addView(label("Local time: $timestamp · ${record.event}", 13f))
+            }
+            content.addView(label("Times use this device's clock and may be inaccurate if its clock was wrong. They are local audit timestamps, not server-verified times.", 12f))
+            content.addView(button("Back to live orders") { finish() })
+        } catch (error: Exception) {
+            content.addView(label("Order details could not be opened. No replacement data was created.", 18f))
+            content.addView(label("Local storage error: ${error.javaClass.simpleName}", 14f))
+            content.addView(button("Retry") { render() })
+        }
+    }
+
+    private fun money(paise: Int) = "₹${paise / 100}.${(paise % 100).toString().padStart(2, '0')}"
+
+    private fun chooseProductToAdd(orderNumber: Int, expectedRevision: Int, currentTotalPaise: Int) {
+        if (!LocalSessionState.authenticated) {
+            render("Sign in before changing an order. No change was made.")
+            return
+        }
+        val sellableProducts = model?.products()?.filter { it.active && it.priceConfirmed && it.unitPricePaise > 0 }
+            ?.sortedWith(compareBy<TapriProduct> { it.category.lowercase(Locale.ROOT) }.thenBy { it.name.lowercase(Locale.ROOT) })
+            .orEmpty()
+        if (sellableProducts.isEmpty()) {
+            render("There are no active products with owner-confirmed prices. No change was made.")
+            return
+        }
+        AlertDialog.Builder(this)
+            // AlertDialog has a single content panel: setting both a message and
+            // a list hides the list on Android. Keep the order context in the
+            // title so the configured products remain selectable.
+            .setTitle("Add item to order #$orderNumber · current ${money(currentTotalPaise)}")
+            .setItems(sellableProducts.map { "${it.name} · ${money(it.unitPricePaise)}" }.toTypedArray()) { _, index ->
+                val selected = sellableProducts[index]
+                confirmAddItem(orderNumber, selected, expectedRevision)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmAddItem(orderNumber: Int, product: TapriProduct, expectedRevision: Int) {
+        if (!LocalSessionState.authenticated) {
+            render("Sign in before changing an order. No change was made.")
+            return
+        }
+        val picker = NumberPicker(this).apply { minValue = 1; maxValue = 100; value = 1; wrapSelectorWheel = false }
+        val pickerContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 8, 48, 0)
+            addView(label("Quantity · ${product.name} at ${money(product.unitPricePaise)} each", 14f))
+            addView(picker)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Confirm item for order #$orderNumber")
+            .setMessage("The item is not handed over and no payment is recorded by this action.")
+            .setView(pickerContainer)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Add item") { _, _ ->
+                if (!LocalSessionState.authenticated) {
+                    render("Sign in before changing an order. No change was made.")
+                    return@setPositiveButton
+                }
+                val result = model?.apply(
+                    "order-line-add-${java.util.UUID.randomUUID()}",
+                    ProposedCommand("add", orderNumber, "Add item from order details", product.productId, picker.value, expectedRevision = expectedRevision)
+                ) ?: "Order details are unavailable. No change was made."
+                render(result)
+            }
+            .show()
+    }
+
+    private fun confirmRemoveUnhanded(orderNumber: Int, productId: String, productName: String, remaining: Int, expectedRevision: Int) {
+        if (!LocalSessionState.isManager) {
+            render("Manager access is required to correct an order. No change was made.")
+            return
+        }
+        val picker = NumberPicker(this).apply { minValue = 1; maxValue = remaining; value = remaining; wrapSelectorWheel = false }
+        val pickerContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 8, 48, 0)
+            addView(label("Quantity to remove (not yet handed over)", 14f))
+            addView(picker)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Correct order #$orderNumber")
+            .setMessage("Remove unhanded $productName? Already handed-over items, recorded payments and stock movements will not be changed. This correction will be audited.")
+            .setView(pickerContainer)
+            .setNegativeButton("Keep order", null)
+            .setPositiveButton("Remove quantity") { _, _ ->
+                if (!LocalSessionState.isManager) {
+                    render("Manager access is required to correct an order. No change was made.")
+                    return@setPositiveButton
+                }
+                val result = model?.apply(
+                    "order-line-correction-${java.util.UUID.randomUUID()}",
+                    ProposedCommand("remove", orderNumber, "Remove unhanded order quantity", productId, picker.value, expectedRevision = expectedRevision)
+                ) ?: "Order details are unavailable. No change was made."
+                render(result)
+            }
+            .show()
+    }
+
+    private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }
+    private fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; minHeight = 56; setOnClickListener { action() } }
+
+    override fun onDestroy() { model?.close(); model = null; super.onDestroy() }
+
+    companion object { const val EXTRA_ORDER_NUMBER = "order_number" }
+}

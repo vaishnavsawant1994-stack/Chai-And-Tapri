@@ -1,0 +1,15 @@
+local.properties
+.gradle/
+build/
+app/build/
+backend/node_modules/
+*.iml
+.idea/
+.DS_Store
+
+# Local test captures may contain synthetic credentials or entered recovery secrets
+test-evidence/
+*.log
+*.apk
+*.aab
+

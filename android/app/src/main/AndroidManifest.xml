@@ -1,0 +1,41 @@
+﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Tapri Counter" android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false">
+        <activity android:name=".WelcomeActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".DevicePermissionsActivity" android:exported="false" />
+        <activity android:name=".LocalAccessActivity" android:exported="false" />
+        <activity android:name=".StaffManagementActivity" android:exported="false" />
+        <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".ShopHomeActivity" android:exported="false" />
+        <activity android:name=".SalesHistoryActivity" android:exported="false" />
+        <activity android:name=".RefundCorrectionActivity" android:exported="false" />
+        <activity android:name=".ShopSetupActivity" android:exported="false" />
+        <activity android:name=".ProductCatalogueActivity" android:exported="false" />
+        <activity android:name=".InventoryOverviewActivity" android:exported="false" />
+        <activity android:name=".StockCountActivity" android:exported="false" />
+        <activity android:name=".QuickSaleActivity" android:exported="false" />
+        <activity android:name=".LiveOrdersActivity" android:exported="false" />
+        <activity android:name=".PaymentActivity" android:exported="false" />
+        <activity android:name=".OrderDetailsActivity" android:exported="false" />
+        <activity android:name=".CustomerCreditActivity" android:exported="false" />
+        <activity android:name=".CustomerDetailsActivity" android:exported="false" />
+        <activity android:name=".ProcurementActivity" android:exported="false" />
+        <activity android:name=".SupplierDetailsActivity" android:exported="false" />
+        <activity android:name=".ExpensesActivity" android:exported="false" />
+        <activity android:name=".CashRegisterActivity" android:exported="false" />
+        <activity android:name=".StaffShiftsActivity" android:exported="false" />
+        <activity android:name=".DailyClosingActivity" android:exported="false" />
+        <activity android:name=".DailyReportActivity" android:exported="false" />
+        <activity android:name=".BusinessAlertsActivity" android:exported="false" />
+        <activity android:name=".VoiceSettingsActivity" android:exported="false" />
+        <activity android:name=".CloudSyncActivity" android:exported="false" />
+    </application>
+</manifest>

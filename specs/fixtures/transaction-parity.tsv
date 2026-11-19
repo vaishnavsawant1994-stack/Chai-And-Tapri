@@ -1,0 +1,3 @@
+﻿# scenario	initial_items	initial_total_paise	stock_delta	post_refund_credit_balance	final_state
+mixed_repayment_refund	2_cutting_chai	2000	0	0	REFUNDED
+partial_handover_cancel	2_cutting_chai	2000	-1	0	CANCELLED

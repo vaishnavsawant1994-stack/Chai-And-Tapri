@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Chai And Tapri — Owner Overview</title>
+    <link rel="stylesheet" href="/owner/styles.css">
+    <script src="/owner/app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="brand-mark" aria-hidden="true">चाय</div>
+        <div>
+          <p class="eyebrow">CHAI AND TAPRI OS</p>
+          <h1>Owner Overview</h1>
+        </div>
+        <span id="connection-state" class="connection-state">Not connected</span>
+      </header>
+
+      <section id="login-panel" class="panel login-panel" aria-labelledby="login-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PRIVATE SHOP DATA</p>
+            <h2 id="login-heading">Sign in to your registered shop</h2>
+          </div>
+        </div>
+        <p class="muted">Use the owner account and registered shop/device IDs from your Chai And Tapri sync setup. This page does not save your password or session token.</p>
+        <form id="login-form" autocomplete="on">
+          <label>Email address<input id="email" name="email" type="email" autocomplete="username" required maxlength="254"></label>
+          <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+          <div class="field-pair">
+            <label>Shop ID<input id="shop-id" name="shopId" type="text" spellcheck="false" required maxlength="36" placeholder="Registered shop UUID"></label>
+            <label>Device ID<input id="device-id" name="deviceId" type="text" spellcheck="false" required maxlength="36" placeholder="Registered device UUID"></label>
+          </div>
+          <button class="primary" type="submit">Sign in securely</button>
+        </form>
+        <p id="login-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="dashboard-panel" class="hidden" aria-labelledby="dashboard-heading">
+        <div class="dashboard-title">
+          <div>
+            <p class="eyebrow">SERVER-ACCEPTED RECORDS</p>
+            <h2 id="dashboard-heading">Shop overview</h2>
+            <p id="shop-name" class="shop-name"></p>
+          </div>
+          <div class="actions">
+            <button id="refresh-button" class="secondary" type="button">Refresh</button>
+            <button id="logout-button" class="quiet" type="button">Sign out</button>
+          </div>
+        </div>
+        <p id="data-scope" class="scope-note"></p>
+        <nav class="dashboard-nav" aria-label="Owner dashboard sections">
+          <button id="overview-tab" class="nav-tab active" type="button" aria-current="page">Overview</button>
+          <button id="products-tab" class="nav-tab" type="button" aria-current="false">Product performance</button>
+          <button id="inventory-tab" class="nav-tab" type="button" aria-current="false">Inventory snapshot</button>
+          <button id="activity-tab" class="nav-tab" type="button" aria-current="false">Sales activity</button>
+        </nav>
+        <section id="overview-view">
+        <div id="metrics" class="metrics" aria-live="polite"></div>
+        <section class="panel evidence-panel" aria-labelledby="evidence-heading">
+          <h3 id="evidence-heading">How to read these figures</h3>
+          <ul id="evidence-list"></ul>
+          <dl class="sync-meta">
+            <div><dt>Server revision</dt><dd id="server-revision">—</dd></div>
+            <div><dt>Accepted events</dt><dd id="accepted-events">—</dd></div>
+            <div><dt>Latest accepted event</dt><dd id="latest-event">—</dd></div>
+          </dl>
+        </section>
+        <p id="dashboard-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="products-view" class="hidden" aria-labelledby="products-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">LATEST ACCEPTED ORDER STATES</p><h2 id="products-heading">Product performance</h2></div>
+          </div>
+          <p id="products-scope" class="scope-note"></p>
+          <div id="product-metrics" class="metrics" aria-live="polite"></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">Product ID</th><th scope="col">Delivered units</th><th scope="col">Returned units</th><th scope="col">Net item value</th><th scope="col">Orders</th><th scope="col">Latest stock</th></tr></thead><tbody id="product-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="product-evidence-heading">
+            <h3 id="product-evidence-heading">How to read product performance</h3>
+            <ul id="product-evidence-list"></ul>
+          </section>
+          <p id="products-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="inventory-view" class="hidden" aria-labelledby="inventory-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">LATEST ACCEPTED STOCK STATE</p><h2 id="inventory-heading">Inventory snapshot</h2></div>
+          </div>
+          <p id="inventory-scope" class="scope-note"></p>
+          <div id="inventory-metrics" class="metrics" aria-live="polite"></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">Product ID</th><th scope="col">Quantity</th><th scope="col">State</th><th scope="col">Reported at revision</th><th scope="col">Accepted at</th></tr></thead><tbody id="inventory-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="inventory-movement-heading">
+            <h3 id="inventory-movement-heading">Recent accepted stock movements</h3>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Movement ID</th><th scope="col">Product ID</th><th scope="col">Quantity delta</th><th scope="col">Order</th><th scope="col">Server revision</th><th scope="col">Accepted at</th></tr></thead><tbody id="inventory-movement-rows"></tbody></table></div>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="inventory-evidence-heading">
+            <h3 id="inventory-evidence-heading">How to read inventory</h3>
+            <ul id="inventory-evidence-list"></ul>
+          </section>
+          <p id="inventory-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="activity-view" class="hidden" aria-labelledby="activity-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">SERVER-RECEIVED BUSINESS ACTIVITY · UTC</p><h2 id="activity-heading">Sales activity</h2></div>
+            <label>Range<select id="activity-range"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+          </div>
+          <p id="activity-scope" class="scope-note"></p>
+          <div id="activity-metrics" class="metrics" aria-live="polite"></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">UTC server date</th><th scope="col">Accepted events</th><th scope="col">Orders started</th><th scope="col">Net delivered value change</th><th scope="col">Cash declared</th><th scope="col">Cash refunds</th><th scope="col">UPI declared</th><th scope="col">UPI pending attempts started</th><th scope="col">Expenses recorded</th></tr></thead><tbody id="activity-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="activity-expenses-heading">
+            <h3 id="activity-expenses-heading">Recorded expenses by category</h3>
+            <ul id="activity-expense-categories"></ul>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="activity-evidence-heading">
+            <h3 id="activity-evidence-heading">How to read sales activity</h3>
+            <ul id="activity-evidence-list"></ul>
+          </section>
+          <p id="activity-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+      </section>
+      <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>
+    </main>
+  </body>
+</html>
