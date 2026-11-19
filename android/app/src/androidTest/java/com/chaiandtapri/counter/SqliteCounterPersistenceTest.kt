@@ -1371,6 +1371,150 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun cleanInstallRecoveryRestoresSyntheticBackupThroughSafUiWhenExplicitlyRequested() {
+        val arguments = InstrumentationRegistry.getArguments()
+        // This destructive drill is opt-in. The normal suite must not count an
+        // assumption violation as a failure or accidentally replace local test data.
+        if (arguments.getString("cat051bCleanRestore") != "true") {
+            android.util.Log.i("CAT051B", "Clean-install restore drill not run; explicit synthetic recovery arguments are required.")
+            return
+        }
+        val expectedBackupName = arguments.getString("cat051bBackupName")
+            ?: throw AssertionError("Pass the exact synthetic backup filename for the clean-install recovery drill")
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        LocalSessionState.clear()
+        val intent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(MainActivity.EXTRA_OPEN_RECOVERY, true)
+        val activity = instrumentation.startActivitySync(intent)
+        val automation = instrumentation.uiAutomation
+        fun visibleNames(): List<String> {
+            val result = mutableListOf<String>()
+            fun collect(node: AccessibilityNodeInfo) {
+                node.text?.toString()?.let(result::add)
+                node.contentDescription?.toString()?.let(result::add)
+                for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+            }
+            automation.rootInActiveWindow?.let(::collect)
+            return result
+        }
+        fun findNode(textPrefix: String? = null, hintPrefix: String? = null, descriptionPrefix: String? = null): AccessibilityNodeInfo {
+            val deadline = System.currentTimeMillis() + 15_000
+            while (System.currentTimeMillis() < deadline) {
+                var found: AccessibilityNodeInfo? = null
+                fun walk(node: AccessibilityNodeInfo) {
+                    val text = node.text?.toString().orEmpty()
+                    val hint = node.hintText?.toString().orEmpty()
+                    val description = node.contentDescription?.toString().orEmpty()
+                    if (found == null && ((textPrefix != null && text.startsWith(textPrefix, true)) ||
+                                (hintPrefix != null && hint.startsWith(hintPrefix, true)) ||
+                                (descriptionPrefix != null && description.startsWith(descriptionPrefix, true)))) found = node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let(::walk)
+                }
+                automation.rootInActiveWindow?.let(::walk)
+                found?.let { return it }
+                Thread.sleep(100)
+            }
+            throw AssertionError("Recovery UI control missing: text=$textPrefix hint=$hintPrefix description=$descriptionPrefix; visible=${visibleNames().joinToString(" | ")}")
+        }
+        fun clickText(text: String) {
+            val node = findNode(textPrefix = text)
+            var parent: AccessibilityNodeInfo? = node
+            var clicked = false
+            while (parent != null && !clicked) {
+                if (parent.isClickable) clicked = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                parent = parent.parent
+            }
+            if (!clicked) {
+                val bounds = android.graphics.Rect()
+                node.getBoundsInScreen(bounds)
+                if (!bounds.isEmpty) {
+                    val x = bounds.exactCenterX()
+                    val y = bounds.exactCenterY()
+                    val downTime = android.os.SystemClock.uptimeMillis()
+                    val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
+                    val up = MotionEvent.obtain(downTime, downTime + 80, MotionEvent.ACTION_UP, x, y, 0)
+                    try {
+                        automation.injectInputEvent(down, true)
+                        clicked = automation.injectInputEvent(up, true)
+                    } finally {
+                        down.recycle()
+                        up.recycle()
+                    }
+                }
+            }
+            assertTrue("Could not select $text; visible=${visibleNames().joinToString(" | ")}", clicked)
+        }
+        fun setText(hint: String, value: String) {
+            val field = findNode(hintPrefix = hint)
+            assertTrue("Could not enter $hint", field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+            }))
+        }
+
+        try {
+            clickText("Restore from backup")
+            var pickerLabels = emptyList<String>()
+            val pickerDeadline = System.currentTimeMillis() + 20_000
+            while (System.currentTimeMillis() < pickerDeadline) {
+                pickerLabels = visibleNames()
+                if (pickerLabels.any { it.equals("Preview the file $expectedBackupName", true) }) break
+                Thread.sleep(100)
+            }
+            if (pickerLabels.none { it.equals("Preview the file $expectedBackupName", true) }) {
+                runCatching { findNode(descriptionPrefix = "Show roots").performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+                clickText("Downloads")
+                pickerLabels = visibleNames()
+            }
+            val backupRow = pickerLabels.firstOrNull { it.equals("Preview the file $expectedBackupName", true) }
+                ?: throw AssertionError("Expected synthetic backup not shown by SAF: ${pickerLabels.joinToString(" | ")}")
+            val backupName = backupRow.removePrefix("Preview the file ")
+            clickText(backupName)
+            val openDeadline = System.currentTimeMillis() + 10_000
+            while (System.currentTimeMillis() < openDeadline && visibleNames().none { it.equals("Open", true) }) Thread.sleep(100)
+            if (visibleNames().any { it.equals("Open", true) }) clickText("Open")
+
+            val recoverySecret = "synthetic-saf-roundtrip-secret-2026"
+            setText("Recovery secret (12+ characters)", recoverySecret)
+            clickText("Continue")
+            var labels = emptyList<String>()
+            val verifiedDeadline = System.currentTimeMillis() + 90_000
+            while (System.currentTimeMillis() < verifiedDeadline) {
+                labels = visibleNames()
+                if (labels.any { it.equals("Backup verified", true) } || labels.any { it.contains("Backup verification failed", true) }) break
+                Thread.sleep(100)
+            }
+            assertTrue("Clean-install restore must authenticate the archive before replacement: ${labels.joinToString(" | ")}", labels.any { it.equals("Backup verified", true) })
+            clickText("Continue")
+            clickText("Replace and restore")
+            val finishedDeadline = System.currentTimeMillis() + 90_000
+            var finished = false
+            while (System.currentTimeMillis() < finishedDeadline) {
+                instrumentation.runOnMainSync { finished = activity.isFinishing }
+                if (finished) break
+                Thread.sleep(100)
+            }
+            assertTrue("Restore should finish and hand off to local access", finished)
+
+            val restored = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            try {
+                val order = restored.allOrders().single()
+                assertTrue("Clean-install restore should retain the synthetic product", order.lines.any { it.productId == "saf_roundtrip_tea" })
+                assertEquals(3000, order.paidPaise)
+                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" })
+                assertEquals(6, restored.stockLevels()["saf_roundtrip_tea"])
+                val localKey = SecureDatabaseKeyManager(context, context.getDatabasePath(SqliteCounterPersistence.DATABASE_NAME)).getOrCreatePassphrase()
+                assertTrue("Fresh install should have usable device-local database key material", localKey.isNotEmpty())
+                localKey.fill(0)
+            } finally {
+                restored.close()
+            }
+        } finally {
+            instrumentation.runOnMainSync { if (!activity.isFinishing) activity.finish(); LocalSessionState.clear() }
+        }
+    }
+
     @Test fun voiceSettingsPersistsLanguageAndAliasesWithoutExecutingBusinessCommands() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

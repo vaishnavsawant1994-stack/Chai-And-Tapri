@@ -734,3 +734,11 @@ The current API 37 source passed the focused UI export test (1/1). It drove the 
 ## CAT-051B same-install SAF round-trip - 19 November 2026
 
 The focused API 37 UI test now passes a real export and restore from the Android Downloads picker, including recovery-secret verification and explicit replacement. It reconciles the restored synthetic order (3,000 paise cash received), payment ledger (one cash collection), and stock (six units remaining). Evidence and limitations are in `specs/CAT-051B-IMPLEMENTATION-REPORT.md`. This does not qualify clean-install recovery or complete CAT-051B.
+
+## CAT-051B clean-install recovery milestone - 19 November 2026
+
+A clean debug installation successfully restored the exact synthetic SAF-exported archive through Android's recovery UI and verified its order, cash ledger and stock balances after database reopen. Focused API 37 test: 1/1 passed. CAT-051B is now clean-install functional for the tested synthetic case, but remains open for physical cross-device/person recovery, hardware key invalidation, real storage/power interruption, independent review and full security acceptance. Details and artifact digest: `specs/CAT-051B-IMPLEMENTATION-REPORT.md`.
+
+## Regression follow-up - 19 November 2026
+
+Focused current-recovery UI flows passed: same-install SAF export/restore 1/1 and clean-install restore 1/1. Prototype Node 52/52, Kotlin JVM 59/59, backend 16 passed with 4 database-dependent skips, APK build tasks passed, lint 0 errors / 161 warnings. The full API 37 instrumentation attempt was not green (92 cases, 4 failures: an empty SAF accessibility hierarchy, two 45-second activity-launch timeouts, and the opt-in test's JUnit assumption handling; the latter was corrected to a logged no-op when not requested). The full Android suite has not been rerun after that guard change. CAT-051B remains qualified for the focused synthetic same-install and clean-install flows, with suite-wide emulator stability and external security/physical gates still open.
