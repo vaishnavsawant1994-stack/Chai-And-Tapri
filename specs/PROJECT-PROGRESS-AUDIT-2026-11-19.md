@@ -6,7 +6,7 @@ After a normal emulator restart cleared the guest System UI ANR, the current-sou
 
 ## Superseding customer-credit slice verification — 19 November 2026
 
-CT-23 now shows age context for each customer's oldest outstanding credit order. This is elapsed time from the saved order timestamp using the device clock; the screen explicitly says there is no recorded due date and does not label balances overdue. JVM behavior tests and a focused API 37 screen test passed. Current work-session results: Node 52/52, Kotlin JVM 58/58, focused Android instrumentation 1/1, debug and test APK tasks passed, lint 0 errors / 161 warnings. A broad 90-test instrumentation rerun had 20 failures while repeated Android System UI ANR dialogs obstructed UI automation; therefore the broad suite is not qualified by this run. Full details: `CT-21-23-24-CUSTOMER-CREDIT-AGING-REPORT.md`; evidence is under ignored `../test-evidence/2026-11-19/`. This slice does not finish CT-21–24 or the product.
+CT-23 and CT-22 now show age context for the oldest still-open credit order using its timestamp and device clock, with explicit wording that no due date is recorded. Focused screen tests verify the ledger repayment interaction and customer-detail wording. Current-source results are Node 52/52, Kotlin JVM 58/58, API 37 instrumentation 90/90, APK tasks passed, lint 0 errors / 161 warnings. An earlier run had 20 failures while System UI ANR dialogs obstructed automation; that run is superseded by the post-restart 90/90 result above. See `CT-21-23-24-CUSTOMER-CREDIT-AGING-REPORT.md` and `CT-22-CUSTOMER-DETAILS-REPORT.md`; evidence is under ignored `../test-evidence/2026-11-19/`. These slices do not finish CT-21–24 or the product.
 
 ## Superseding current-source verification — 19 November 2026
 

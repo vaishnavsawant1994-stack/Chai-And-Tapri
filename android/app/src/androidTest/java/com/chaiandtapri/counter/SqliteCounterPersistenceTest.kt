@@ -2078,6 +2078,7 @@ class SqliteCounterPersistenceTest {
             assertTrue(strings.contains("Repaid: ₹10.00"))
             assertTrue(strings.contains("Outstanding: ₹20.00"))
             assertTrue(strings.contains("Name: Priya Joshi"))
+            assertTrue(strings.any { it.contains("Oldest open credit:") && it.contains("since order (device clock)") && it.contains("No due date is recorded") })
             assertTrue(strings.any { it.contains("Contact:") && it.contains("3344") })
             assertFalse(strings.any { it.contains("+919911223344") })
             assertTrue(strings.any { it.contains("customer_repayment") && it.contains("₹10.00") && it.contains("staff_declared") })

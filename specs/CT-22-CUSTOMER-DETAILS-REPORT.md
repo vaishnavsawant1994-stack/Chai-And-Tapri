@@ -22,3 +22,7 @@
 ## Remaining work
 
 Customer details still lack profile editing/deletion, dated timeline, consent revocation/retention, customer authentication, aging/due dates, and cloud sync. Repayment dialogs have not been manually used by a shopkeeper; their transaction engine and displayed ledger are covered by tests. No real customer data was used.
+
+## Superseding CT-22 open-credit age context — 19 November 2026
+
+The detail page now shows the age of the oldest still-open credit order when the customer has a positive receivable. It uses the persisted order timestamp and device clock and explicitly states that no due date is recorded; it does not claim a balance is overdue. Fully settled credit is not shown as open age. The existing directory-to-detail test now asserts this wording using a synthetic profile and credit sale. Focused API 37 test passed 1/1. Current-source regression after this change: Node 52/52; Kotlin JVM 58/58; API 37 instrumentation 90/90; debug and instrumentation APK tasks PASS; lint 0 errors / 161 warnings. Evidence logs: `../test-evidence/2026-11-19/ct22-credit-aging-focused.log`, `ct22-credit-aging-node.log`, and `ct22-credit-aging-full-gradle.log`. This remains device-clock age context, not due-date tracking or collection automation; the broader CT-22 and product remain partial.

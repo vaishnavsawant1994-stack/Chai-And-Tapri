@@ -718,3 +718,7 @@ The local customer credit ledger now displays the age of each customer's oldest 
 ## Superseding CT-23 emulator regression — 19 November 2026
 
 After rebooting the API 37 emulator, the previously ANR-obstructed Android run passed 90/90. The repayment screen test was restored to exercise entry and persistence of a synthetic ₹5 staff-declared cash repayment, and passed both focused 1/1 and in the full 90/90 run. Current checks: Node 52/52, Kotlin JVM 58/58, Android instrumentation 90/90, APK build tasks PASS, lint 0 errors/161 warnings. The original 20/90 failed run is retained as historical diagnostic evidence and is superseded by `ct23-credit-aging-final-full-instrumentation.log`. See `specs/CT-21-23-24-CUSTOMER-CREDIT-AGING-REPORT.md`. Product, security, hardware and field gates remain open.
+
+## Superseding CT-22 customer detail age context — 19 November 2026
+
+CT-22 details now show age context for the oldest open credit order using the recorded order timestamp and device clock; the wording explicitly says no due date is recorded and does not claim overdue status. The directory-to-details API 37 test verifies the displayed age with a synthetic profile and receivable. Focused test 1/1 and full current-source regression passed: Node 52/52, Kotlin JVM 58/58, API 37 instrumentation 90/90, APK tasks PASS, lint 0 errors/161 warnings. Details: `specs/CT-22-CUSTOMER-DETAILS-REPORT.md`; ignored logs under `test-evidence/2026-11-19/`. Full product and hardware/security/release gates remain open.

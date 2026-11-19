@@ -57,6 +57,10 @@ class CustomerDetailsActivity : Activity() {
             content.addView(label("Repaid: ${money(repaid)}", 16f))
             content.addView(label("Credit reversed: ${money(reversed)}", 16f))
             content.addView(label("Outstanding: ${money(due)}", 19f))
+            if (due > 0) {
+                val oldestOpenCredit = CreditAging.oldestOutstandingOrderCreatedAt(credits, current.allOrders(), customerId)
+                content.addView(label(CreditAging.description(oldestOpenCredit, System.currentTimeMillis()), 14f))
+            }
             message?.let { content.addView(label(it, 15f)) }
             content.addView(label("Credit by order", 18f))
             if (credits.isEmpty()) content.addView(label("No credit sales are recorded for this account.", 14f))
