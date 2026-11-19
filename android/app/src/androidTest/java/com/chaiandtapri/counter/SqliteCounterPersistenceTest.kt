@@ -1179,6 +1179,119 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun ownerBackupMenuCreatesEncryptedSyntheticBackupThroughSafUi() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic Recovery Owner")
+        val seed = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(seed.saveProduct(TapriProduct("saf_roundtrip_tea", "SAF Roundtrip Tea", "Chai", 1500, true, true, true)).startsWith("Product saved"))
+        assertTrue(seed.confirmOpeningStock("saf_roundtrip_tea", 8, "synthetic SAF roundtrip opening count", "saf-roundtrip-stock").contains("8 units"))
+        assertTrue(seed.quickSale(listOf("saf_roundtrip_tea" to 2), "cash", commandId = "saf-roundtrip-cash-sale").startsWith("Quick sale"))
+        seed.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val statusField = MainActivity::class.java.getDeclaredField("status").apply { isAccessible = true }
+        val menuMethod = MainActivity::class.java.getDeclaredMethod("showRecoveryMenu").apply { isAccessible = true }
+        try {
+            var status: TextView? = null
+            repeat(120) {
+                instrumentation.runOnMainSync { status = runCatching { statusField.get(activity) as TextView }.getOrNull() }
+                if (status != null) return@repeat
+                Thread.sleep(100)
+            }
+            assertNotNull("Owner counter should load before starting its backup UI", status)
+
+            val automation = instrumentation.uiAutomation
+            fun findNode(textPrefix: String? = null, hintPrefix: String? = null, descriptionPrefix: String? = null): AccessibilityNodeInfo {
+                repeat(160) {
+                    var found: AccessibilityNodeInfo? = null
+                    fun walk(node: AccessibilityNodeInfo) {
+                        val text = node.text?.toString().orEmpty()
+                        val hint = node.hintText?.toString().orEmpty()
+                        val description = node.contentDescription?.toString().orEmpty()
+                        if (found == null && ((textPrefix != null && text.startsWith(textPrefix, ignoreCase = true)) ||
+                                (hintPrefix != null && hint.startsWith(hintPrefix, ignoreCase = true)) ||
+                                (descriptionPrefix != null && description.startsWith(descriptionPrefix, ignoreCase = true)))) found = node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::walk)
+                    }
+                    automation.rootInActiveWindow?.let(::walk)
+                    found?.let { return it }
+                    Thread.sleep(100)
+                }
+                val visible = mutableListOf<String>()
+                fun collect(node: AccessibilityNodeInfo) {
+                    node.text?.toString()?.let(visible::add)
+                    node.contentDescription?.toString()?.let(visible::add)
+                    for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                }
+                automation.rootInActiveWindow?.let(::collect)
+                throw AssertionError("SAF backup UI control not found: text=$textPrefix hint=$hintPrefix description=$descriptionPrefix; visible=${visible.joinToString(" | ")}")
+            }
+            val names = mutableListOf<String>()
+            fun visibleNames(): List<String> {
+                names.clear()
+                fun collect(node: AccessibilityNodeInfo) {
+                    node.text?.toString()?.let(names::add)
+                    node.contentDescription?.toString()?.let(names::add)
+                    for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                }
+                automation.rootInActiveWindow?.let(::collect)
+                return names.toList()
+            }
+            fun clickText(text: String) {
+                var target: AccessibilityNodeInfo? = findNode(textPrefix = text)
+                var clicked = false
+                while (target != null && !clicked) {
+                    if (target.isClickable) clicked = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    target = target.parent
+                }
+                assertTrue("Could not click $text; picker text=${visibleNames().joinToString(" | ")}", clicked)
+            }
+            fun setText(hint: String, value: String) {
+                val field = findNode(hintPrefix = hint)
+                assertTrue("Could not enter $hint", field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+                }))
+            }
+
+            instrumentation.runOnMainSync { menuMethod.invoke(activity) }
+            clickText("Create encrypted backup")
+            val recoverySecret = "synthetic-saf-roundtrip-secret-2026"
+            setText("Recovery secret (12+ characters)", recoverySecret)
+            setText("Confirm recovery secret", recoverySecret)
+            clickText("Continue")
+
+            // The actual Android CreateDocument picker remains on screen here. SAF opens in
+            // the last-used directory; require an explicit Downloads location before saving.
+            var pickerText = ""
+            val pickerDeadline = System.currentTimeMillis() + 10_000
+            while (System.currentTimeMillis() < pickerDeadline) {
+                pickerText = visibleNames().joinToString(" | ")
+                if (pickerText.contains("Files in Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true)) break
+                Thread.sleep(100)
+            }
+            assertTrue("CreateDocument must open in Downloads before export: $pickerText", pickerText.contains("Files in Downloads", ignoreCase = true))
+            val filenameField = runCatching { findNode(hintPrefix = "File name") }.getOrNull()
+            filenameField?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "cat051b-saf-roundtrip-${System.currentTimeMillis()}.ctbackup")
+            })
+            clickText("Save")
+
+            var completion = ""
+            val completionDeadline = System.currentTimeMillis() + 90_000
+            while (System.currentTimeMillis() < completionDeadline) {
+                instrumentation.runOnMainSync { completion = status?.text?.toString().orEmpty() }
+                if (completion.startsWith("Encrypted backup created") || completion.startsWith("Backup failed")) break
+                Thread.sleep(100)
+            }
+            assertTrue("The real SAF export flow should finish successfully; status=$completion", completion.startsWith("Encrypted backup created"))
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
+        } finally {
+            instrumentation.runOnMainSync { if (!activity.isFinishing) activity.finish(); LocalSessionState.clear() }
+        }
+    }
+
     @Test fun voiceSettingsPersistsLanguageAndAliasesWithoutExecutingBusinessCommands() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

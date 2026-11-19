@@ -726,3 +726,7 @@ CT-22 details now show age context for the oldest open credit order using the re
 ## Superseding CT-22 dated customer account timeline — 19 November 2026
 
 CT-22 now displays payment and repayment history as a newest-first timeline with local timestamps read from the existing `payment_entries.created_at` field; no migration was needed. Missing/legacy and future dates are reported unavailable. Open-credit age remains device-clock context and no due date is inferred. Current regression: Node 52/52, Kotlin JVM 59/59, API 37 instrumentation 90/90, APK tasks PASS, lint 0 errors/161 warnings; the focused directory-to-details timeline test passed 1/1. Evidence is in ignored `test-evidence/2026-11-19/ct22-customer-timeline-*`. See `specs/CT-22-CUSTOMER-DETAILS-REPORT.md`. Customer cloud history, trusted time, whole product and release qualification remain open.
+
+## CAT-051B SAF export UI instrumentation - 19 November 2026
+
+The current API 37 source passed the focused UI export test (1/1). It drove the real backup menu, masked recovery-secret confirmation, Android CreateDocument picker, Downloads save, and app success state. Host ADB observed and pulled the resulting 245,884-byte synthetic encrypted-backup file; the artifact remains untracked/ignored. The exact file has not been restored or reconciled, so CAT-051B remains open. Evidence and limitations are recorded in `specs/CAT-051B-IMPLEMENTATION-REPORT.md`.
