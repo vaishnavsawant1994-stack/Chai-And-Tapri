@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Current Progress Audit
 
+## Superseding emulator regression and customer repayment UI — 19 November 2026
+
+After a normal emulator restart cleared the guest System UI ANR, the current-source API 37 instrumentation suite passed 90/90 with no failures, errors or skips. The earlier broad run (20/90 failures) was environmental and is retained in its own log; it is superseded by `ct23-credit-aging-final-full-instrumentation.log` and its current JUnit XML. The customer credit screen test now also drives the repayment dialog, submits a synthetic ₹5 cash repayment, and verifies the updated ₹15 balance plus a separate staff-declared ledger event; focused result 1/1. Refreshed checks: Node 52/52; Kotlin JVM 58/58; API 37 instrumentation 90/90; debug and instrumentation APK build tasks PASS; lint 0 errors / 161 warnings. The six-wave product and CAT-051B destructive/security, physical-device, field, browser-review and production gates remain open.
+
 ## Superseding customer-credit slice verification — 19 November 2026
 
 CT-23 now shows age context for each customer's oldest outstanding credit order. This is elapsed time from the saved order timestamp using the device clock; the screen explicitly says there is no recorded due date and does not label balances overdue. JVM behavior tests and a focused API 37 screen test passed. Current work-session results: Node 52/52, Kotlin JVM 58/58, focused Android instrumentation 1/1, debug and test APK tasks passed, lint 0 errors / 161 warnings. A broad 90-test instrumentation rerun had 20 failures while repeated Android System UI ANR dialogs obstructed UI automation; therefore the broad suite is not qualified by this run. Full details: `CT-21-23-24-CUSTOMER-CREDIT-AGING-REPORT.md`; evidence is under ignored `../test-evidence/2026-11-19/`. This slice does not finish CT-21–24 or the product.
@@ -23,11 +27,12 @@ All previous statements in this file are historical unless explicitly superseded
 | --- | --- |
 | Prototype Node | 52 passed, 0 failed |
 | Backend Node + isolated PostgreSQL integration | 20 passed, 0 failed, 0 skipped |
-| Kotlin JVM | 56 passed, 0 failed |
+| Kotlin JVM | 58 passed, 0 failed |
 | Debug and instrumentation APK build tasks | Passed |
 | Android lint | 0 errors, 161 warnings |
 | Changed JavaScript syntax | Passed |
-| Android API 37 full instrumentation | 90 passed, 0 failed, 0 skipped |
+| Android API 37 full instrumentation | 90 passed, 0 failed, 0 skipped (post-restart rerun) |
+| Focused customer-credit repayment UI | 1 passed, 0 failed |
 | Focused maintenance barrier / financial restore / CT-32 settings | 1/1 each passed |
 
 Evidence logs are under `../test-evidence/2026-11-19/`.

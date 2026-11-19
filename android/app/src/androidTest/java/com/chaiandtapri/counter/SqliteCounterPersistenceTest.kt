@@ -1912,7 +1912,46 @@ class SqliteCounterPersistenceTest {
             assertTrue(strings.any { it.contains("Outstanding credit:") && it.contains("20.00") })
             assertTrue(strings.any { it.contains("Oldest open credit:") && it.contains("since order (device clock)") && it.contains("No due date is recorded") })
             assertTrue(strings.any { it.contains("customer_repayment") && it.contains("10.00") && it.contains("staff_declared") })
-            assertTrue(strings.any { it.contains("Record cash repayment") })
+
+            val automation = instrumentation.uiAutomation
+            fun findNode(textPrefix: String? = null, hintPrefix: String? = null): AccessibilityNodeInfo {
+                repeat(100) {
+                    var found: AccessibilityNodeInfo? = null
+                    fun walk(node: AccessibilityNodeInfo) {
+                        val text = node.text?.toString().orEmpty()
+                        val hint = node.hintText?.toString().orEmpty()
+                        if (found == null && ((textPrefix != null && text.startsWith(textPrefix, ignoreCase = true)) ||
+                                (hintPrefix != null && hint.startsWith(hintPrefix, ignoreCase = true)))) found = node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::walk)
+                    }
+                    val root = automation.rootInActiveWindow
+                    root?.let(::walk)
+                    found?.let { return it }
+                    root?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Customer repayment UI element not found: text=$textPrefix hint=$hintPrefix")
+            }
+            assertTrue(findNode(textPrefix = "Record cash repayment").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val amountField = findNode(hintPrefix = "Cash amount in rupees")
+            assertTrue("Repayment amount editor should accept focus", amountField.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            instrumentation.waitForIdleSync()
+            assertTrue(amountField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "5.00")
+            }))
+            assertEquals("5.00", findNode(textPrefix = "5.00").text?.toString())
+            assertTrue(findNode(textPrefix = "Record repayment").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            instrumentation.waitForIdleSync()
+            strings.clear()
+            instrumentation.runOnMainSync { collect(activity.findViewById(android.R.id.content)) }
+            assertTrue("The UI should confirm a repayment result; visible text=${strings.joinToString(" | ")}", strings.any { it.contains("Repayment") && it.contains("5.00 allocated") })
+
+            val afterUiRepayment = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            assertEquals(1500, afterUiRepayment.creditBalance("customer-demo"))
+            val repayments = afterUiRepayment.paymentHistory().filter { it.customerId == "customer-demo" && it.kind == "customer_repayment" }
+            assertEquals(2, repayments.size)
+            assertTrue(repayments.any { it.amountPaise == 500 && it.status == "staff_declared" && it.method == "cash" })
+            afterUiRepayment.close()
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase("chai_tapri_counter.db")
