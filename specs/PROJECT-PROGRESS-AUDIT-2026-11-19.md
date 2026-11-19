@@ -50,3 +50,7 @@ Still open: real storage exhaustion, hard process kill/power loss and filesystem
 - **Wave 6 release:** physical device/field trials, independent review, deployment, operations and release qualification remain open.
 
 No full-product, cross-device, physical Bluetooth, field, independent security or production readiness claim is made.
+
+## CT-29 Android SAF export runtime — 19 November 2026
+
+On the installed API 37 emulator, created a synthetic local owner, navigated to Daily Reports, opened Android's Create Document picker, saved the CSV to shared Downloads, observed the success message, and pulled the resulting 940-byte file for content inspection. The ledger was empty and all exported amounts were zero; therefore this proves picker/destination/file-write/success-path operation only, not nonzero financial aggregation. It does not qualify cancellation, write failure, provider variation, calendar-day reports, profit, tax export or manual usability. Evidence screenshots and CSV are ignored under `test-evidence/2026-11-19/ct29-*`; see `specs/CT-29-CSV-EXPORT-REPORT.md`.

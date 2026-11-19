@@ -1,7 +1,7 @@
 # CT-29 Local Report CSV Export
 
-**Updated:** 1 November 2026  
-**Status:** Implemented and JVM-tested; Android picker flow build-qualified, runtime qualification pending.
+**Updated:** 19 November 2026
+**Status:** Local CSV formatter JVM-tested; Android SAF destination selection and file-write path manually runtime-qualified on API 37 for an empty synthetic ledger.
 
 ## Delivered
 
@@ -23,6 +23,12 @@ Command: `cd android; .\gradlew.bat testDebugUnitTest assembleDebug assembleDebu
 - Evidence: `../test-evidence/2026-11-01/ct29-csv-export-gradle-final.log`; focused test XML: `../android/app/build/test-results/testDebugUnitTest/TEST-com.chaiandtapri.counter.DailyReportCsvTest.xml`.
 - No ADB device was connected, so the Activity Result picker and actual destination write were not emulator-run. The exported content formatter is unit-tested; end-to-end SAF qualification remains open.
 
+## API 37 SAF runtime follow-up — 19 November 2026
+
+Installed the current debug APK on the API 37 emulator, created a synthetic local owner on the clean installation, opened Daily Reports from the app navigation, selected the default Downloads destination in Android's Create Document picker, and saved the generated CSV. The Activity returned to CT-29 and displayed the successful export message. The file was present in the emulator's shared Downloads directory and was pulled for inspection; it is 940 bytes and contains the CSV header, all-local-records scope disclosure, staff-declared cash label, and pending UPI label. The report was empty (all totals zero), so this verifies the actual picker/write/success path, not correctness of nonzero financial totals. No report data was seeded, and no external/payment claims are made.
+
+Evidence (ignored synthetic artifacts): `../test-evidence/2026-11-19/ct29-create-document-picker.png`, `ct29-export-result.png`, and `ct29-exported-empty-demo.csv`. A UI screenshot and CSV do not qualify cancellation, write failure, content-provider edge cases, nonzero financial mapping, or manual usability beyond this emulator interaction.
+
 ## Remaining CT-29 work
 
-Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting and manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
+Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
