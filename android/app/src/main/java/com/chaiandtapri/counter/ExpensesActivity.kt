@@ -12,6 +12,7 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import java.util.Locale
+import java.time.ZoneId
 
 /** CT-25 local operating-expense entry; purchase receipts and supplier settlements stay separate. */
 class ExpensesActivity : Activity() {
@@ -36,14 +37,23 @@ class ExpensesActivity : Activity() {
             val current = CounterModel(SqliteCounterPersistence(this))
             model = current
             content.addView(label("Operating Expenses | CT-25", 24f))
-            content.addView(label("Local lifetime total: ${money(current.totalExpensesPaise())}. Dates and daily totals are not available yet. Cash entries are staff-declared, not independently verified.", 14f))
+            val deviceZone = ZoneId.systemDefault()
+            content.addView(label("Local lifetime total: ${money(current.totalExpensesPaise())}. Daily grouping uses this device's clock and timezone (${deviceZone.id}); timestamps are not independently verified. Cash entries are staff-declared.", 14f))
             status = label("", 14f); content.addView(status)
             content.addView(button("Record operating expense") { askExpense() })
             content.addView(label("Expense history", 19f))
             val entries = current.expenseHistory().asReversed()
             if (entries.isEmpty()) content.addView(label("No expenses recorded.", 15f))
+            content.addView(label("Daily totals · device-local recorded date", 19f))
+            val daily = ExpenseHistorySummary.daily(entries, deviceZone)
+            if (daily.isEmpty()) content.addView(label("No dated expenses recorded.", 14f))
+            daily.forEach { summary ->
+                val date = summary.localDate?.toString() ?: "Date unavailable"
+                content.addView(label("$date | ${summary.recordCount} record${if (summary.recordCount == 1) "" else "s"} | ${money(summary.totalPaise)}", 14f))
+            }
             entries.forEach { expense ->
-                content.addView(label("${expense.category} | ${money(expense.amountPaise.toLong())} | ${expense.method} | ${expense.status}${if (expense.note.isBlank()) "" else " | ${expense.note}"}", 14f))
+                val recordedDate = expense.recordedAtEpochMs?.takeIf { it > 0 }?.let { java.time.Instant.ofEpochMilli(it).atZone(deviceZone).toLocalDate().toString() } ?: "date unavailable"
+                content.addView(label("$recordedDate | ${expense.category} | ${money(expense.amountPaise.toLong())} | ${expense.method} | ${expense.status}${if (expense.note.isBlank()) "" else " | ${expense.note}"}", 14f))
             }
             content.addView(label("Supplier purchases and supplier payments are tracked separately. Cash expenses recorded during an open CT-26 drawer session reduce that session's expected cash. Do not also record the same expense as a separate cash-out movement.", 13f))
             content.addView(button("Back") { finish() })

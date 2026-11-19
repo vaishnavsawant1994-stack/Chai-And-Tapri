@@ -1650,12 +1650,17 @@ class SqliteCounterPersistenceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase("chai_tapri_counter.db")
         val model = CounterModel(SqliteCounterPersistence(context))
+        val beforeRecord = System.currentTimeMillis()
         assertTrue(model.recordExpense("electricity", 3450, "cash", "synthetic monthly bill", "expense-ui").startsWith("Expense recorded"))
+        val afterRecord = System.currentTimeMillis()
         model.close()
 
         val reopened = CounterModel(SqliteCounterPersistence(context))
         assertEquals(3450L, reopened.totalExpensesPaise())
         assertEquals("staff_declared", reopened.expenseHistory().single().status)
+        val recordedAt = reopened.expenseHistory().single().recordedAtEpochMs
+        assertTrue(recordedAt != null && recordedAt in beforeRecord..afterRecord)
+        assertEquals(3450L, ExpenseHistorySummary.daily(reopened.expenseHistory(), java.time.ZoneId.systemDefault()).single().totalPaise)
         assertEquals("Duplicate command ignored.", reopened.recordExpense("electricity", 3450, "cash", "synthetic monthly bill", "expense-ui"))
         assertTrue(reopened.auditEvents().any { it.contains("expense.recorded category=electricity") })
         reopened.close()
@@ -1669,6 +1674,8 @@ class SqliteCounterPersistenceTest {
         }
         collect(activity.findViewById(android.R.id.content))
         assertTrue(strings.any { it.contains("total:") && it.contains("34.50") })
+        assertTrue(strings.any { it.contains("Daily totals") && it.contains("device-local") })
+        assertTrue(strings.any { it.contains(java.time.Instant.ofEpochMilli(recordedAt!!).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()) && it.contains("34.50") })
         assertTrue(strings.any { it.contains("electricity") && it.contains("staff_declared") })
         instrumentation.runOnMainSync { activity.finish() }
         context.deleteDatabase("chai_tapri_counter.db")
@@ -3591,6 +3598,9 @@ class SqliteCounterPersistenceTest {
         assertTrue(source.quickSale(listOf("chai" to 1), "cash", commandId = "clean-drawer-sale").startsWith("Quick sale"))
         assertTrue(source.endStaffShift(6_200, "Synthetic evening", "synthetic recount follow-up", "clean-drawer-close").contains("unresolved variance"))
         assertTrue(source.recordCashClosingReview("clean-drawer-open", "synthetic recount follow-up", "clean-drawer-review").contains("review recorded"))
+        assertTrue(source.recordExpense("utilities", 2_550, "upi", "synthetic recovery expense", "clean-expense-1").startsWith("Expense recorded"))
+        val sourceExpenseTime = source.expenseHistory().single().recordedAtEpochMs
+        assertNotNull(sourceExpenseTime)
         source.close()
 
         val recoverySecret = "separate-sandbox-recovery-2026".toCharArray()
@@ -3630,6 +3640,8 @@ class SqliteCounterPersistenceTest {
         assertEquals("Synthetic Customer", restored.customerProfiles().single { it.customerId == "pilot-customer" }.displayName)
         assertEquals("+919900112233", restored.customerProfiles().single { it.customerId == "pilot-customer" }.phone)
         assertEquals(1, restored.creditRepayments().size)
+        assertEquals(2_550, restored.expenseHistory().single().amountPaise)
+        assertEquals(sourceExpenseTime, restored.expenseHistory().single().recordedAtEpochMs)
         assertEquals(1, restored.paymentHistory().count { it.kind == "credit_reversal" })
         assertEquals(1, restored.paymentHistory().count { it.method == "upi" && it.status == "pending" })
         assertEquals(1, restored.stockMovements().count { it.reason == "sale_refund_restock" })

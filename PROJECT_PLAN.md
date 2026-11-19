@@ -702,3 +702,7 @@ The local staff credential test now asserts local-owner attribution for account 
 ## Current focused follow-up - 2 November 2026
 
 API 37 instrumentation passed the updated staff actor assertion 1/1 and the restored CT-04 permissions screen test 1/1. CT-04 direct permission-prompt Allow remains pending; the earlier manual Settings grant/return evidence is retained. Continue with CT-04 result qualification through a trusted device interaction path, then the remaining CT-01-12 workflows. Overall full product and device/security gates remain open.
+
+## CT-25 expense date history and daily totals — 19 November 2026
+
+New expense entries store their device-clock timestamp in the existing `created_at` field; no schema migration was needed. Expenses now groups totals by device-local calendar date and discloses the timezone/device-clock limitation. Legacy rows without timestamps remain “date unavailable.” JVM summary coverage and API 37 tests verify grouping, encrypted persistence, screen rendering, and exact timestamp preservation through encrypted portable snapshot restore. Current full Android regression: Kotlin JVM 57/57, API 37 instrumentation 90/90, debug and test APK builds pass, lint 0 errors / 161 warnings. Node 52/52 is the latest prior unchanged result and was not rerun for this slice. No cross-device date trust or end-to-end expense sync is qualified. See `specs/CT-25-EXPENSES-REPORT.md`.

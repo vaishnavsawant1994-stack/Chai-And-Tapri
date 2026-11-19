@@ -579,7 +579,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (method !in setOf("cash", "upi", "card")) return "Choose cash, UPI or card as the declared payment method. No expense recorded."
         if (details.length > 160) return "Expense note must be 160 characters or fewer. No expense recorded."
         val before = snapshot()
-        expenseRecords += BusinessExpense(commandId, normalizedCategory, amountPaise, method, "staff_declared", details, if (method == "cash") activeCashDrawer()?.sessionId else null)
+        expenseRecords += BusinessExpense(commandId, normalizedCategory, amountPaise, method, "staff_declared", details,
+            if (method == "cash") activeCashDrawer()?.sessionId else null, System.currentTimeMillis())
         return commitMutation(before, commandId, "Expense recorded: $normalizedCategory ${money(amountPaise)} via $method.", "expense.recorded category=$normalizedCategory amount=${amountPaise}p method=$method status=staff_declared")
     }
 

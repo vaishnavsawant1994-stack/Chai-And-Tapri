@@ -1,7 +1,7 @@
 # CT-25 Expenses — Implementation Report
 
 **Date:** 29 October 2026  
-**Status:** Partial local prototype; selected validation, encrypted persistence, screen rendering, manual form submission and process-restart persistence are tested.
+**Status:** Partial local workflow; dated expense history and device-local daily totals are implemented and covered by JVM, encrypted persistence, snapshot/restore and API 37 emulator regression tests.
 
 ## Implemented
 
@@ -12,30 +12,32 @@
 - Optional note limited to 160 characters.
 - Append-only expense records, command idempotency, audit event and sync outbox entry posted atomically through the existing write-barrier-protected persistence path.
 - Encrypted SQLCipher schema v11 added the expenses table; current schema v12 adds optional drawer-session attribution. Migrations are additive; v8-to-v12 migration preserves existing order data and creates procurement, expense and drawer tables.
-- Local lifetime total and reverse-chronological history are shown. Dates and daily reports are not yet available.
+- Device-clock timestamp is recorded for new expenses using the existing `created_at` column; no schema migration was needed. Device-local calendar-day totals and dated history are shown with the device timezone explicitly disclosed.
+- Legacy rows with missing/zero timestamps remain undated and are reported separately as “date unavailable”; the app does not invent historical dates.
+- Snapshot restore preserves an expense timestamp exactly. This timestamp is device-clock supplied and not independently verified; it is not a trusted cross-device business date.
 - Supplier purchases/payments are kept separate from operating expenses. Owner withdrawals and cash-register opening/closing are not represented as expenses.
 
 ## Verification
 
-Latest local full run, 29 October 2026:
+Latest current-source full run, 19 November 2026:
 
 | Check | Result |
 |---|---:|
-| Node | 48/48 passed |
-| Kotlin JVM | 27/27 passed |
-| API 37 emulator instrumentation | 19/19 passed; no failures/errors/skips |
+| Node | 52/52 passed (unchanged suite; not rerun for this slice) |
+| Kotlin JVM | 57/57 passed |
+| API 37 emulator instrumentation | 90/90 passed; no failures/errors/skips |
 | Debug and instrumentation APK builds | Passed |
-| Android lint | 0 errors, 70 warnings |
+| Android lint | 0 errors, 161 warnings |
 
-New coverage checks input validation, duplicate command behavior, rollback on persistence failure, encrypted-database reopen, audit event persistence, additive migration and rendering of a synthetic expense on the native screen. On the API 37 emulator, the expense form was manually submitted with synthetic rent ₹250.50, cash (staff-declared), and a synthetic note. The updated lifetime total and history appeared. After force-stopping and relaunching the app, the same total and record remained visible.
+New JVM coverage verifies grouping by device-local date and separating unknown legacy dates. API 37 coverage verifies exact timestamp persistence and daily summary rendering after encrypted database reopen, and timestamp retention through encrypted portable snapshot restore into a separate store. The full API 37 suite also passed. The test data is synthetic; a fresh manual UI expense submission was not repeated for this date-summary slice.
 
 Evidence: [saved screen](../test-evidence/2026-10-29/ct25-saved.png), [post-restart screen](../test-evidence/2026-10-29/ct25-restart.png), [post-restart UI hierarchy](../test-evidence/2026-10-29/ct25-restart.xml), [Kotlin JVM report](../android/app/build/test-results/testDebugUnitTest/TEST-com.chaiandtapri.counter.CounterModelTest.xml), and [Android instrumentation report](../android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0%20%28AVD%29%20-%2017.xml). The manual record is synthetic emulator data, not a real shop expense.
 
 ## Limits and next step
 
-Expense date attribution is not exposed in the current record model. There is no recurring expense workflow, attachment/evidence capture, category management, approval, export, staff identity, or authenticated sync. The lifetime total is not a daily figure and does not establish complete expense coverage or profit. Implement CT-26 cash drawer and shift events next, then CT-28 closing with counted-versus-expected cash and explicit unresolved variances.
+Dates reflect the device clock and timezone at entry, which may be wrong or changed; they are not server receipt dates. There is no recurring expense workflow, attachment/evidence capture, category management, approval, export, or expense-specific staff attribution. Expense records/outbox are not end-to-end sync-qualified, and these totals do not establish complete expense coverage or profit. Daily summaries are local convenience reporting, not accounting close or tax reports.
 
 
 ## Later schema extension
 
-Schema v12 added optional session attribution for cash expenses; schema v13 added the separate cash-session closing review. The expense record model and limitations above remain unchanged.
+Schema v12 added optional session attribution for cash expenses; schema v13 added the separate cash-session closing review. The expense model now carries an optional recorded timestamp; no schema migration was required because `created_at` was already present. Legacy unknown dates remain unknown.

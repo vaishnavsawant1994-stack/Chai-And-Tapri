@@ -903,8 +903,9 @@ class SqliteCounterPersistence internal constructor(
             while (c.moveToNext()) purchaseReturns += PurchaseReturn(c.getString(0), c.getString(1), c.getString(2), returnLines[c.getString(0)].orEmpty(), c.getLong(3))
         }
         val expenses = mutableListOf<BusinessExpense>()
-        db.rawQuery("SELECT expense_id,category,amount_paise,method,status,note,drawer_session_id FROM expenses ORDER BY created_at,expense_id", null).use { c ->
-            while (c.moveToNext()) expenses += BusinessExpense(c.getString(0), c.getString(1), c.getInt(2), c.getString(3), c.getString(4), c.getString(5), if (c.isNull(6)) null else c.getString(6))
+        db.rawQuery("SELECT expense_id,category,amount_paise,method,status,note,drawer_session_id,created_at FROM expenses ORDER BY created_at,expense_id", null).use { c ->
+            while (c.moveToNext()) expenses += BusinessExpense(c.getString(0), c.getString(1), c.getInt(2), c.getString(3), c.getString(4), c.getString(5),
+                if (c.isNull(6)) null else c.getString(6), c.getLong(7).takeIf { it > 0 })
         }
         val drawerSessions = mutableListOf<CashDrawerSession>()
         db.rawQuery("SELECT session_id,opening_cash_paise,opened_at,closing_cash_paise,closed_at,staff_label,handover_to_label,handover_note FROM cash_drawer_sessions ORDER BY rowid", null).use { c ->
@@ -1009,7 +1010,8 @@ class SqliteCounterPersistence internal constructor(
             }
             snapshot.expenses.forEach { expense -> db.insertWithOnConflict("expenses", null, ContentValues().apply {
                 put("expense_id", expense.expenseId); put("category", expense.category); put("amount_paise", expense.amountPaise)
-                put("method", expense.method); put("status", expense.status); put("note", expense.note); put("drawer_session_id", expense.drawerSessionId); put("created_at", now)
+                put("method", expense.method); put("status", expense.status); put("note", expense.note); put("drawer_session_id", expense.drawerSessionId)
+                put("created_at", expense.recordedAtEpochMs ?: 0L)
             }, CipherDatabase.CONFLICT_IGNORE) }
             snapshot.cashDrawerSessions.forEach { session ->
                 val values = ContentValues().apply {

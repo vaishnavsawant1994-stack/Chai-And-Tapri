@@ -96,7 +96,17 @@ data class PurchaseReturnLine(val productId: String, val productName: String, va
     val lineValuePaise: Long get() = quantity.toLong() * unitCostPaise
 }
 data class PurchaseReturn(val returnId: String, val supplierId: String, val receiptId: String, val lines: List<PurchaseReturnLine>, val totalPaise: Long = lines.sumOf { it.lineValuePaise })
-data class BusinessExpense(val expenseId: String, val category: String, val amountPaise: Int, val method: String, val status: String, val note: String, val drawerSessionId: String? = null)
+data class BusinessExpense(
+    val expenseId: String,
+    val category: String,
+    val amountPaise: Int,
+    val method: String,
+    val status: String,
+    val note: String,
+    val drawerSessionId: String? = null,
+    /** Device-clock time when recorded; null means the original date is unavailable. */
+    val recordedAtEpochMs: Long? = null
+)
 data class CashDrawerSession(val sessionId: String, val openingCashPaise: Int, val openedAt: Long, val closingCashPaise: Int? = null, val closedAt: Long? = null, val staffLabel: String? = null, val handoverToLabel: String? = null, val handoverNote: String = "")
 data class CashDrawerMovement(val movementId: String, val sessionId: String, val kind: String, val amountPaise: Int, val note: String)
 data class CashClosingReview(val reviewId: String, val sessionId: String, val reviewedAt: Long, val note: String)

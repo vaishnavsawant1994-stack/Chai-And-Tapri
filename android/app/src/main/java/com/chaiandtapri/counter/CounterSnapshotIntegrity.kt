@@ -64,7 +64,7 @@ internal object CounterSnapshotIntegrity {
         }
         if (snapshot.paymentEntries.any { it.drawerSessionId != null && it.drawerSessionId !in drawerIds } || snapshot.expenses.any { it.drawerSessionId != null && it.drawerSessionId !in drawerIds } || snapshot.supplierPayments.any { it.drawerSessionId != null && it.drawerSessionId !in drawerIds }) problems += "cash event references a missing drawer session"
         snapshot.expenses.forEach { expense ->
-            if (expense.expenseId.isBlank() || expense.category.length !in 2..40 || !expense.category.matches(Regex("[a-z][a-z0-9 _-]*")) || expense.amountPaise !in 1..100_000_000 || expense.method !in setOf("cash", "upi", "card") || expense.status != "staff_declared" || expense.note.length > 160) {
+            if (expense.expenseId.isBlank() || expense.category.length !in 2..40 || !expense.category.matches(Regex("[a-z][a-z0-9 _-]*")) || expense.amountPaise !in 1..100_000_000 || expense.method !in setOf("cash", "upi", "card") || expense.status != "staff_declared" || expense.note.length > 160 || expense.recordedAtEpochMs?.let { it <= 0 } == true) {
                 problems += "expense ${expense.expenseId} has invalid fields or unsupported evidence status"
             }
         }
