@@ -1240,6 +1240,56 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun shopProfileSettingsEditPersistsOwnerChangesWithoutFinancialSideEffects() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic test owner")
+        CounterModel(SqliteCounterPersistence(context)).use { model ->
+            assertTrue(model.saveShopProfile(ShopProfile("Old Tea Corner", "chai_tapri", "hi-IN", "INR")).startsWith("Shop setup saved"))
+        }
+
+        val activity = instrumentation.startActivitySync(Intent(context, ShopSetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        fun widgets(): List<View> {
+            val found = mutableListOf<View>()
+            instrumentation.runOnMainSync {
+                fun visit(view: View) {
+                    if (view is EditText || view is Spinner || view is Button || view is TextView) found += view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+                }
+                visit(activity.findViewById(android.R.id.content))
+            }
+            return found
+        }
+        repeat(60) { if (widgets().filterIsInstance<Button>().any { it.text.toString() == "Save shop profile" }) return@repeat; Thread.sleep(100) }
+        val initial = widgets()
+        assertTrue(initial.filterIsInstance<TextView>().any { it.text.toString().contains("Shop Profile & Settings · CT-32") })
+        val name = initial.filterIsInstance<EditText>().single()
+        val selectors = initial.filterIsInstance<Spinner>()
+        assertEquals(2, selectors.size)
+        instrumentation.runOnMainSync {
+            name.setText("Updated Tea Corner")
+            selectors[0].setSelection(3)
+            selectors[1].setSelection(2)
+            initial.filterIsInstance<Button>().single { it.text.toString() == "Save shop profile" }.performClick()
+        }
+        var saved = false
+        repeat(60) {
+            saved = widgets().filterIsInstance<TextView>().any { it.text.toString().startsWith("Shop setup saved") }
+            if (!saved) Thread.sleep(100)
+        }
+        assertTrue("Owner profile save should finish with success feedback", saved)
+        CounterModel(SqliteCounterPersistence(context)).use { model ->
+            assertEquals(ShopProfile("Updated Tea Corner", "cafe", "en-IN", "INR"), model.shopProfile())
+            assertTrue(model.auditRecords().any { it.event.contains("shop.profile_updated") })
+            assertTrue("Editing shop configuration must not create an order", model.allOrders().isEmpty())
+            assertTrue("Editing shop configuration must not create payments", model.paymentHistory().isEmpty())
+            assertTrue("Editing shop configuration must not create stock movements", model.stockMovements().isEmpty())
+        }
+        instrumentation.runOnMainSync { activity.finish() }
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+    }
+
     @Test fun businessAlertsUseLocalRecordsAndDiscloseUnavailableAlertClasses() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

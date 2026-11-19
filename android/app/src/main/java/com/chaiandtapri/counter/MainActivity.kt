@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity() {
         column.addView(maintenanceBanner)
         if (LocalSessionState.isOwner) {
             column.addView(button("Staff Accounts · local roles"){startActivity(android.content.Intent(this,StaffManagementActivity::class.java))})
-            column.addView(button("Shop Setup · CT-02"){startActivity(android.content.Intent(this,ShopSetupActivity::class.java))})
+            column.addView(button("Shop Profile & Settings · CT-32"){startActivity(android.content.Intent(this,ShopSetupActivity::class.java))})
             column.addView(button("Shop Home · CT-05"){startActivity(android.content.Intent(this,ShopHomeActivity::class.java))})
             column.addView(button("Device Permissions · CT-04"){startActivity(android.content.Intent(this,DevicePermissionsActivity::class.java))})
         }

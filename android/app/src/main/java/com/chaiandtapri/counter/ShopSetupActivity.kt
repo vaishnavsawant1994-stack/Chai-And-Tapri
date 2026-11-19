@@ -56,8 +56,9 @@ class ShopSetupActivity : Activity() {
         val column = content
         column.removeAllViews()
 
-        column.addView(label("Shop Setup", 26f))
-        column.addView(label("CT-02 · Basic business profile is stored in this device’s encrypted database.", 15f))
+        val isConfigured = profile.shopName.isNotBlank()
+        column.addView(label(if (isConfigured) "Shop Profile & Settings · CT-32" else "Shop Setup · CT-02", 26f))
+        column.addView(label("Shop name, business type, preferred language, and currency are stored in the encrypted local database.", 15f))
         column.addView(label("Shop name", 16f))
         shopName = EditText(this).apply {
             hint = "For example, Shree Tea Corner"
@@ -82,7 +83,7 @@ class ShopSetupActivity : Activity() {
         column.addView(label("Product prices and opening stock are configured separately. This setup does not create sales or financial records.", 14f))
         status = label("", 14f)
         column.addView(status)
-        column.addView(button("Save shop setup") { save() })
+        column.addView(button(if (isConfigured) "Save shop profile" else "Save shop setup") { save() })
         column.addView(button("Back to counter") { finish() })
     }
 

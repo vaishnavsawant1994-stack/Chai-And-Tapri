@@ -2,9 +2,9 @@
 
 ## Superseding current-source verification — 19 November 2026
 
-The earlier note below that Android instrumentation stalled is superseded by a later full run on the same current source. `testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL**: Kotlin JVM **56/56**, Android API 37 instrumentation **89/89**, debug and test APK build tasks passed, and lint reported **0 errors / 161 warnings**. The prototype Node suite passed **52/52**; backend tests passed **20/20** on a separate temporary PostgreSQL 17 cluster using synthetic data and the restricted runtime role. Changed JavaScript syntax checks passed. Total: **217 passed, 0 failed** across distinct suites.
+The current-source regression now includes the CT-32 owner shop-profile settings UI test. Prototype Node passed 52/52; backend tests passed 20/20 against a temporary isolated PostgreSQL 17 cluster; Kotlin JVM passed 56/56; API 37 instrumentation passed 90/90; APK tasks passed; lint reported 0 errors / 161 warnings. Total: 218 passed, 0 failed across the four distinct test suites.
 
-The first full instrumentation attempt on this run had one receivable-projection assertion failure in `liveOrdersUdharSelectsSavedCustomerAndSettlesOrderDue`; its focused rerun passed, and the subsequent full run passed 89/89. The assertion diagnostic was improved to include both paise values. The intermittent first-run failure was not root-caused, so retain it as a stability observation rather than claiming a proven product defect or root-cause fix. Current XML: `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`; JVM XMLs: `../android/app/build/test-results/testDebugUnitTest/`; lint: `../android/app/build/reports/lint-results-debug.txt`.
+An earlier full instrumentation attempt on 19 November had one receivable-projection assertion failure in `liveOrdersUdharSelectsSavedCustomerAndSettlesOrderDue`; its focused rerun and the subsequent 89-case suite passed. The assertion diagnostic was improved, but the intermittent first-run failure was not root-caused. A later full run after the CT-32 settings UI addition passed 90/90. Current XML: `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`; JVM XMLs: `../android/app/build/test-results/testDebugUnitTest/`; lint: `../android/app/build/reports/lint-results-debug.txt`.
 
 CAT-051B's current-source synthetic recovery was subsequently exercised through the actual Android UI on API 37: a test-generated encrypted archive was selected with SAF, authenticated and previewed, replacement was explicitly confirmed, and the app restored into a clean app installation. After creating a synthetic local owner, the app reopened the restored counter and displayed three restored orders. The focused instrumentation test for that exact rich synthetic dataset passed 1/1 and asserts cash, pending UPI, refund, credit, repayment, stock, audit, outbox and a different local key in an isolated restored store. Screenshot: `../test-evidence/2026-11-19/cat051b-current-ui-orders.png`; UI hierarchy captures are under the same ignored evidence directory. This qualifies the current-source emulator SAF restore workflow for synthetic data; it does not close destructive-failure or security-review gates. Real storage exhaustion, hard process/power interruption, hardware Keystore invalidation, separate-device/person recovery and independent review remain open. PostgreSQL integration ran against a newly initialized loopback-only temporary cluster under `test-evidence/2026-11-19/`; the laptop's existing PostgreSQL service and databases were not used. The cluster was stopped after the run. Test log: `../test-evidence/2026-11-19/backend-postgres-tests.log`.
 
@@ -23,8 +23,8 @@ All previous statements in this file are historical unless explicitly superseded
 | Debug and instrumentation APK build tasks | Passed |
 | Android lint | 0 errors, 161 warnings |
 | Changed JavaScript syntax | Passed |
-| Android API 37 full instrumentation | 89 passed, 0 failed, 0 skipped |
-| Focused maintenance barrier / financial restore | 1/1 each passed |
+| Android API 37 full instrumentation | 90 passed, 0 failed, 0 skipped |
+| Focused maintenance barrier / financial restore / CT-32 settings | 1/1 each passed |
 
 Evidence logs are under `../test-evidence/2026-11-19/`.
 

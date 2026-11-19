@@ -53,6 +53,7 @@ class ShopHomeActivity : ComponentActivity() {
             content.addView(button("Quick Sale · CT-06") { startActivity(Intent(this, QuickSaleActivity::class.java)) })
             content.addView(button("Live Orders · CT-08") { startActivity(Intent(this, LiveOrdersActivity::class.java)) })
             content.addView(button("Products & Prices · CT-13/14") { startActivity(Intent(this, ProductCatalogueActivity::class.java)) })
+            content.addView(button("Shop Profile & Settings · CT-32") { startActivity(Intent(this, ShopSetupActivity::class.java)) })
             content.addView(button("Inventory Overview - CT-15") { startActivity(Intent(this, InventoryOverviewActivity::class.java)) })
             content.addView(button("Customers & Udhar - CT-21/23") { startActivity(Intent(this, CustomerCreditActivity::class.java)) })
             content.addView(button("Suppliers & Purchases - CT-17/20") { startActivity(Intent(this, ProcurementActivity::class.java)) })
