@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildShopOverview } from '../src/dashboard.mjs';
+import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildRecordedMoneyMovementSummary, buildShopOverview } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
@@ -210,12 +210,39 @@ test('daily sales activity rejects unsupported ranges and invalid calendar dates
   assert.throws(() => buildDailySalesActivity({ ...base, endDate: '2026-02-31' }), (error) => error instanceof ApiError && error.code === 'invalid_activity_range');
 });
 
+test('recorded money movement summary excludes pending UPI and checks paise aggregates', () => {
+  const activity = {
+    shopId: 's', shopName: 'Synthetic', serverRevision: 8,
+    range: { fromDate: '2026-11-02', throughDate: '2026-11-03', days: 2, timezone: 'UTC' },
+    evidence: { scope: 'accepted only', dates: 'server UTC' },
+    daily: [
+      { date: '2026-11-02', staffDeclaredCashPaise: 2000, staffDeclaredUpiPaise: 1000,
+        staffDeclaredCashRefundPaise: 500, staffDeclaredExpensesPaise: 750, upiPendingAttemptsStartedPaise: 9000 },
+      { date: '2026-11-03', staffDeclaredCashPaise: 0, staffDeclaredUpiPaise: 0,
+        staffDeclaredCashRefundPaise: 0, staffDeclaredExpensesPaise: 0, upiPendingAttemptsStartedPaise: 0 }
+    ]
+  };
+  const result = buildRecordedMoneyMovementSummary(activity);
+  assert.equal(result.shopId, 's');
+  assert.equal(result.serverRevision, 8);
+  assert.equal(result.daily[0].recordedInflowPaise, 3000);
+  assert.equal(result.daily[0].recordedOutflowPaise, 1250);
+  assert.equal(result.daily[0].netRecordedMovementPaise, 1750);
+  assert.equal(result.totals.netRecordedMovementPaise, 1750);
+  assert.match(result.evidence.net, /not profit/);
+  assert.match(result.evidence.exclusions, /UPI pending/);
+  assert.throws(() => buildRecordedMoneyMovementSummary({ ...activity, daily: [
+    { ...activity.daily[0], staffDeclaredCashPaise: Number.MAX_SAFE_INTEGER, staffDeclaredUpiPaise: 1 }
+  ] }) , (error) => error instanceof ApiError && error.status === 422);
+});
+
 test('sync service refuses dashboard access to non-owner roles before reading the database', async () => {
   const service = new SyncService(null);
   await assert.rejects(service.shopOverview({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopProductPerformance({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopInventorySnapshot({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopDailySalesActivity({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopRecordedMoneyMovements({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
 });
 
 test('owner overview route requires authentication and serves only owner static assets', async (t) => {
@@ -230,7 +257,8 @@ test('owner overview route requires authentication and serves only owner static 
     async shopOverview(actor) { return { ...fixture, shopId: actor.shop_id }; },
     async shopProductPerformance(actor) { return { ...fixture, shopId: actor.shop_id, products: [] }; },
     async shopInventorySnapshot(actor) { return { ...fixture, shopId: actor.shop_id, products: [], recentMovements: [] }; },
-    async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; }
+    async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; },
+    async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; }
   };
   const server = createApiServer(service);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -251,6 +279,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="inventory-rows"/);
   assert.match(pageText, /Sales activity/);
   assert.match(pageText, /id="activity-rows"/);
+  assert.match(pageText, /Recorded money movements/);
+  assert.match(pageText, /id="cashflow-rows"/);
   const script = await fetch(`${base}/owner/app.js`);
   assert.equal(script.status, 200);
   const scriptText = await script.text();
@@ -258,6 +288,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/products/);
   assert.match(scriptText, /\/v1\/dashboard\/inventory/);
   assert.match(scriptText, /\/v1\/dashboard\/activity/);
+  assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
 
   const denied = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`);
   assert.equal(denied.status, 401);
@@ -277,12 +308,19 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal((await activity.json()).days, 7);
   const invalidRange = await fetch(`${base}/v1/dashboard/activity?shopId=shop-1&days=14`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(invalidRange.status, 400);
+  const cashflowDenied = await fetch(`${base}/v1/dashboard/cashflow?shopId=shop-1&days=7`);
+  assert.equal(cashflowDenied.status, 401);
+  const cashflow = await fetch(`${base}/v1/dashboard/cashflow?shopId=shop-1&days=7`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(cashflow.status, 200);
+  assert.equal((await cashflow.json()).shopId, 'shop-1');
   assert.deepEqual(calls, [
     { token: '', shopId: 'shop-1' },
     { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
+    { token: 'owner-token', shopId: 'shop-1' },
+    { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' }
   ]);
 });

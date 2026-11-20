@@ -57,6 +57,7 @@
           <button id="products-tab" class="nav-tab" type="button" aria-current="false">Product performance</button>
           <button id="inventory-tab" class="nav-tab" type="button" aria-current="false">Inventory snapshot</button>
           <button id="activity-tab" class="nav-tab" type="button" aria-current="false">Sales activity</button>
+          <button id="cashflow-tab" class="nav-tab" type="button" aria-current="false">Recorded money movements</button>
         </nav>
         <section id="overview-view">
         <div id="metrics" class="metrics" aria-live="polite"></div>
@@ -118,6 +119,20 @@
             <ul id="activity-evidence-list"></ul>
           </section>
           <p id="activity-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="cashflow-view" class="hidden" aria-labelledby="cashflow-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">ACCEPTED DECLARATIONS · UTC</p><h2 id="cashflow-heading">Recorded money movements</h2></div>
+            <label>Range<select id="cashflow-range"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+          </div>
+          <p id="cashflow-scope" class="scope-note"></p>
+          <div id="cashflow-metrics" class="metrics" aria-live="polite"></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">UTC server date</th><th scope="col">Cash declared in</th><th scope="col">UPI declared in</th><th scope="col">Cash refunds declared</th><th scope="col">Expenses recorded</th><th scope="col">Net recorded movement*</th></tr></thead><tbody id="cashflow-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="cashflow-evidence-heading">
+            <h3 id="cashflow-evidence-heading">Scope and exclusions</h3>
+            <ul id="cashflow-evidence-list"></ul>
+          </section>
+          <p id="cashflow-status" class="status" role="status" aria-live="polite"></p>
         </section>
       </section>
       <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>

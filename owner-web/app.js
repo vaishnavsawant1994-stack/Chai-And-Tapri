@@ -39,11 +39,13 @@
     const products = view === 'products';
     const inventory = view === 'inventory';
     const activity = view === 'activity';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : 'Refresh sales activity';
+    const cashflow = view === 'cashflow';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : 'Refresh money movements';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
     $('activity-view').classList.toggle('hidden', !activity);
+    $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
@@ -52,6 +54,8 @@
     $('inventory-tab').setAttribute('aria-current', inventory ? 'page' : 'false');
     $('activity-tab').classList.toggle('active', activity);
     $('activity-tab').setAttribute('aria-current', activity ? 'page' : 'false');
+    $('cashflow-tab').classList.toggle('active', cashflow);
+    $('cashflow-tab').setAttribute('aria-current', cashflow ? 'page' : 'false');
   }
 
   async function loadOverview() {
@@ -242,6 +246,49 @@
     }
   }
 
+  async function loadCashflow() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    setStatus($('cashflow-status'), 'Loading accepted money movement records…');
+    try {
+      const days = $('cashflow-range').value;
+      const data = await request(`/v1/dashboard/cashflow?shopId=${encodeURIComponent(activeShopId)}&days=${encodeURIComponent(days)}`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      const totals = data.totals;
+      $('cashflow-scope').textContent = `${data.evidence.scope} Range ${data.range.fromDate} to ${data.range.throughDate} (${data.range.timezone}).`;
+      $('cashflow-metrics').replaceChildren(
+        metric('Cash collections declared', money(totals.declaredCashInPaise), 'Staff-declared records'),
+        metric('UPI receipts declared', money(totals.declaredUpiInPaise), 'Staff-declared; not provider-verified'),
+        metric('Recorded refunds and expenses', money(totals.recordedOutflowPaise), 'Only accepted declared outflow records'),
+        metric('Net recorded movement*', money(totals.netRecordedMovementPaise), 'Partial event total; not a reconciled cash balance')
+      );
+      $('cashflow-rows').replaceChildren(...data.daily.map((day) => {
+        const row = document.createElement('tr');
+        [day.date, money(day.declaredCashInPaise), money(day.declaredUpiInPaise),
+          money(day.recordedCashRefundOutPaise), money(day.recordedExpensesOutPaise), money(day.netRecordedMovementPaise)]
+          .forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
+        return row;
+      }));
+      const caveats = [
+        data.evidence.net,
+        data.evidence.inflows,
+        data.evidence.outflows,
+        data.evidence.exclusions,
+        data.evidence.dates
+      ];
+      $('cashflow-evidence-list').replaceChildren(...caveats.map((text) => {
+        const item = document.createElement('li'); item.textContent = text; return item;
+      }));
+      setStatus($('cashflow-status'), `Recorded money movements refreshed at server revision ${data.serverRevision}.`, 'success');
+    } catch (error) {
+      setStatus($('cashflow-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally {
+      $('refresh-button').disabled = false;
+    }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
@@ -288,13 +335,16 @@
     if (!$('products-view').classList.contains('hidden')) loadProducts();
     else if (!$('inventory-view').classList.contains('hidden')) loadInventory();
     else if (!$('activity-view').classList.contains('hidden')) loadActivity();
+    else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else loadOverview();
   });
   $('overview-tab').addEventListener('click', () => setView('overview'));
   $('products-tab').addEventListener('click', () => { setView('products'); loadProducts(); });
   $('inventory-tab').addEventListener('click', () => { setView('inventory'); loadInventory(); });
   $('activity-tab').addEventListener('click', () => { setView('activity'); loadActivity(); });
+  $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('activity-range').addEventListener('change', () => { if (!$('activity-view').classList.contains('hidden')) loadActivity(); });
+  $('cashflow-range').addEventListener('change', () => { if (!$('cashflow-view').classList.contains('hidden')) loadCashflow(); });
   $('logout-button').addEventListener('click', async () => {
     const current = session;
     signOutLocally();

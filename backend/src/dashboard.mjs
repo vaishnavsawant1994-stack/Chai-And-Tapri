@@ -320,3 +320,54 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
     }
   };
 }
+
+/** A deliberately partial cash-movement view derived from accepted declarations only. */
+export function buildRecordedMoneyMovementSummary(activity) {
+  const daily = activity.daily.map((day) => {
+    const declaredCashInPaise = day.staffDeclaredCashPaise;
+    const declaredUpiInPaise = day.staffDeclaredUpiPaise;
+    const recordedCashRefundOutPaise = day.staffDeclaredCashRefundPaise;
+    const recordedExpensesOutPaise = day.staffDeclaredExpensesPaise;
+    const recordedInflowPaise = safeTotal([declaredCashInPaise, declaredUpiInPaise]);
+    const recordedOutflowPaise = safeTotal([recordedCashRefundOutPaise, recordedExpensesOutPaise]);
+    const netRecordedMovementPaise = safeTotal([
+      declaredCashInPaise, declaredUpiInPaise,
+      -recordedCashRefundOutPaise, -recordedExpensesOutPaise
+    ]);
+    return {
+      date: day.date,
+      declaredCashInPaise,
+      declaredUpiInPaise,
+      recordedCashRefundOutPaise,
+      recordedExpensesOutPaise,
+      recordedInflowPaise,
+      recordedOutflowPaise,
+      netRecordedMovementPaise
+    };
+  });
+  const totals = {
+    declaredCashInPaise: safeTotal(daily.map((day) => day.declaredCashInPaise)),
+    declaredUpiInPaise: safeTotal(daily.map((day) => day.declaredUpiInPaise)),
+    recordedCashRefundOutPaise: safeTotal(daily.map((day) => day.recordedCashRefundOutPaise)),
+    recordedExpensesOutPaise: safeTotal(daily.map((day) => day.recordedExpensesOutPaise)),
+    recordedInflowPaise: safeTotal(daily.map((day) => day.recordedInflowPaise)),
+    recordedOutflowPaise: safeTotal(daily.map((day) => day.recordedOutflowPaise)),
+    netRecordedMovementPaise: safeTotal(daily.map((day) => day.netRecordedMovementPaise))
+  };
+  return {
+    shopId: activity.shopId,
+    shopName: activity.shopName,
+    serverRevision: activity.serverRevision,
+    range: activity.range,
+    daily,
+    totals,
+    evidence: {
+      scope: activity.evidence.scope,
+      dates: activity.evidence.dates,
+      inflows: 'Cash and UPI are accepted staff-declared receipt records. UPI provider verification is not asserted.',
+      outflows: 'Includes accepted staff-declared cash refunds and expenses once per recorded ID; it is not a complete outflow ledger.',
+      net: 'Net recorded movement is the included declared inflows less included recorded outflows. It is not profit, a reconciled cash drawer, or a bank balance.',
+      exclusions: 'UPI pending attempts, customer credit and repayments, supplier payments and purchases, cash-in/out, opening/closing balances, and offline or unsynchronized activity are excluded.'
+    }
+  };
+}
