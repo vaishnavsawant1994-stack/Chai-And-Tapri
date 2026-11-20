@@ -13,6 +13,13 @@ import java.util.Locale
 import java.util.TimeZone
 
 class CounterModelTest {
+    @Test fun estimatedUnitCostRejectsNegativeAndOutOfRangeValues() {
+        val model = CounterModel()
+        assertTrue(model.saveProduct(TapriProduct("bad_cost", "Bad Cost", "Test", 1000, estimatedUnitCostPaise = -1)).contains("Estimated unit cost"))
+        assertTrue(model.saveProduct(TapriProduct("large_cost", "Large Cost", "Test", 1000, estimatedUnitCostPaise = 10_000_001)).contains("Estimated unit cost"))
+        model.close()
+    }
+
     @Test fun customerTimelineOrdersEventsAndDoesNotInventMissingOrFutureDates() {
         val events = listOf(
             PaymentEntry("older", null, "c", 100, "cash", "staff_declared", "customer_repayment", createdAtEpochMs = 1_000L),

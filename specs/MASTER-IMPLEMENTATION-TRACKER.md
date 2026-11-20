@@ -441,3 +441,7 @@ A fresh API 37 run of `connectedDebugAndroidTest` completed successfully: 92/92 
 ## OW-04 recorded money movement slice — 20 November 2026
 
 Added the owner-only `GET /v1/dashboard/cashflow` projection and the Recorded money movements view, reusing accepted UTC activity records. The calculation includes staff-declared cash and UPI receipts less accepted cash refunds and declared expenses, all in integer paise with overflow rejection. Pending UPI, credit, supplier, drawer, opening/closing, offline and unsynchronized records are excluded. This is not profit, verified settlement, complete cashflow, or a drawer/bank balance. Backend suite: 17 passed / 0 failed / 4 PostgreSQL-dependent tests skipped; edited JavaScript syntax and diff checks passed. No PostgreSQL integration or browser visual review was performed. Details: `specs/OW-04-CASHFLOW-REPORT.md`.
+
+## Superseding CT-14 product cost estimate slice — 20 November 2026
+
+Product catalogue supports an optional owner-entered estimated unit cost; new configured-product order lines persist an immutable estimated-cost snapshot. Additive SQLite v25→v26 migration preserves business rows and leaves pre-existing line costs unknown. Kotlin JVM 60/60; full API 37 instrumentation 93/93; prototype Node 52/52; backend Node 18 passed / 4 database-dependent skipped; debug and instrumentation APK builds passed; lint 0 errors / 161 warnings. This is not actual inventory valuation, verified purchase cost, COGS, profit, or synchronized cost data. See [CT-14 report](CT-14-PRODUCT-COST-ESTIMATE-REPORT.md).

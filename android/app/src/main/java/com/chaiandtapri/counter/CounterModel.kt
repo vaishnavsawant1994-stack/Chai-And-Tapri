@@ -2,8 +2,11 @@ package com.chaiandtapri.counter
 
 import java.util.Locale
 
-data class CounterLine(val productId: String,val name: String,val quantity: Int,val unitPricePaise: Int,val deliveredQuantity: Int = 0,val refundedQuantity: Int = 0) {
+data class CounterLine(val productId: String,val name: String,val quantity: Int,val unitPricePaise: Int,val deliveredQuantity: Int = 0,val refundedQuantity: Int = 0,
+    /** Immutable per-line estimate captured at sale entry; null means cost is unknown. */
+    val estimatedUnitCostPaise: Int? = null) {
     val amountPaise: Int get() = quantity * unitPricePaise
+    val estimatedCostPaise: Long? get() = estimatedUnitCostPaise?.let { quantity.toLong() * it }
 }
 data class CounterOrder(
     val number: Int,
@@ -99,6 +102,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (product.name.trim().length !in 2..60 || product.category.trim().length !in 2..40) return "Enter a product name and category."
         if (product.unitPricePaise !in 0..10_000_000) return "Enter a valid price in rupees."
         if (product.active && product.priceConfirmed && product.unitPricePaise <= 0) return "A sellable product needs a price above ₹0."
+        if (product.estimatedUnitCostPaise != null && product.estimatedUnitCostPaise !in 0..10_000_000) return "Estimated unit cost must be 0 to ₹100000, or blank."
         if (product.aliases.any { it.trim().length > 40 }) return "Product aliases must be 40 characters or less."
         if (product.reorderThreshold != null && product.reorderThreshold !in 1..100_000) return "Low-stock threshold must be 1 to 100000 units, or blank."
         return try {
@@ -1024,7 +1028,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if(quantity !in 1..99) return null
         if (requireConfiguredProducts) {
             val product = persistence?.loadProducts()?.firstOrNull { it.productId == id && it.active && it.priceConfirmed } ?: return null
-            return CounterLine(product.productId, product.name, quantity, product.unitPricePaise)
+            return CounterLine(product.productId, product.name, quantity, product.unitPricePaise, estimatedUnitCostPaise = product.estimatedUnitCostPaise)
         }
         val (name,price)=when(id){ "cutting_chai"->"Cutting Chai" to 1000; "chai"->"Regular Chai" to 1500; "samosa"->"Samosa" to 2000; "coffee"->"Coffee" to 2500; else->return null }
         return CounterLine(id,name,quantity,price)

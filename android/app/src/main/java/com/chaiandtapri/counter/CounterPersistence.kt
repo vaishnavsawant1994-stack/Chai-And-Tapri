@@ -152,7 +152,9 @@ data class TapriProduct(
     val favorite: Boolean = false,
     val priceConfirmed: Boolean = false,
     val aliases: List<String> = emptyList(),
-    val reorderThreshold: Int? = null
+    val reorderThreshold: Int? = null,
+    /** Owner-entered estimate in paise; not a verified purchase cost or accounting valuation. */
+    val estimatedUnitCostPaise: Int? = null
 )
 
 data class CounterSnapshot(
