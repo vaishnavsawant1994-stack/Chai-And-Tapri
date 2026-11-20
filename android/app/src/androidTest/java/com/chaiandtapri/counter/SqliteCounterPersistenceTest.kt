@@ -1284,7 +1284,7 @@ class SqliteCounterPersistenceTest {
             // The actual Android CreateDocument picker remains on screen here. SAF opens in
             // the last-used directory; require an explicit Downloads location before saving.
             var pickerText = ""
-            val pickerDeadline = System.currentTimeMillis() + 10_000
+            val pickerDeadline = System.currentTimeMillis() + 30_000
             while (System.currentTimeMillis() < pickerDeadline) {
                 pickerText = visibleNames().joinToString(" | ")
                 if (pickerText.contains("Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true)) break
@@ -1367,6 +1367,12 @@ class SqliteCounterPersistenceTest {
             }
             instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
         } finally {
+            val uiAutomation = instrumentation.uiAutomation
+            val activePackage = uiAutomation.rootInActiveWindow?.packageName?.toString().orEmpty()
+            if (activePackage == "com.google.android.documentsui") {
+                uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                Thread.sleep(250)
+            }
             instrumentation.runOnMainSync { if (!activity.isFinishing) activity.finish(); LocalSessionState.clear() }
         }
     }
