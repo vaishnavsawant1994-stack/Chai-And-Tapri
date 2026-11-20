@@ -18,6 +18,11 @@ Only accepted server events are included. Cash and UPI receipts are staff-declar
 - Backend unit/API contract suite: 17 passed, 0 failed, 4 PostgreSQL-dependent tests skipped because no `DATABASE_URL` was configured.
 - New tests cover calculation, exclusions (including pending UPI), unsafe aggregate rejection, owner-only access denial, authenticated route response, and owner-page asset contract.
 - `node --check` passed for `owner-web/app.js`, `backend/src/dashboard.mjs`, and `backend/src/http.mjs`; `git diff --check` passed.
-- No PostgreSQL-backed test, Android sync-to-server test, browser visual review, or production deployment was performed.
+- At the initial local-only run, four PostgreSQL-dependent tests were skipped because no database URL was configured; this has since been superseded by the database-backed qualification below.
+- No Android sync-to-server test, browser visual review, or production deployment was performed.
+
+## Database-backed route qualification — 20 November 2026
+
+The full backend suite was rerun against a fresh isolated PostgreSQL 17 cluster using a restricted runtime login with the repository's `chai_tapri_api` grants; the superuser connection was used only for the test cleanup/admin pool. Result: **21/21 passed, 0 failed, 0 skipped**. The authenticated HTTP integration syncs one synthetic order/declared-cash entry and one synthetic expense, then requests `/v1/dashboard/cashflow` and asserts shop/revision scope, ₹20.00 declared cash, ₹250.50 expense outflow, and −₹230.50 net recorded movement. It also verifies wrong-shop and revoked-session denial. The output is at `../test-evidence/2026-11-20/ow04-postgres-tests.log`; the temporary database was stopped after the run. This qualifies the API path on the local synthetic PostgreSQL setup only, not deployment or browser rendering.
 
 **Next:** run the backend integration suite against an isolated synthetic PostgreSQL database; then visually review the owner dashboard only through the authorized browser path.

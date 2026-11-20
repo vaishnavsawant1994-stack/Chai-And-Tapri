@@ -121,6 +121,13 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.deepEqual(daily.expenseCategories,[{category:'utilities',count:1,amountPaise:25050}]);
     assert.equal(daily.daily.reduce((sum,day)=>sum+day.staffDeclaredExpensesPaise,0),25050);
     assert.match(daily.evidence.expenses,/not a profit calculation/);
+    const cashflow=await fetch(`${base}/v1/dashboard/cashflow?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(cashflow.status,200); const movement=await cashflow.json();
+    assert.equal(movement.shopId,enrollment.shopId); assert.equal(movement.serverRevision,1);
+    assert.equal(movement.totals.declaredCashInPaise,2000); assert.equal(movement.totals.declaredUpiInPaise,0);
+    assert.equal(movement.totals.recordedExpensesOutPaise,25050);
+    assert.equal(movement.totals.netRecordedMovementPaise,-23050);
+    assert.match(movement.evidence.net,/not profit/);
     const duplicate=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(duplicate.status,200); assert.equal((await duplicate.json()).results[0].status,'duplicate');
     const afterRetry=await fetch(`${base}/v1/dashboard/activity?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
@@ -129,11 +136,15 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(wrongShop.status,401);
     const wrongActivityShop=await fetch(`${base}/v1/dashboard/activity?shopId=${randomUUID()}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(wrongActivityShop.status,401);
+    const wrongCashflowShop=await fetch(`${base}/v1/dashboard/cashflow?shopId=${randomUUID()}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(wrongCashflowShop.status,401);
     const logout=await fetch(`${base}/v1/logout`,{method:'POST',headers:{authorization:`Bearer ${enrollment.token}`}}); assert.equal(logout.status,200);
     const denied=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[{...event,eventId:randomUUID(),commandId:`retry-${randomUUID()}`,baseRevision:1}]})});
     assert.equal(denied.status,401);
     const deniedOverview=await fetch(`${base}/v1/dashboard/overview?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(deniedOverview.status,401);
+    const deniedCashflow=await fetch(`${base}/v1/dashboard/cashflow?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(deniedCashflow.status,401);
   } finally {
     await cleanupEnrollment(admin,enrollment);
     await new Promise((resolve)=>server.close(resolve)); await pool.end(); await admin.end();
