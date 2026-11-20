@@ -251,6 +251,13 @@ class CounterModelTest {
         assertFalse(identityPayload.sendable)
         assertEquals("customer_identity_contract_pending", identityPayload.blockedReason)
         assertNull(identityPayload.json)
+
+        val costedOrder = CounterOrderRecord(13,
+            listOf(CounterLine("tea", "Tea", 1, 1000, deliveredQuantity = 1, estimatedUnitCostPaise = 425)),
+            Fulfillment.GIVEN, Payment.STAFF_DECLARED, paidPaise = 1000, salePosted = true, cancelReason = null, revision = 1)
+        val costPayload = SyncOutboxPayloadEncoder.between(before, before.copy(orders = listOf(costedOrder)))
+        assertTrue(costPayload.sendable)
+        assertTrue(costPayload.json!!.contains("\"estimatedUnitCostPaise\":425"))
     }
 
     @Test fun syncEnvelopeMapperRejectsInvalidIdentityRevisionVersionAndEventIds() {

@@ -99,7 +99,7 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     }],orders:[{
       orderNumber:12,fulfillment:'GIVEN',payment:'STAFF_DECLARED',paidPaise:2000,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,
       salePosted:true,voided:false,revision:1,createdAtEpochMs:1000,
-      lines:[{productId:'chai',quantity:2,deliveredQuantity:2,refundedQuantity:0,unitPricePaise:1000}]
+      lines:[{productId:'chai',quantity:2,deliveredQuantity:2,refundedQuantity:0,unitPricePaise:1000,estimatedUnitCostPaise:400}]
     }],paymentEntries:[{entryId:randomUUID(),orderNumber:12,customerId:null,amountPaise:2000,method:'cash',status:'staff_declared',kind:'order_collection',relatedEntryId:null}]}};
     const sync=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(sync.status,200); assert.equal((await sync.json()).results[0].status,'accepted');
@@ -133,6 +133,9 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(readiness.shopId,enrollment.shopId); assert.equal(readiness.status,'not_calculable');
     assert.equal(readiness.figures.netDeliveredItemValueChangePaise,2000);
     assert.equal(readiness.figures.staffDeclaredExpensesPaise,25050);
+    assert.equal(readiness.costCoverage.netDeliveredSaleLines,1);
+    assert.equal(readiness.costCoverage.costedNetDeliveredSaleLines,1);
+    assert.equal(readiness.costCoverage.complete,true);
     assert.equal(readiness.figures.grossProfitPaise,null); assert.equal(readiness.figures.operatingProfitPaise,null);
     const duplicate=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(duplicate.status,200); assert.equal((await duplicate.json()).results[0].status,'duplicate');

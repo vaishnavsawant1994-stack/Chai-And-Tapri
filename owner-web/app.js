@@ -304,9 +304,11 @@
       });
       $('profit-scope').textContent = `${data.evidence.scope} Range ${data.range.fromDate} to ${data.range.throughDate} (${data.range.timezone}).`;
       const figures = data.figures;
+      const coverage = data.costCoverage;
       $('profit-metrics').replaceChildren(
         metric('Delivered item value change', money(figures.netDeliveredItemValueChangePaise), 'Accepted order-state changes after recorded returns; not profit'),
         metric('Expenses recorded', money(figures.staffDeclaredExpensesPaise), 'Accepted staff-declared expenses only'),
+        metric('Estimated-cost coverage', `${coverage.costedNetDeliveredSaleLines} / ${coverage.netDeliveredSaleLines} sale lines`, 'Latest accepted sale lines with net delivery across all available history'),
         metric('Gross profit', figures.grossProfitPaise === null ? 'Unavailable' : money(figures.grossProfitPaise), 'Cost coverage is insufficient'),
         metric('Operating profit', figures.operatingProfitPaise === null ? 'Unavailable' : money(figures.operatingProfitPaise), 'Not calculated from incomplete records')
       );

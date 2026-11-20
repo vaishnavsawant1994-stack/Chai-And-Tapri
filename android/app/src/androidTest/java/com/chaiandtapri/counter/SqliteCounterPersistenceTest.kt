@@ -4138,7 +4138,8 @@ class SqliteCounterPersistenceTest {
     @Test fun estimatedCostSnapshotSurvivesCatalogueEditsRestartAndV25Migration() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
-        var model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        val persistence = SqliteCounterPersistence(context)
+        var model = CounterModel(persistence, requireConfiguredProducts = true)
         assertTrue(model.saveProduct(TapriProduct("cost_test_tea", "Cost Test Tea", "Tea", 1500, true, true, true,
             estimatedUnitCostPaise = 425)).startsWith("Product saved"))
         assertTrue(model.confirmOpeningStock("cost_test_tea", 10, "synthetic cost snapshot test", "cost-test-opening").contains("10 units"))
@@ -4146,6 +4147,8 @@ class SqliteCounterPersistenceTest {
         val saleBeforeEdit = model.allOrders().single().lines.single()
         assertEquals(425, saleBeforeEdit.estimatedUnitCostPaise)
         assertEquals(850L, saleBeforeEdit.estimatedCostPaise)
+        val saleEvent = persistence.loadPendingSyncEvents(50).single { it.commandId == "cost-test-sale" }
+        assertTrue(saleEvent.payloadJson!!.contains("\"estimatedUnitCostPaise\":425"))
         assertTrue(model.saveProduct(model.products().single { it.productId == "cost_test_tea" }.copy(estimatedUnitCostPaise = 500)).startsWith("Product saved"))
         model.close()
 

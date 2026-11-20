@@ -30,7 +30,8 @@ export function validateProjectionDelta(payload) {
   if (payload.paymentEntries.some((entry) => object(entry) && Object.hasOwn(entry, 'customerId') && entry.customerId !== null)) throw new ApiError(400, 'customer_identity_contract_pending');
 
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
-  const lineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
+  const legacyLineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
+  const costedLineKeys = [...legacyLineKeys, 'estimatedUnitCostPaise'];
   for (const order of payload.orders) {
     if (!hasExactKeys(order, orderKeys) || !isInt(order.orderNumber, { min: 1 }) ||
       !enumIs(order.fulfillment, ['TAKEN','PREPARING','READY','PARTIALLY_GIVEN','GIVEN','CANCELLED']) ||
@@ -38,9 +39,9 @@ export function validateProjectionDelta(payload) {
       !['paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','revision','createdAtEpochMs'].every((key) => isInt(order[key], { min: 0 })) ||
       typeof order.salePosted !== 'boolean' || typeof order.voided !== 'boolean' || !Array.isArray(order.lines) || order.lines.length > 100) throw new ApiError(400, 'invalid_projection_delta');
     for (const line of order.lines) {
-      if (!hasExactKeys(line, lineKeys) || !isText(line.productId, 120) || !isInt(line.quantity, { min: 1 }) ||
+      if (!(hasExactKeys(line, legacyLineKeys) || hasExactKeys(line, costedLineKeys)) || !isText(line.productId, 120) || !isInt(line.quantity, { min: 1 }) ||
         !isInt(line.deliveredQuantity, { min: 0, max: line.quantity }) || !isInt(line.refundedQuantity, { min: 0, max: line.deliveredQuantity }) ||
-        !isInt(line.unitPricePaise, { min: 0 })) throw new ApiError(400, 'invalid_projection_delta');
+        !isInt(line.unitPricePaise, { min: 0 }) || (Object.hasOwn(line, 'estimatedUnitCostPaise') && line.estimatedUnitCostPaise !== null && !isInt(line.estimatedUnitCostPaise, { min: 0, max: 10_000_000 }))) throw new ApiError(400, 'invalid_projection_delta');
     }
   }
 

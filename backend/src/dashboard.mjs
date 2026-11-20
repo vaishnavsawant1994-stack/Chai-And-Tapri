@@ -220,6 +220,35 @@ function zeroActivityDay(date) {
   };
 }
 
+function currentAcceptedCostCoverage(events) {
+  const orders = new Map();
+  for (const row of events) {
+    const payload = row.envelope?.payload;
+    if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const order of payload.orders ?? []) orders.set(order.orderNumber, order);
+  }
+  let netDeliveredSaleLines = 0;
+  let costedNetDeliveredSaleLines = 0;
+  for (const order of orders.values()) {
+    if (!order.salePosted || order.voided) continue;
+    for (const line of order.lines) {
+      const units = Math.max(0, line.deliveredQuantity - line.refundedQuantity);
+      if (units === 0) continue;
+      netDeliveredSaleLines = safeTotal([netDeliveredSaleLines, 1]);
+      if (Number.isSafeInteger(line.estimatedUnitCostPaise) && line.estimatedUnitCostPaise >= 0) {
+        costedNetDeliveredSaleLines = safeTotal([costedNetDeliveredSaleLines, 1]);
+      }
+    }
+  }
+  return {
+    basis: 'latest accepted order states across available sync history; all dates',
+    netDeliveredSaleLines,
+    costedNetDeliveredSaleLines,
+    uncostedNetDeliveredSaleLines: safeTotal([netDeliveredSaleLines, -costedNetDeliveredSaleLines]),
+    complete: netDeliveredSaleLines > 0 && netDeliveredSaleLines === costedNetDeliveredSaleLines
+  };
+}
+
 /** Daily sales/payment activity based on server receive dates and state transitions. */
 export function buildDailySalesActivity({ shopId, shopName, serverRevision, events, days = 30, endDate = new Date().toISOString().slice(0, 10) }) {
   const parsedEndDate = /^\d{4}-\d{2}-\d{2}$/.test(endDate) ? new Date(`${endDate}T00:00:00Z`) : null;
@@ -305,6 +334,7 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
     shopName,
     serverRevision,
     range: { fromDate, throughDate: endDate, days, timezone: 'UTC' },
+    currentAcceptedCostCoverage: currentAcceptedCostCoverage(events),
     acceptedEventCount: totals.eventsAccepted,
     daily,
     totals,
@@ -374,11 +404,17 @@ export function buildRecordedMoneyMovementSummary(activity) {
 
 /** Show owners which accepted inputs exist while refusing to invent profit without cost coverage. */
 export function buildProfitReadiness(activity) {
+  const costCoverage = activity.currentAcceptedCostCoverage ?? {
+    basis: 'latest accepted order states across available sync history; all dates',
+    netDeliveredSaleLines: 0, costedNetDeliveredSaleLines: 0,
+    uncostedNetDeliveredSaleLines: 0, complete: false
+  };
   return {
     shopId: activity.shopId,
     shopName: activity.shopName,
     serverRevision: activity.serverRevision,
     range: activity.range,
+    costCoverage,
     status: 'not_calculable',
     figures: {
       netDeliveredItemValueChangePaise: activity.totals.netDeliveredItemValueChangePaise,
@@ -387,6 +423,7 @@ export function buildProfitReadiness(activity) {
       operatingProfitPaise: null
     },
     missingInputs: [
+      ...(costCoverage.complete ? [] : ['Owner-entered estimated cost is missing for some or all net delivered units in accepted order history.']),
       'Purchase receipts and product cost layers are not included in the current server sync contract.',
       'Opening-stock valuation, recipe ingredient costs, and sale-date cost allocation are unavailable.',
       'The accepted expense subset may omit other operating outflows, supplier payments, and owner withdrawals.'

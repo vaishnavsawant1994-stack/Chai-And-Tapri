@@ -236,7 +236,7 @@ test('recorded money movement summary excludes pending UPI and checks paise aggr
   ] }) , (error) => error instanceof ApiError && error.status === 422);
 });
 
-test('profit readiness exposes accepted activity but keeps profit unavailable without cost coverage', () => {
+test('profit readiness exposes accepted activity and keeps profit unavailable without cost coverage', () => {
   const activity = {
     shopId: 'shop', shopName: 'Synthetic', serverRevision: 7,
     range: { fromDate: '2026-11-01', throughDate: '2026-11-07', days: 7, timezone: 'UTC' },
@@ -253,8 +253,30 @@ test('profit readiness exposes accepted activity but keeps profit unavailable wi
   assert.equal(result.figures.staffDeclaredExpensesPaise, 1800);
   assert.equal(result.figures.grossProfitPaise, null);
   assert.equal(result.figures.operatingProfitPaise, null);
-  assert.equal(result.missingInputs.length, 3);
+  assert.equal(result.missingInputs.length, 4);
   assert.match(result.evidence.result, /No profit value is estimated/);
+});
+
+test('profit readiness reports latest accepted estimated-cost coverage without calculating profit', () => {
+  const accepted = row(1, { ...empty, orders: [
+    { orderNumber: 1, salePosted: true, voided: false, lines: [
+      { productId: 'chai', quantity: 2, deliveredQuantity: 2, refundedQuantity: 0, unitPricePaise: 1000, estimatedUnitCostPaise: 425 },
+      { productId: 'samosa', quantity: 1, deliveredQuantity: 1, refundedQuantity: 0, unitPricePaise: 2000 }
+    ] }
+  ] });
+  const activity = buildDailySalesActivity({ shopId: 's', shopName: 'S', serverRevision: 1, events: [accepted], days: 7, endDate: '2026-11-07' });
+  const result = buildProfitReadiness(activity);
+  assert.deepEqual(result.costCoverage, {
+    basis: 'latest accepted order states across available sync history; all dates',
+    netDeliveredSaleLines: 2,
+    costedNetDeliveredSaleLines: 1,
+    uncostedNetDeliveredSaleLines: 1,
+    complete: false
+  });
+  assert.equal(result.status, 'not_calculable');
+  assert.equal(result.figures.grossProfitPaise, null);
+  assert.equal(result.figures.operatingProfitPaise, null);
+  assert.match(result.missingInputs[0], /missing for some or all/);
 });
 
 test('sync service refuses dashboard access to non-owner roles before reading the database', async () => {

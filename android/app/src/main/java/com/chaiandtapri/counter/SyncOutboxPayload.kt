@@ -50,7 +50,7 @@ object SyncOutboxPayloadEncoder {
                 append("\"lines\":"); array(order.lines) { line ->
                     append('{'); field("productId", line.productId); append(','); number("quantity", line.quantity); append(',')
                     number("deliveredQuantity", line.deliveredQuantity); append(','); number("refundedQuantity", line.refundedQuantity); append(',')
-                    number("unitPricePaise", line.unitPricePaise); append('}')
+                    number("unitPricePaise", line.unitPricePaise); append(','); nullableNumber("estimatedUnitCostPaise", line.estimatedUnitCostPaise); append('}')
                 }
                 append('}')
             }

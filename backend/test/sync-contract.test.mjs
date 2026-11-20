@@ -28,6 +28,15 @@ test('projection contract requires exact order, line and integer paise fields', 
     lines:[{productId:'chai',quantity:1,deliveredQuantity:1,refundedQuantity:0,unitPricePaise:1500}]
   });
   assert.equal(validateProjectionDelta(payload), true);
+  payload.orders[0].lines[0].estimatedUnitCostPaise = 425;
+  assert.equal(validateProjectionDelta(payload), true);
+  payload.orders[0].lines[0].estimatedUnitCostPaise = null;
+  assert.equal(validateProjectionDelta(payload), true);
+  payload.orders[0].lines[0].estimatedUnitCostPaise = -1;
+  invalid(payload);
+  payload.orders[0].lines[0].estimatedUnitCostPaise = 1.25;
+  invalid(payload);
+  delete payload.orders[0].lines[0].estimatedUnitCostPaise;
   payload.orders[0].lines[0].unitPricePaise = 1.5;
   invalid(payload);
 });
