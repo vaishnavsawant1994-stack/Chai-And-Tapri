@@ -772,3 +772,8 @@ Added an optional owner-entered estimated unit cost in paise to the Android prod
 ## CAT-052 estimated-cost sync and coverage slice — 20 November 2026
 
 The allow-listed `projection_delta.v1` order line now optionally carries nullable `estimatedUnitCostPaise`; server validation accepts legacy lines without it and rejects invalid values. Android's encrypted outbox emits the field from the immutable sale-line snapshot. OW-03 reports costed sale-line coverage across latest accepted order states (all available dates), but continues to return null for gross and operating profit. This avoids aggregating heterogeneous product units and does not claim purchases, inventory valuation, recipes, COGS, or complete expenses. Prototype Node 52/52; backend suite 23/23 on isolated PostgreSQL 17 with restricted runtime role; Kotlin JVM 60/60; focused API 37 instrumentation 1/1; APK/build and lint tasks passed. The full 93-test Android suite passed before this narrow sync change and was not rerun afterward. No Android-to-PostgreSQL delivery or browser visual qualification was performed. See CT-14 and OW-03 reports.
+
+
+## Latest engineering checkpoint - 20 November 2026
+
+CAT-052 now has focused API 37 coverage for the Android production HTTPS transport, account-registration client, and sync runner against a synthetic loopback TLS server (1/1 passed). This proves the Android request/acknowledgment transport path under a test certificate only. It does not establish Android-to-backend/PostgreSQL end-to-end delivery or production readiness. See specs/CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md; continue with isolated backend integration and offline retry/idempotency qualification.

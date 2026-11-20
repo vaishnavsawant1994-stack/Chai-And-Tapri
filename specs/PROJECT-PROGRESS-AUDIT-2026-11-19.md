@@ -87,3 +87,12 @@ The focused same-install SAF round trip and clean-install recovery each passed 1
 ## Superseding CT-14 cost-estimate foundation — 20 November 2026
 
 The Android catalogue stores an optional owner-entered estimated unit cost and snapshots it on new configured-product order lines. SQLite v25→v26 migration is additive; legacy rows remain cost-unknown. The accepted v1 line allow-list now optionally syncs that snapshot; OW-03 shows latest accepted sale-line coverage while still withholding profit. Latest current-source checks: Kotlin JVM 60/60; focused API 37 instrumentation 1/1; prototype Node 52/52; backend 23/23 on isolated PostgreSQL 17 with a restricted role; APK build and lint tasks passed (0 errors / 161 warnings). The full API 37 suite passed 93/93 before the narrow outbox change and was not rerun afterward. Android-to-server delivery is unqualified. Purchase reconciliation, recipe costing, COGS, and profit calculation remain absent. See `CT-14-PRODUCT-COST-ESTIMATE-REPORT.md` and `OW-03-PROFIT-READINESS-REPORT.md`.
+
+
+## CAT-052 Android HTTPS transport qualification - 20 November 2026
+
+The current Android API 37 emulator passed a focused instrumentation test (1/1) through the production HttpsSyncHttpTransport, SyncAccountClient, and SyncRunner. A full current-source instrumentation regression also passed 94/94 with zero failures, errors, or skips in 16m20s. The test performed synthetic owner registration and delivered one synthetic allow-listed event to a loopback-only TLS test server; the client accepted the server-correlated acknowledgment and advanced the in-memory test journal. Test-only certificate trust was restored after the test, and normal hostname verification remained enabled.
+
+Same-source checks: prototype Node 52/52; Kotlin JVM 60/60; debug APK, instrumentation APK, and JVM test tasks passed; lint passed with no errors reported. The generated JUnit XML is at android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml (ignored build output).
+
+This does not connect Android to the backend or PostgreSQL, and does not qualify production TLS, server-side persistence/authorization, offline retries, or multi-device conflict handling. Details: specs/CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md. The six-wave product remains incomplete.
