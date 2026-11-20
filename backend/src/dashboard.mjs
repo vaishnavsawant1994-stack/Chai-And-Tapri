@@ -371,3 +371,31 @@ export function buildRecordedMoneyMovementSummary(activity) {
     }
   };
 }
+
+/** Show owners which accepted inputs exist while refusing to invent profit without cost coverage. */
+export function buildProfitReadiness(activity) {
+  return {
+    shopId: activity.shopId,
+    shopName: activity.shopName,
+    serverRevision: activity.serverRevision,
+    range: activity.range,
+    status: 'not_calculable',
+    figures: {
+      netDeliveredItemValueChangePaise: activity.totals.netDeliveredItemValueChangePaise,
+      staffDeclaredExpensesPaise: activity.totals.staffDeclaredExpensesPaise,
+      grossProfitPaise: null,
+      operatingProfitPaise: null
+    },
+    missingInputs: [
+      'Purchase receipts and product cost layers are not included in the current server sync contract.',
+      'Opening-stock valuation, recipe ingredient costs, and sale-date cost allocation are unavailable.',
+      'The accepted expense subset may omit other operating outflows, supplier payments, and owner withdrawals.'
+    ],
+    evidence: {
+      scope: activity.evidence.scope,
+      sales: activity.evidence.deliveredValue,
+      expenses: activity.evidence.expenses,
+      result: 'Profit and margin are unavailable. No profit value is estimated from selling prices or incomplete cost data.'
+    }
+  };
+}

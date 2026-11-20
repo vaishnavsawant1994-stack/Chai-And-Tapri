@@ -58,6 +58,7 @@
           <button id="inventory-tab" class="nav-tab" type="button" aria-current="false">Inventory snapshot</button>
           <button id="activity-tab" class="nav-tab" type="button" aria-current="false">Sales activity</button>
           <button id="cashflow-tab" class="nav-tab" type="button" aria-current="false">Recorded money movements</button>
+          <button id="profit-tab" class="nav-tab" type="button" aria-current="false">Profit readiness</button>
         </nav>
         <section id="overview-view">
         <div id="metrics" class="metrics" aria-live="polite"></div>
@@ -133,6 +134,23 @@
             <ul id="cashflow-evidence-list"></ul>
           </section>
           <p id="cashflow-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="profit-view" class="hidden" aria-labelledby="profit-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">OWNER PROFIT ANALYSIS</p><h2 id="profit-heading">Profit readiness</h2></div>
+            <label>Range<select id="profit-range"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+          </div>
+          <p id="profit-scope" class="scope-note"></p>
+          <div id="profit-metrics" class="metrics" aria-live="polite"></div>
+          <section class="panel evidence-panel" aria-labelledby="profit-missing-heading">
+            <h3 id="profit-missing-heading">Why profit is unavailable</h3>
+            <ul id="profit-missing-list"></ul>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="profit-evidence-heading">
+            <h3 id="profit-evidence-heading">Data included</h3>
+            <ul id="profit-evidence-list"></ul>
+          </section>
+          <p id="profit-status" class="status" role="status" aria-live="polite"></p>
         </section>
       </section>
       <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>

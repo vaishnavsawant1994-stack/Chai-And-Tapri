@@ -760,3 +760,7 @@ Added the owner-only `GET /v1/dashboard/cashflow` projection and the Recorded mo
 ## OW-04 PostgreSQL route qualification — 20 November 2026
 
 Expanded the synthetic authenticated HTTP integration to exercise `/v1/dashboard/cashflow` after accepting a sale and expense. It verifies declared cash, expense outflow, the derived paise net, owner scope, wrong-shop denial, and revoked-session denial. The full backend suite passed 21/21 with zero skips against an isolated PostgreSQL 17 database and a restricted runtime login; the test cleanup connection used the isolated cluster's admin role. The cluster was stopped after the run. Evidence: `test-evidence/2026-11-20/ow04-postgres-tests.log`. Browser rendering and Android-to-server synchronization remain unqualified. See `specs/OW-04-CASHFLOW-REPORT.md`.
+
+## OW-03 profit-readiness slice — 20 November 2026
+
+Added authenticated `/v1/dashboard/profit-readiness` and an Owner Dashboard view. It displays accepted item-value change and declared expenses for 7/30/90 UTC days, but returns gross and operating profit as `null` until product cost layers, opening stock valuation, recipe costs, and complete expense coverage are available in the server contract. No profit or margin is inferred. Full backend suite passed 22/22 on isolated PostgreSQL 17 with the restricted runtime role; the HTTP integration checks shop scope, null profit outputs, wrong-shop denial, and revoked-session denial. No browser visual review or Android-to-server sync qualification. See `specs/OW-03-PROFIT-READINESS-REPORT.md`.

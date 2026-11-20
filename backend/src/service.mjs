@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildRecordedMoneyMovementSummary, buildShopOverview } from './dashboard.mjs';
+import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -215,6 +215,11 @@ export class SyncService {
   async shopRecordedMoneyMovements(actor, days = 30) {
     const activity = await this.shopDailySalesActivity(actor, days);
     return buildRecordedMoneyMovementSummary(activity);
+  }
+
+  async shopProfitReadiness(actor, days = 30) {
+    const activity = await this.shopDailySalesActivity(actor, days);
+    return buildProfitReadiness(activity);
   }
 
   async submitEvents(actor, events) {

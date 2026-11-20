@@ -128,6 +128,12 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(movement.totals.recordedExpensesOutPaise,25050);
     assert.equal(movement.totals.netRecordedMovementPaise,-23050);
     assert.match(movement.evidence.net,/not profit/);
+    const profit=await fetch(`${base}/v1/dashboard/profit-readiness?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(profit.status,200); const readiness=await profit.json();
+    assert.equal(readiness.shopId,enrollment.shopId); assert.equal(readiness.status,'not_calculable');
+    assert.equal(readiness.figures.netDeliveredItemValueChangePaise,2000);
+    assert.equal(readiness.figures.staffDeclaredExpensesPaise,25050);
+    assert.equal(readiness.figures.grossProfitPaise,null); assert.equal(readiness.figures.operatingProfitPaise,null);
     const duplicate=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(duplicate.status,200); assert.equal((await duplicate.json()).results[0].status,'duplicate');
     const afterRetry=await fetch(`${base}/v1/dashboard/activity?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
@@ -138,6 +144,8 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(wrongActivityShop.status,401);
     const wrongCashflowShop=await fetch(`${base}/v1/dashboard/cashflow?shopId=${randomUUID()}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(wrongCashflowShop.status,401);
+    const wrongProfitShop=await fetch(`${base}/v1/dashboard/profit-readiness?shopId=${randomUUID()}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(wrongProfitShop.status,401);
     const logout=await fetch(`${base}/v1/logout`,{method:'POST',headers:{authorization:`Bearer ${enrollment.token}`}}); assert.equal(logout.status,200);
     const denied=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[{...event,eventId:randomUUID(),commandId:`retry-${randomUUID()}`,baseRevision:1}]})});
     assert.equal(denied.status,401);
@@ -145,6 +153,8 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(deniedOverview.status,401);
     const deniedCashflow=await fetch(`${base}/v1/dashboard/cashflow?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(deniedCashflow.status,401);
+    const deniedProfit=await fetch(`${base}/v1/dashboard/profit-readiness?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(deniedProfit.status,401);
   } finally {
     await cleanupEnrollment(admin,enrollment);
     await new Promise((resolve)=>server.close(resolve)); await pool.end(); await admin.end();

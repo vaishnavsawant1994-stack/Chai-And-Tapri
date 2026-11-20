@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildRecordedMoneyMovementSummary, buildShopOverview } from '../src/dashboard.mjs';
+import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
@@ -236,6 +236,27 @@ test('recorded money movement summary excludes pending UPI and checks paise aggr
   ] }) , (error) => error instanceof ApiError && error.status === 422);
 });
 
+test('profit readiness exposes accepted activity but keeps profit unavailable without cost coverage', () => {
+  const activity = {
+    shopId: 'shop', shopName: 'Synthetic', serverRevision: 7,
+    range: { fromDate: '2026-11-01', throughDate: '2026-11-07', days: 7, timezone: 'UTC' },
+    totals: { netDeliveredItemValueChangePaise: 9200, staffDeclaredExpensesPaise: 1800 },
+    evidence: {
+      scope: 'Accepted events only.',
+      deliveredValue: 'Delivered value is not profit.',
+      expenses: 'Recorded expense subset is incomplete.'
+    }
+  };
+  const result = buildProfitReadiness(activity);
+  assert.equal(result.status, 'not_calculable');
+  assert.equal(result.figures.netDeliveredItemValueChangePaise, 9200);
+  assert.equal(result.figures.staffDeclaredExpensesPaise, 1800);
+  assert.equal(result.figures.grossProfitPaise, null);
+  assert.equal(result.figures.operatingProfitPaise, null);
+  assert.equal(result.missingInputs.length, 3);
+  assert.match(result.evidence.result, /No profit value is estimated/);
+});
+
 test('sync service refuses dashboard access to non-owner roles before reading the database', async () => {
   const service = new SyncService(null);
   await assert.rejects(service.shopOverview({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
@@ -243,6 +264,7 @@ test('sync service refuses dashboard access to non-owner roles before reading th
   await assert.rejects(service.shopInventorySnapshot({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopDailySalesActivity({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopRecordedMoneyMovements({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopProfitReadiness({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
 });
 
 test('owner overview route requires authentication and serves only owner static assets', async (t) => {
@@ -258,7 +280,8 @@ test('owner overview route requires authentication and serves only owner static 
     async shopProductPerformance(actor) { return { ...fixture, shopId: actor.shop_id, products: [] }; },
     async shopInventorySnapshot(actor) { return { ...fixture, shopId: actor.shop_id, products: [], recentMovements: [] }; },
     async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; },
-    async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; }
+    async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
+    async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; }
   };
   const server = createApiServer(service);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -281,6 +304,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="activity-rows"/);
   assert.match(pageText, /Recorded money movements/);
   assert.match(pageText, /id="cashflow-rows"/);
+  assert.match(pageText, /Profit readiness/);
+  assert.match(pageText, /id="profit-missing-list"/);
   const script = await fetch(`${base}/owner/app.js`);
   assert.equal(script.status, 200);
   const scriptText = await script.text();
@@ -289,6 +314,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/inventory/);
   assert.match(scriptText, /\/v1\/dashboard\/activity/);
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
+  assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
 
   const denied = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`);
   assert.equal(denied.status, 401);
@@ -313,12 +339,24 @@ test('owner overview route requires authentication and serves only owner static 
   const cashflow = await fetch(`${base}/v1/dashboard/cashflow?shopId=shop-1&days=7`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(cashflow.status, 200);
   assert.equal((await cashflow.json()).shopId, 'shop-1');
+  const profitDenied = await fetch(`${base}/v1/dashboard/profit-readiness?shopId=shop-1&days=7`);
+  assert.equal(profitDenied.status, 401);
+  const profit = await fetch(`${base}/v1/dashboard/profit-readiness?shopId=shop-1&days=7`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(profit.status, 200);
+  const readiness = await profit.json();
+  assert.equal(readiness.shopId, 'shop-1');
+  assert.equal(readiness.status, 'not_calculable');
+  assert.equal(readiness.figures.grossProfitPaise, null);
+  const invalidProfitRange = await fetch(`${base}/v1/dashboard/profit-readiness?shopId=shop-1&days=14`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(invalidProfitRange.status, 400);
   assert.deepEqual(calls, [
     { token: '', shopId: 'shop-1' },
     { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
+    { token: 'owner-token', shopId: 'shop-1' },
+    { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' }

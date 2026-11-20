@@ -40,12 +40,14 @@
     const inventory = view === 'inventory';
     const activity = view === 'activity';
     const cashflow = view === 'cashflow';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : 'Refresh money movements';
+    const profit = view === 'profit';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : 'Refresh profit readiness';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
     $('activity-view').classList.toggle('hidden', !activity);
     $('cashflow-view').classList.toggle('hidden', !cashflow);
+    $('profit-view').classList.toggle('hidden', !profit);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
@@ -56,6 +58,8 @@
     $('activity-tab').setAttribute('aria-current', activity ? 'page' : 'false');
     $('cashflow-tab').classList.toggle('active', cashflow);
     $('cashflow-tab').setAttribute('aria-current', cashflow ? 'page' : 'false');
+    $('profit-tab').classList.toggle('active', profit);
+    $('profit-tab').setAttribute('aria-current', profit ? 'page' : 'false');
   }
 
   async function loadOverview() {
@@ -289,6 +293,37 @@
     }
   }
 
+  async function loadProfitReadiness() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    setStatus($('profit-status'), 'Checking accepted sales and cost-data coverage…');
+    try {
+      const days = $('profit-range').value;
+      const data = await request(`/v1/dashboard/profit-readiness?shopId=${encodeURIComponent(activeShopId)}&days=${encodeURIComponent(days)}`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      $('profit-scope').textContent = `${data.evidence.scope} Range ${data.range.fromDate} to ${data.range.throughDate} (${data.range.timezone}).`;
+      const figures = data.figures;
+      $('profit-metrics').replaceChildren(
+        metric('Delivered item value change', money(figures.netDeliveredItemValueChangePaise), 'Accepted order-state changes after recorded returns; not profit'),
+        metric('Expenses recorded', money(figures.staffDeclaredExpensesPaise), 'Accepted staff-declared expenses only'),
+        metric('Gross profit', figures.grossProfitPaise === null ? 'Unavailable' : money(figures.grossProfitPaise), 'Cost coverage is insufficient'),
+        metric('Operating profit', figures.operatingProfitPaise === null ? 'Unavailable' : money(figures.operatingProfitPaise), 'Not calculated from incomplete records')
+      );
+      const appendEvidence = (id, values) => $(id).replaceChildren(...values.map((text) => {
+        const item = document.createElement('li'); item.textContent = text; return item;
+      }));
+      appendEvidence('profit-missing-list', data.missingInputs);
+      appendEvidence('profit-evidence-list', [data.evidence.sales, data.evidence.expenses, data.evidence.result]);
+      setStatus($('profit-status'), `Profit readiness refreshed at server revision ${data.serverRevision}; calculation remains unavailable.`, 'success');
+    } catch (error) {
+      setStatus($('profit-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally {
+      $('refresh-button').disabled = false;
+    }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
@@ -336,6 +371,7 @@
     else if (!$('inventory-view').classList.contains('hidden')) loadInventory();
     else if (!$('activity-view').classList.contains('hidden')) loadActivity();
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
+    else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
     else loadOverview();
   });
   $('overview-tab').addEventListener('click', () => setView('overview'));
@@ -343,8 +379,10 @@
   $('inventory-tab').addEventListener('click', () => { setView('inventory'); loadInventory(); });
   $('activity-tab').addEventListener('click', () => { setView('activity'); loadActivity(); });
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
+  $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('activity-range').addEventListener('change', () => { if (!$('activity-view').classList.contains('hidden')) loadActivity(); });
   $('cashflow-range').addEventListener('change', () => { if (!$('cashflow-view').classList.contains('hidden')) loadCashflow(); });
+  $('profit-range').addEventListener('change', () => { if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness(); });
   $('logout-button').addEventListener('click', async () => {
     const current = session;
     signOutLocally();

@@ -74,6 +74,14 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopRecordedMoneyMovements(actor,days));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/profit-readiness') {
+        const shopId=url.searchParams.get('shopId');
+        const rawDays=url.searchParams.get('days')??'30';
+        const days=Number(rawDays);
+        if(!Number.isInteger(days)||![7,30,90].includes(days)) throw new ApiError(400,'invalid_activity_range');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopProfitReadiness(actor,days));
+      }
       return json(res,404,{error:'not_found'});
     } catch(error) {
       const status=error instanceof ApiError?error.status:500;
