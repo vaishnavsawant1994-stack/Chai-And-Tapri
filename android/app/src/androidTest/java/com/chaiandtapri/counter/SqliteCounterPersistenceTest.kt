@@ -1754,6 +1754,62 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun businessAlertRoutesOpenOrdersPaymentsAndCreditWithoutChangingLedger() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("ct30_route_tea", "Route Tea", "Chai", 1000, true, true, true, reorderThreshold = 10)).startsWith("Product saved"))
+            assertTrue(model.saveProduct(TapriProduct("ct30_route_coffee", "Route Coffee", "Coffee", 1500, true, false, true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct30_route_tea", 10, "synthetic alert routes", "ct30-route-tea-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.confirmOpeningStock("ct30_route_coffee", 10, "synthetic alert routes", "ct30-route-coffee-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.quickSale(listOf("ct30_route_tea" to 1), "upi_pending", commandId = "ct30-route-upi-sale").startsWith("Quick sale"))
+            assertTrue(model.saveCustomerProfile(CustomerProfile("ct30-credit-customer", "Route Customer")).startsWith("Customer profile saved"))
+            assertTrue(model.quickSale(listOf("ct30_route_coffee" to 1), "udhar", "ct30-credit-customer", "ct30-route-credit-sale").startsWith("Quick sale"))
+            assertTrue(model.apply("ct30-route-open-order", ProposedCommand("create", null, "synthetic open order", "ct30_route_tea", 1)).contains("Order #"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Synthetic alert ledger missing") }
+        val routes = listOf(
+            "Review live orders" to LiveOrdersActivity::class.java,
+            "Review payments" to PaymentActivity::class.java,
+            "Review customer credit" to CustomerCreditActivity::class.java,
+            "Review inventory" to InventoryOverviewActivity::class.java
+        )
+        LocalSessionState.establish("Synthetic Owner")
+        try {
+            routes.forEach { (label, destination) ->
+                val monitor = instrumentation.addMonitor(destination.name, null, false)
+                val alerts = instrumentation.startActivitySync(Intent(context, BusinessAlertsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                var action: Button? = null
+                try {
+                    repeat(50) {
+                        instrumentation.runOnMainSync {
+                            fun visit(view: View) {
+                                if (view is Button && view.text.toString() == label) action = view
+                                if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+                            }
+                            visit(alerts.findViewById(android.R.id.content))
+                        }
+                        if (action == null) Thread.sleep(100)
+                    }
+                    assertNotNull("Expected $label action for a synthetic alert", action)
+                    instrumentation.runOnMainSync { requireNotNull(action).performClick() }
+                    val target = instrumentation.waitForMonitorWithTimeout(monitor, 5_000)
+                    assertNotNull("$label should open ${destination.simpleName}", target)
+                    instrumentation.runOnMainSync { target?.finish(); alerts.finish() }
+                    val after = SqliteCounterPersistence(context).use { it.load() ?: error("Alert navigation removed the ledger") }
+                    assertEquals("$label is read-only", before, after)
+                } finally {
+                    instrumentation.removeMonitor(monitor)
+                    instrumentation.runOnMainSync { alerts.finish() }
+                }
+            }
+        } finally {
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun dailyReportRendersOnlyPersistedLifetimeLedgerTotalsAndDisclaimsProfit() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
