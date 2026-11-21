@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CT-28 daily-closing review UI - 22 November 2026
+
+The CT-28 API 37 test now submits the actual closing-review dialog and a follow-up note, starting from an unacknowledged drawer close. It verifies the note persists while expected cash, payment history, and stock movements remain unchanged. Focused UI test passed 1/1; complete isolated API 37 instrumentation passed 107/107 with zero failures/errors/skips; Node 52/52; Kotlin JVM 63/63; APK build and lint tasks passed (0 lint errors / 172 warnings). Only the isolated test AVD was used. This validates one synthetic review-acknowledgement path; CT-28 is not a calendar-day close or production-ready close process. See [CT-28 report](specs/CT-28-DAILY-CLOSING-REPORT.md) and [current progress audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md).
+
 ## Latest continuation - CT-30 review-route qualification - 22 November 2026
 
 Added a synthetic UI test covering all seven local alert routes: open order, pending UPI, customer credit, low stock, supplier payable, open shift, and cash-count discrepancy. Actions open CT-08, CT-10, CT-23, CT-15, CT-17, CT-27, and CT-28 respectively, with the persisted business snapshot unchanged after each route. Focused test passed 1/1; complete isolated API 37 instrumentation suite passed 107/107 with zero failures/errors/skips. Node 52/52; Kotlin JVM 63/63; APK build and lint tasks pass; lint 0 errors / 172 warnings. Only `emulator-5556` was used. This qualifies these alert routes only; dated overdue/sync alerts and automatic replenishment are unimplemented. CT-30 and the full product remain partial. See [CT-30 report](specs/CT-30-LOW-STOCK-ALERTS-REPORT.md).

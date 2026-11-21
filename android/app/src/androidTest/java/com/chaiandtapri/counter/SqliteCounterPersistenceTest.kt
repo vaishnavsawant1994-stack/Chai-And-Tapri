@@ -2367,11 +2367,13 @@ class SqliteCounterPersistenceTest {
         assertTrue(model.quickSale(listOf("closing_chai" to 1), "upi_pending", commandId = "closing-upi").startsWith("Quick sale"))
         assertTrue(model.apply("closing-open-order", ProposedCommand("create", null, "draft chai", "closing_chai", 1)).contains("Order #"))
         assertTrue(model.closeCashDrawer(6_000, "closing-close").contains("unresolved variance"))
-        assertTrue(model.recordCashClosingReview("closing-open", "recount float", "closing-review").contains("review recorded"))
         model.close()
 
         val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals("recount float", reopened.closingReview("closing-open")?.note)
+        assertNull(reopened.closingReview("closing-open"))
+        val expectedBeforeReview = reopened.expectedCashPaise("closing-open")
+        val paymentsBeforeReview = reopened.paymentHistory()
+        val stockBeforeReview = reopened.stockMovements()
         val intent = Intent(context, DailyClosingActivity::class.java).putExtra(DailyClosingActivity.EXTRA_SESSION_ID, "closing-open").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val activity = instrumentation.startActivitySync(intent)
         val strings = mutableListOf<String>()
@@ -2385,7 +2387,43 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("Cash difference: -₹3.00 · unresolved") })
         assertTrue(strings.any { it.contains("Open orders: 1") })
         assertTrue(strings.any { it.contains("UPI pending: ₹15.00") })
-        assertTrue(strings.any { it.contains("Review status: acknowledged") })
+        assertTrue(strings.any { it.contains("Review status: not acknowledged") })
+        fun awaitClosingNode(text: String? = null, className: String? = null): AccessibilityNodeInfo {
+            var labels = ""
+            repeat(120) {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                var found: AccessibilityNodeInfo? = null
+                val seen = mutableListOf<String>()
+                fun visit(node: AccessibilityNodeInfo) {
+                    node.text?.toString()?.let(seen::add)
+                    val matches = if (text != null) node.text?.toString()?.equals(text, ignoreCase = true) == true else node.className?.toString() == className
+                    if (found == null && matches) found = node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let(::visit)
+                }
+                if (root != null) visit(root)
+                labels = seen.joinToString(" | ")
+                found?.let { return it }
+                Thread.sleep(100)
+            }
+            throw AssertionError("Daily closing UI node not found: text=$text class=$className; UI=$labels")
+        }
+        assertTrue(awaitClosingNode(text = "Acknowledge review and note follow-up").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        assertTrue(awaitClosingNode(className = "android.widget.EditText").performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Recount float tomorrow")
+        }))
+        assertTrue(awaitClosingNode(text = "Acknowledge").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        var savedReview: CashClosingReview? = null
+        repeat(60) {
+            savedReview = SqliteCounterPersistence(context).use { it.load()?.cashClosingReviews?.singleOrNull() }
+            if (savedReview?.note == "Recount float tomorrow") return@repeat
+            Thread.sleep(100)
+        }
+        assertEquals("Recount float tomorrow", savedReview?.note)
+        val afterReview = CounterModel(SqliteCounterPersistence(context))
+        assertEquals(expectedBeforeReview, afterReview.expectedCashPaise("closing-open"))
+        assertEquals(paymentsBeforeReview, afterReview.paymentHistory())
+        assertEquals(stockBeforeReview, afterReview.stockMovements())
+        afterReview.close()
         instrumentation.runOnMainSync { activity.finish() }
         reopened.close()
         context.deleteDatabase("chai_tapri_counter.db")

@@ -37,3 +37,9 @@ This is session-based, not calendar-day accounting. Sales and cash events outsid
 ## Superseding continuation — schema v14
 
 CT-27 now adds partial cash-linked shift/handover data to drawer sessions. Staff and receiving labels are operator-entered, not authenticated identities. CT-28 remains a selected-session review and still does not provide calendar-day attribution, stock closing counts, approvals, accounting-period controls, or complete daily reporting. Current schema v14 adds the shift metadata while keeping the close-review record compatible.
+
+## CT-28 review acknowledgement exercised through UI - 22 November 2026
+
+Updated `dailyClosingReviewShowsSessionTotalsAndKeepsCurrentExceptionsSeparate` to begin with an unacknowledged synthetic session, open the actual follow-up dialog, enter a note, and submit it through the Android accessibility/UI path. The test confirms the note is persisted in encrypted storage while expected cash, payment history, and inventory movement history are unchanged. This verifies the review marker is not used to silently resolve a cash discrepancy or change financial/stock records.
+
+Focused API 37 test passed 1/1 on the isolated AVD. Current regression: Node 52/52; Kotlin JVM 63/63; complete isolated API 37 instrumentation 107/107 (0 failures/errors/skips); debug and instrumentation APK builds and lint pass; lint 0 errors / 172 warnings. Full test evidence is `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. This is a synthetic emulator UI path only. Daily Closing remains session-based and incomplete for calendar-day accounting, stock close, authenticated staff approval, and production operation.
