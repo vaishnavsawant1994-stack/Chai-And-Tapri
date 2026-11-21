@@ -9,14 +9,14 @@
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 63/63 passed |
-| API 37 instrumentation | 103/103 passed; 0 failures, errors, or skips |
+| API 37 instrumentation | 104/104 passed; 0 failures, errors, or skips |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 172 warnings |
 
-The 102-test Android run used `Tapri_Recovery_Isolated` to protect the existing AVD data. It includes CT-08 UI tests for partial item handover and queue search/status filters. The optional live backend Android test class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL.
+The 104-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes CT-08 UI tests for partial item handover and queue search/status filters and the new CT-29 nonzero SAF export. The endpoint-dependent live-backend Android class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL. The qualified run has zero failures, errors, or skips.
 
 ## Wave status
 
@@ -36,6 +36,10 @@ Live Orders now offers a review dialog for handing over a selected ready item an
 ## CT-08 Live Orders queue search and filters - 22 November 2026
 
 The local Live Orders queue now filters by order number, item text, fulfillment/payment state, and five queue views: all, needs preparation/handover, ready to hand over, payment due, and UPI pending. Filtering is read-only. A focused API 37 UI test confirmed the Ready filter and item search show the matching order without changing either order or stock. Focused test passed 1/1; the full current API 37 suite passed 103/103, Kotlin JVM 63/63, and Node 52/52; APK tasks passed and lint reported 0 errors / 172 warnings. The full-suite XML is listed above. This is a partial queue interaction qualification; manual usability and complete CT-08 remain open. See [CT-08/10 report](CT-08-10-LIVE-ORDERS-REPORT.md).
+
+## CT-29 nonzero Daily Reports CSV export - 22 November 2026
+
+Added an API 37 instrumentation test that creates synthetic cash and UPI-pending sales, a recorded expense, and delivered product quantities, then exports from Daily Reports through the Android Storage Access Framework. Focused test passed 1/1; the saved Downloads CSV was pulled and inspected: ₹35 recorded sales, ₹15 staff-declared cash, ₹20 pending UPI, ₹5 recorded expenses, and one delivered unit for each product. The scope/evidence labels are present. Current regression: Node 52/52, Kotlin JVM 63/63, API 37 instrumentation 104/104 with no failures/errors/skips (endpoint-dependent live-backend class excluded), debug and instrumentation APK build tasks PASS, lint 0 errors / 172 warnings. Backend suite remains the previously verified 23/23 isolated PostgreSQL run; it was unchanged and not rerun for this Android-only slice. See [CT-29 report](CT-29-CSV-EXPORT-REPORT.md) and ignored synthetic evidence `../test-evidence/2026-11-22/ct29-nonzero-export.csv`.
 
 ## CAT-051B recovery evidence
 

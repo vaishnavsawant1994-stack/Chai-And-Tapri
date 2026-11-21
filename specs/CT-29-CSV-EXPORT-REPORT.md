@@ -1,7 +1,7 @@
 # CT-29 Local Report CSV Export
 
-**Updated:** 19 November 2026
-**Status:** Local CSV formatter JVM-tested; Android SAF destination selection and file-write path manually runtime-qualified on API 37 for an empty synthetic ledger.
+**Updated:** 22 November 2026
+**Status:** Formatter JVM-tested; Android SAF export qualified on API 37 with both empty and nonzero synthetic ledger data.
 
 ## Delivered
 
@@ -29,6 +29,14 @@ Installed the current debug APK on the API 37 emulator, created a synthetic loca
 
 Evidence (ignored synthetic artifacts): `../test-evidence/2026-11-19/ct29-create-document-picker.png`, `ct29-export-result.png`, and `ct29-exported-empty-demo.csv`. A UI screenshot and CSV do not qualify cancellation, write failure, content-provider edge cases, nonzero financial mapping, or manual usability beyond this emulator interaction.
 
+## Nonzero ledger export test — 22 November 2026
+
+Added `dailyReportExportsNonzeroSyntheticLedgerThroughSafSaveDialog`, an Android instrumentation test that seeds two configured products, posts a ₹35 cash/UPI-pending sales mix and a ₹5 recorded expense, launches the actual Daily Reports UI, saves through Android's Create Document picker, and checks the activity's success state. The focused API 37 test passed 1/1 on the isolated `Tapri_Recovery_Isolated` AVD. The downloaded CSV was pulled and inspected at `../test-evidence/2026-11-22/ct29-nonzero-export.csv`.
+
+The exported values were ₹35 (3500 paise) recorded sales, ₹15 (1500 paise) staff-declared cash, ₹20 (2000 paise) UPI pending, and ₹5 (500 paise) recorded operating expenses. It also included one delivered unit for each seeded product, with the all-local-records scope and evidence labels intact. The test exercises the actual Android document picker and destination write; it does not establish provider compatibility beyond this emulator, cancellation/failure behavior, or report usability.
+
+The focused run passed 1/1. The subsequent qualified full-suite XML at `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` includes this export test in the 86-test persistence suite (0 failures/errors/skips across the full 104-test run). The synthetic CSV evidence is ignored by Git and contains no real shop data.
+
 ## Remaining CT-29 work
 
-Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
+Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting, cancellation/write-failure qualification and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
