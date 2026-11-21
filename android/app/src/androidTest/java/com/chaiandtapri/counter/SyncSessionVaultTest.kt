@@ -61,4 +61,21 @@ class SyncSessionVaultTest {
         assertTrue(error is SyncSessionUnavailableException)
         assertEquals(before, SyncSessionVault.encryptedEnvelopeForTests(context))
     }
+
+    @Test fun namespacedVaultIsIsolatedFromTheDefaultOwnerSession() {
+        SyncSessionVault.resetForTests(context)
+        val namespace = "test_${java.util.UUID.randomUUID().toString().replace("-", "")}"
+        val isolated = SyncSessionVault(context, namespace)
+        val isolatedSession = session.copy(bearerToken = "isolated-synthetic-token")
+        SyncSessionVault(context).save(session)
+        isolated.save(isolatedSession)
+
+        val normalizedSession = session.copy(endpointBase = session.endpointBase.trimEnd('/'))
+        assertEquals(normalizedSession, SyncSessionVault(context).load())
+        assertEquals(normalizedSession.copy(bearerToken = isolatedSession.bearerToken), SyncSessionVault(context, namespace).load())
+        isolated.clear()
+        assertEquals(normalizedSession, SyncSessionVault(context).load())
+
+        SyncSessionVault(context).clear()
+    }
 }

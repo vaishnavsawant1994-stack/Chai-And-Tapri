@@ -18,9 +18,13 @@ import javax.crypto.spec.GCMParameterSpec
 data class SyncSession(val endpointBase: String, val identity: SyncEnvelopeIdentity, val bearerToken: String)
 
 /** Stores only a server-issued bearer session, encrypted with an app/device-bound Android Keystore key. */
-class SyncSessionVault(context: Context) {
+class SyncSessionVault(context: Context, private val keyNamespace: String = "default") {
     private val appContext = context.applicationContext
-    private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val storageName = if (keyNamespace == "default") PREFERENCES else "$PREFERENCES.$keyNamespace"
+    private val storageAlias = if (keyNamespace == "default") KEY_ALIAS else "$KEY_ALIAS.$keyNamespace"
+    private val preferences = appContext.getSharedPreferences(storageName, Context.MODE_PRIVATE)
+
+    init { require(keyNamespace.matches(Regex("[A-Za-z0-9_.-]{1,64}"))) { "Sync session namespace is invalid." } }
 
     @Synchronized
     fun save(session: SyncSession) {
@@ -82,7 +86,7 @@ class SyncSessionVault(context: Context) {
     fun clear() {
         check(preferences.edit().remove(CIPHERTEXT).remove(IV).commit()) { "Could not clear the local sync-session envelope." }
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        keyStore.deleteEntry(KEY_ALIAS)
+        keyStore.deleteEntry(storageAlias)
     }
 
     private fun validate(session: SyncSession) {
@@ -100,7 +104,7 @@ class SyncSessionVault(context: Context) {
     }
 
     private fun loadOrCreateKey(): SecretKey = loadExistingKey() ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).run {
-        init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+        init(KeyGenParameterSpec.Builder(storageAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(256)
@@ -111,7 +115,7 @@ class SyncSessionVault(context: Context) {
 
     private fun loadExistingKey(): SecretKey? = KeyStore.getInstance(ANDROID_KEYSTORE).run {
         load(null)
-        getKey(KEY_ALIAS, null) as? SecretKey
+        getKey(storageAlias, null) as? SecretKey
     }
 
     private fun String.isUuid(): Boolean = runCatching { java.util.UUID.fromString(this).toString().equals(this, true) }.getOrDefault(false)

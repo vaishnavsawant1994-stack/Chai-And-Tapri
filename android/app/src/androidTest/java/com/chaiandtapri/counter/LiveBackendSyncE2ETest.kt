@@ -22,19 +22,6 @@ import javax.net.ssl.TrustManagerFactory
 /** Optional end-to-end CAT-052 drill. Run with an isolated backend endpoint supplied to instrumentation. */
 @RunWith(AndroidJUnit4::class)
 class LiveBackendSyncE2ETest {
-    private class PendingJournal(private val event: SyncOutboxEvent) : SyncJournal {
-        val outcomes = mutableListOf<Pair<String, Long>>()
-        private var cursor = 0L
-        override fun pending(limit: Int) = if (outcomes.isEmpty() && limit > 0) listOf(event) else emptyList()
-        override fun cursor() = cursor
-        override fun record(eventId: String, outcome: String, serverRevision: Long): Boolean {
-            if (eventId != event.eventId || outcome !in setOf("accepted", "duplicate") || serverRevision < cursor) return false
-            outcomes += outcome to serverRevision
-            cursor = maxOf(cursor, serverRevision)
-            return true
-        }
-    }
-
     private fun configureTestTrust() {
         val context = InstrumentationRegistry.getInstrumentation().context
         val certificate = context.assets.open("tls/sync-test-server.pem").use {
@@ -72,6 +59,13 @@ class LiveBackendSyncE2ETest {
         val endpointBase = args.getString("syncE2eEndpoint")
         assumeTrue("Provide syncE2eEndpoint for the isolated backend drill.", !endpointBase.isNullOrBlank())
         val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val storeId = UUID.randomUUID().toString().replace("-", "")
+        val databaseName = "sync_e2e_$storeId.db"
+        val keyNamespace = "sync_e2e_$storeId"
+        var model: CounterModel? = null
+        var reopened: SqliteCounterPersistence? = null
         try {
             configureTestTrust()
             val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
@@ -81,49 +75,32 @@ class LiveBackendSyncE2ETest {
                 endpointBase!!,
                 SyncRegistration(email, "Synthetic-Only-Password-2026!", "Android E2E Owner", "Synthetic E2E Business", "Loopback Shop", deviceId, "API 37 Emulator")
             )
+            val vault = SyncSessionVault(context, keyNamespace)
+            vault.save(session)
 
-            val eventId = UUID.randomUUID().toString()
-            val commandId = "android-e2e-${UUID.randomUUID()}"
-            val stockMovementId = UUID.randomUUID().toString()
-            val paymentEntryId = UUID.randomUUID().toString()
-            val payload = JSONObject()
-                .put("kind", "projection_delta.v1")
-                .put("orders", org.json.JSONArray().put(JSONObject()
-                    .put("orderNumber", 12)
-                    .put("fulfillment", "GIVEN")
-                    .put("payment", "STAFF_DECLARED")
-                    .put("paidPaise", 2_500)
-                    .put("creditPaise", 0)
-                    .put("refundedPaise", 0)
-                    .put("cashRefundedPaise", 0)
-                    .put("creditReversedPaise", 0)
-                    .put("salePosted", true)
-                    .put("voided", false)
-                    .put("revision", 1)
-                    .put("createdAtEpochMs", System.currentTimeMillis())
-                    .put("lines", org.json.JSONArray().put(JSONObject()
-                        .put("productId", "chai")
-                        .put("quantity", 1)
-                        .put("deliveredQuantity", 1)
-                        .put("refundedQuantity", 0)
-                        .put("unitPricePaise", 2_500)
-                        .put("estimatedUnitCostPaise", 1_000)))))
-                .put("stock", org.json.JSONArray().put(JSONObject().put("productId", "chai").put("quantity", 9)))
-                .put("stockMovements", org.json.JSONArray().put(JSONObject()
-                    .put("movementId", stockMovementId).put("productId", "chai").put("quantityDelta", -1).put("orderNumber", 12)))
-                .put("customerCredits", org.json.JSONArray())
-                .put("repayments", org.json.JSONArray())
-                .put("paymentEntries", org.json.JSONArray().put(JSONObject()
-                    .put("entryId", paymentEntryId).put("orderNumber", 12).put("customerId", JSONObject.NULL)
-                    .put("amountPaise", 2_500).put("method", "cash").put("status", "staff_declared")
-                    .put("kind", "order_collection").put("relatedEntryId", JSONObject.NULL)))
-                .put("expenses", org.json.JSONArray())
-            val event = SyncOutboxEvent(eventId, commandId, 1, payload.toString())
-            val journal = PendingJournal(event)
+            instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic sync E2E owner") }
+            val persistence = SqliteCounterPersistence(context, databaseName, keyNamespace)
+            model = CounterModel(persistence, requireConfiguredProducts = true)
+            val product = TapriProduct(
+                productId = "e2e_chai", name = "E2E Chai", category = "Tea", unitPricePaise = 2_500,
+                active = true, favorite = true, priceConfirmed = true, estimatedUnitCostPaise = 1_000
+            )
+            assertTrue(model!!.saveProduct(product).contains("saved"))
+            assertTrue(model!!.confirmOpeningStock("e2e_chai", 10, "synthetic sync setup", "e2e-opening-${UUID.randomUUID()}").contains("confirmed"))
+            val saleCommandId = "e2e-sale-${UUID.randomUUID()}"
+            assertTrue(model!!.quickSale(listOf("e2e_chai" to 1), "cash", commandId = saleCommandId).startsWith("Quick sale"))
+            val sendableEvents = persistence.loadPendingSyncEvents(20)
+            val saleEvent = sendableEvents.singleOrNull { it.commandId == saleCommandId }
+            val outboxState = persistence.writableDatabase.rawQuery("SELECT command_id,status,blocked_reason FROM sync_outbox ORDER BY created_at,event_id", null).use { cursor ->
+                buildList { while (cursor.moveToNext()) add("${cursor.getString(0)}=${cursor.getString(1)}:${if (cursor.isNull(2)) "" else cursor.getString(2)}") }.joinToString(" | ")
+            }
+            assertTrue("Actual SQLite outbox should contain the sale event; sendable=${sendableEvents.map { it.commandId }}; rows=$outboxState", saleEvent != null)
+            assertTrue("Opening-stock event should also be in the outbox", sendableEvents.any { it.commandId.startsWith("e2e-opening-") })
             var loseFirstAcknowledgment = true
             val interruptedTransport = SyncHttpTransport { endpoint, token, body ->
                 val response = transport.post(endpoint, token, body)
-                if (loseFirstAcknowledgment) {
+                val postedEventId = JSONObject(body).getJSONArray("events").getJSONObject(0).getString("eventId")
+                if (postedEventId == saleEvent!!.eventId && loseFirstAcknowledgment) {
                     loseFirstAcknowledgment = false
                     throw IOException("Synthetic response-loss fault after server commit.")
                 }
@@ -131,20 +108,32 @@ class LiveBackendSyncE2ETest {
             }
 
             val firstAttempt = runCatching {
-                SyncRunner(journal, interruptedTransport).push(session.endpointBase, session.identity, session.bearerToken)
+                SyncRunner(PersistenceSyncJournal(persistence), interruptedTransport).push(session.endpointBase, session.identity, session.bearerToken)
             }
             assertTrue("The test fault should simulate the lost response", firstAttempt.exceptionOrNull() is IOException)
-            assertTrue("Local outbox must remain pending after the lost response", journal.pending(1).singleOrNull()?.eventId == eventId)
+            assertEquals("Sale remains the only unacknowledged local event", listOf(saleEvent!!.eventId), persistence.loadPendingSyncEvents(20).map { it.eventId })
+            assertEquals("Earlier stock event should have advanced the stored cursor", 1L, persistence.loadSyncCursor())
+            model!!.close()
+            model = null
 
-            val retry = SyncRunner(journal, transport).push(session.endpointBase, session.identity, session.bearerToken)
+            reopened = SqliteCounterPersistence(context, databaseName, keyNamespace)
+            val restoredModel = CounterModel(reopened)
+            assertEquals(2_500, restoredModel.allOrders().single().salePaise)
+            assertEquals(9, restoredModel.stockLevels()["e2e_chai"])
+            assertEquals(listOf(saleEvent.eventId), reopened!!.loadPendingSyncEvents(20).map { it.eventId })
+            assertEquals(1L, reopened!!.loadSyncCursor())
+
+            val retry = SyncRunner(PersistenceSyncJournal(reopened!!), transport).push(session.endpointBase, session.identity, session.bearerToken)
             assertEquals(1, retry.acknowledged)
-            assertEquals(1L, retry.serverRevision)
-            assertEquals(listOf("duplicate" to 1L), journal.outcomes)
-            assertTrue("Retry must remove the acknowledged event from the outbox", journal.pending(1).isEmpty())
+            assertEquals(2L, retry.serverRevision)
+            assertTrue("Durable outbox should clear only after the duplicate acknowledgment", reopened!!.loadPendingSyncEvents(20).isEmpty())
+            assertEquals(2L, reopened!!.loadSyncCursor())
+            restoredModel.close()
+            reopened = null
 
             val overview = getJson("${session.endpointBase}/v1/dashboard/overview?shopId=${session.identity.shopId}", session.bearerToken)
-            assertEquals(1L, overview.getLong("serverRevision"))
-            assertEquals(1, overview.getInt("acceptedEventCount"))
+            assertEquals(2L, overview.getLong("serverRevision"))
+            assertEquals(2, overview.getInt("acceptedEventCount"))
             assertEquals(1, overview.getInt("recordedOrderCount"))
             assertEquals(2_500, overview.getLong("cashCollectedPaise"))
             val readiness = getJson("${session.endpointBase}/v1/dashboard/profit-readiness?shopId=${session.identity.shopId}&days=30", session.bearerToken)
@@ -154,6 +143,13 @@ class LiveBackendSyncE2ETest {
             assertFalse("A server retry must not duplicate the accepted order", overview.getInt("recordedOrderCount") > 1)
             SyncAccountClient(transport).logout(session)
         } finally {
+            model?.close()
+            reopened?.close()
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            context.deleteDatabase(databaseName)
+            context.getSharedPreferences("chai_tapri_secure_key_envelope.$keyNamespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace)
+            SyncSessionVault(context, keyNamespace).clear()
             HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
         }
     }
