@@ -3378,10 +3378,41 @@ class SqliteCounterPersistenceTest {
             instrumentation.runOnMainSync { searchField.setText("no_match_$token") }
             instrumentation.waitForIdleSync()
             assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "No products match this search and filter." })
+
+            instrumentation.runOnMainSync {
+                searchField.text.clear()
+                filters.setSelection((0 until filters.count).first { filters.getItemAtPosition(it).toString() == "All products" })
+            }
+            instrumentation.waitForIdleSync()
+            val productButton = descendants(activity.window.decorView).filterIsInstance<Button>()
+                .first { it.text.toString().startsWith("$productName ·") }
+            instrumentation.runOnMainSync { productButton.performClick() }
+            instrumentation.waitForIdleSync()
+            fun quantityButton(action: String) = descendants(activity.window.decorView).filterIsInstance<Button>()
+                .first { it.contentDescription?.toString() == "$action quantity for $productName" }
+            instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
+            instrumentation.waitForIdleSync()
+            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 × $productName") })
+            instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
+            instrumentation.waitForIdleSync()
+            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any {
+                it.text.toString() == "Not enough recorded stock for $productName. Receive/count stock first."
+            })
+            instrumentation.runOnMainSync { quantityButton("Decrease").performClick() }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
+            instrumentation.waitForIdleSync()
+            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 × $productName") })
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
         }
+        val verify = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertEquals(3, verify.stockLevels()[productId])
+        assertTrue("Changing cart quantities must not post a sale before checkout", verify.allOrders().isEmpty())
+        verify.close()
     }
 
     @Test fun scannerCodeInputSelectsExactProductWithoutPostingSale() {

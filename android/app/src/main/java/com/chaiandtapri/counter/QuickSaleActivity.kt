@@ -134,8 +134,24 @@ class QuickSaleActivity : Activity() {
             row.addView(button("−") {
                 val newQuantity = (quantities[product.productId] ?: 0) - 1
                 if (newQuantity <= 0) quantities.remove(product.productId) else quantities[product.productId] = newQuantity
+                status.text = ""
                 render()
-            })
+            }.apply { contentDescription = "Decrease quantity for ${product.name}" })
+            row.addView(button("+") {
+                val currentQuantity = quantities[product.productId] ?: 0
+                val available = levels[product.productId] ?: 0
+                val stockConfirmed = model.isStockConfirmed(product.productId)
+                status.text = when {
+                    !stockConfirmed -> "Physically count and confirm opening stock for ${product.name} before selling."
+                    currentQuantity >= 99 -> "Maximum cart quantity is 99. No order changed."
+                    currentQuantity >= available -> "Not enough recorded stock for ${product.name}. Receive/count stock first."
+                    else -> ""
+                }
+                if (stockConfirmed && currentQuantity < 99 && currentQuantity < available) {
+                    quantities[product.productId] = currentQuantity + 1
+                    render()
+                }
+            }.apply { contentDescription = "Increase quantity for ${product.name}" })
             cartRowsContainer.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
     }
