@@ -4,6 +4,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import android.content.Intent
 import android.content.Context
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.content.ContentValues
 import android.Manifest
 import android.net.Uri
@@ -12,6 +14,9 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.os.Environment
 import android.os.Bundle
+import android.os.IBinder
+import android.os.Messenger
+import android.os.Message
 import android.provider.MediaStore
 import android.view.View
 import android.view.ViewGroup
@@ -3920,6 +3925,88 @@ class SqliteCounterPersistenceTest {
         recovered.close()
         assertTrue("Recovery journal must be cleared after a successful rollback", !previous.exists())
         assertEquals(null, RestoreRecoveryJournal.preferences(context).getString("pending_restore:$databaseName", null))
+        context.deleteDatabase(databaseName)
+    }
+
+    @Test fun restoreStartupRecoversAfterCrashHarnessProcessDiesAtDurableCutoverCheckpoint() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = SqliteCounterPersistence.DATABASE_NAME
+        val token = java.util.UUID.randomUUID().toString()
+        val marker = java.io.File(context.cacheDir, "restore-process-crash-$token.marker")
+        val recoveryReport = java.io.File(context.cacheDir, "restore-process-recovered-$token.report")
+        context.deleteDatabase(databaseName)
+        marker.delete()
+        recoveryReport.delete()
+
+        val original = CounterModel(SqliteCounterPersistence(context))
+        original.apply("real-process-crash-original", ProposedCommand("create", null, "one chai", "chai", 1))
+        val expected = original.allOrders().single()
+        original.close()
+
+        fun bindHarness(): Pair<ServiceConnection, Messenger> {
+            val connected = java.util.concurrent.CountDownLatch(1)
+            var harness: Messenger? = null
+            val connection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                    harness = Messenger(service)
+                    connected.countDown()
+                }
+                override fun onServiceDisconnected(name: ComponentName) = Unit
+            }
+            assertTrue(context.bindService(Intent(context, RestoreCrashHarnessService::class.java), connection, Context.BIND_AUTO_CREATE))
+            assertTrue("Crash harness service must bind", connected.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            return connection to checkNotNull(harness)
+        }
+
+        val (crashConnection, crashHarness) = bindHarness()
+        val crashMessage = Message.obtain(null, RestoreCrashHarnessService.WHAT_CRASH_AFTER_PRESERVE).apply {
+            data = Bundle().apply {
+                putString(RestoreCrashHarnessService.EXTRA_DATABASE_NAME, databaseName)
+                putString(RestoreCrashHarnessService.EXTRA_TOKEN, token)
+            }
+        }
+        runCatching { crashHarness.send(crashMessage) }
+
+        val deadline = System.currentTimeMillis() + 15_000
+        while (!marker.exists() && System.currentTimeMillis() < deadline) Thread.sleep(50)
+        assertTrue("Crash harness must durably mark the recovery checkpoint", marker.exists())
+        context.unbindService(crashConnection)
+        val crashedPid = marker.readText(Charsets.US_ASCII).toInt()
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val processExitDeadline = System.currentTimeMillis() + 10_000
+        while (activityManager.runningAppProcesses.orEmpty().any { it.pid == crashedPid } && System.currentTimeMillis() < processExitDeadline) Thread.sleep(50)
+        assertFalse("Crash harness process must exit before recovery starts", activityManager.runningAppProcesses.orEmpty().any { it.pid == crashedPid })
+
+        val active = context.getDatabasePath(databaseName)
+        val previous = context.getDatabasePath("$databaseName.pre-restore")
+        assertFalse("The cutover checkpoint must have no active database", active.exists())
+        assertTrue("The original encrypted database must remain preserved", previous.exists())
+
+        // A new process gets a fresh preferences cache and runs the ordinary startup recovery path.
+        val (recoveryConnection, recoveryHarness) = bindHarness()
+        recoveryHarness.send(Message.obtain(null, RestoreCrashHarnessService.WHAT_RECOVER_AND_REPORT).apply {
+            data = Bundle().apply { putString(RestoreCrashHarnessService.EXTRA_TOKEN, token) }
+        })
+        context.unbindService(recoveryConnection)
+        val recoveryDeadline = System.currentTimeMillis() + 15_000
+        while (!recoveryReport.exists() && System.currentTimeMillis() < recoveryDeadline) Thread.sleep(50)
+        assertTrue("Fresh process must run startup recovery and report the restored business state", recoveryReport.exists())
+        val report = recoveryReport.readText(Charsets.US_ASCII).lines()
+        assertEquals(expected.number.toString(), report[0])
+        assertEquals(expected.salePaise.toString(), report[1])
+        assertEquals("true", report[2])
+        assertEquals("true", report[3])
+        assertEquals("false", report[4])
+
+        // Reopen in the test process too, proving the recovered encrypted database is usable.
+        val recovered = CounterModel(SqliteCounterPersistence(context))
+        assertEquals(expected.number, recovered.allOrders().single().number)
+        assertEquals(expected.salePaise, recovered.allOrders().single().salePaise)
+        assertTrue(recovered.auditEvents().any { it.contains("real-process-crash-original") })
+        recovered.close()
+        assertTrue("Recovery should consume the previous-store staging file", !previous.exists())
+        assertTrue(recoveryReport.delete())
+        assertTrue(marker.delete())
         context.deleteDatabase(databaseName)
     }
 
