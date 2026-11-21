@@ -266,6 +266,12 @@ CAT-052 is still not end-to-end sync qualified: no live HTTPS request occurred; 
 Superseding lint verification after the final Cloud Sync main-thread change: `:app:lintDebug` passed with 0 errors and 139 warnings. `:app:testDebugUnitTest` also passed after that change; the JVM report remains 35/35. The warning count supersedes the earlier 138-warning line in this continuation.
 # Saved customer selection in counter credit flows — 31 October 2026
 
+## Current recovery qualification - 22 November 2026
+
+The isolated API 37 emulator passed the current-source SAF export, app uninstall/reinstall, and rich synthetic clean-install restore UI drill. Full instrumentation passed 101/101, Kotlin JVM 63/63, APK build tasks passed, and lint reported 0 errors / 171 warnings. CAT-051B remains partial for hard power/storage failure, physical key invalidation, separate-device/person, OEM-transfer and independent security review. Details: [`../specs/CAT-051B-IMPLEMENTATION-REPORT.md`](../specs/CAT-051B-IMPLEMENTATION-REPORT.md) and [`../specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md`](../specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md).
+
+
+
 CT-06 Quick Sale, CT-10 Payment, and CT-08/09 Live Orders Udhar now share `CustomerAccountPicker`. It searches persisted profiles and legacy credit IDs, displays outstanding balances, and requires choosing an existing account before creating a receivable. The directory can be opened to add a profile; no account is silently created by the sales flow. JVM coverage is `CustomerAccountPickerTest` (3 cases); emulator UI coverage verifies selection in both Quick Sale and Live Orders. See `../specs/CT-06-10-CUSTOMER-PICKER-REPORT.md` for the current regression results and scope limitations.
 # CT-06 atomic cash + Udhar split
 

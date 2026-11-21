@@ -1,5 +1,11 @@
 # Chai And Tapri OS Ã¢â‚¬â€ Phase 0 Qualification Report
 
+## Superseding current-source recovery and regression evidence ? 22 November 2026
+
+The current source has passed a complete synthetic SAF export and clean-install restore UI drill on an isolated fresh API 37 AVD. Restore after app uninstall/reinstall verified two orders, cash/UPI-pending states, partial refund and credit reversal, customer repayment, stock, audit/payment/outbox consistency, duplicate-command rejection and usable fresh-install Keystore material. Focused export and restore tests passed 1/1 each. Full API 37 instrumentation is 101/101 (0 failures/errors/skips), Kotlin JVM 63/63, Node 52/52; APK tasks pass; lint 0 errors / 171 warnings; current isolated PostgreSQL backend suite 23/23. See [current project audit](PROJECT-PROGRESS-AUDIT-2026-11-22.md), [CAT-051B report](CAT-051B-IMPLEMENTATION-REPORT.md), and [recovery evidence log](../test-evidence/2026-11-22/cat051b-clean-install-rich-restore-ui.log).
+
+Phase 0 and the six-wave product remain incomplete. CAT-051B still lacks real power-loss/storage-exhaustion tests, hardware key invalidation and second-device/person qualification, plus independent security review. Bluetooth/camera hardware, noisy-shop trials, continuous B2 listening, browser visual review, production sync/deployment and full product release gates remain unqualified.
+
 ## Superseding current-source verification — 19 November 2026
 
 Current checks: prototype Node 52/52; backend Node 16 passed / 4 PostgreSQL-dependent skipped; Kotlin JVM 56/56; API 37 Android instrumentation 89/89; debug and instrumentation APK tasks PASS; lint 0 errors / 161 warnings; changed JavaScript syntax PASS. Focused maintenance-barrier and financial-restore tests passed 1/1 each. An earlier complete Android attempt had one receivable-projection assertion failure; the focused rerun and later full run passed, but root cause remains unknown. The complete SAF UI clean-install drill was not repeated. PostgreSQL integration, physical-device Bluetooth/noise, independent security review, browser visual review and production qualification remain open. Detailed current-source record: [19 November audit](PROJECT-PROGRESS-AUDIT-2026-11-19.md).

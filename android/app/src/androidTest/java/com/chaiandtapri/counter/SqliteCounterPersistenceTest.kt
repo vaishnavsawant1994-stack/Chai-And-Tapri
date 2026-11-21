@@ -1191,10 +1191,17 @@ class SqliteCounterPersistenceTest {
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         LocalSessionState.establish("Synthetic Recovery Owner")
-        val seed = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        val seed = CounterModel(SqliteCounterPersistence(context), setOf("saf_roundtrip_tea"), requireConfiguredProducts = true)
         assertTrue(seed.saveProduct(TapriProduct("saf_roundtrip_tea", "SAF Roundtrip Tea", "Chai", 1500, true, true, true)).startsWith("Product saved"))
+        assertTrue(seed.saveProduct(TapriProduct("saf_roundtrip_samosa", "SAF Roundtrip Samosa", "Snacks", 2000, true, true, true)).startsWith("Product saved"))
+        assertTrue(seed.saveCustomerProfile(CustomerProfile("saf_roundtrip_customer", "Synthetic SAF Customer")).contains("profile saved"))
         assertTrue(seed.confirmOpeningStock("saf_roundtrip_tea", 8, "synthetic SAF roundtrip opening count", "saf-roundtrip-stock").contains("8 units"))
-        assertTrue(seed.quickSale(listOf("saf_roundtrip_tea" to 2), "cash", commandId = "saf-roundtrip-cash-sale").startsWith("Quick sale"))
+        assertTrue(seed.confirmOpeningStock("saf_roundtrip_samosa", 8, "synthetic SAF roundtrip opening count", "saf-roundtrip-samosa-stock").contains("8 units"))
+        assertTrue(seed.quickSaleSplit(listOf("saf_roundtrip_tea" to 2), 1000, "saf_roundtrip_customer", "saf-roundtrip-split-sale").startsWith("Quick sale"))
+        val firstOrder = seed.allOrders().single()
+        assertTrue(seed.repayCredit("saf_roundtrip_customer", 500, "saf-roundtrip-repayment").contains("Repayment"))
+        assertTrue(seed.refundItems(firstOrder.number, mapOf("saf_roundtrip_tea" to 1), "sealed synthetic return", mapOf("saf_roundtrip_tea" to "restock"), true, "saf-roundtrip-partial-refund", firstOrder.revision).contains("Refund"))
+        assertTrue(seed.quickSale(listOf("saf_roundtrip_samosa" to 1), "upi_pending", commandId = "saf-roundtrip-upi-order").startsWith("Quick sale"))
         seed.close()
 
         val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -1362,13 +1369,31 @@ class SqliteCounterPersistenceTest {
                 Thread.sleep(100)
             }
             assertTrue("The real SAF restore should finish through the login handoff: $restoreFailure", restoreActivityFinished)
-            val restored = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            val restoredStore = SqliteCounterPersistence(context)
+            val restored = CounterModel(restoredStore, setOf("saf_roundtrip_tea"), requireConfiguredProducts = true)
             try {
-                val restoredOrder = restored.allOrders().single()
-                assertTrue("Restored order should retain the exported product", restoredOrder.lines.any { it.productId == "saf_roundtrip_tea" })
-                assertTrue("Restored order should retain its cash payment", restoredOrder.paidPaise == 3000)
-                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" })
-                assertEquals(6, restored.stockLevels()["saf_roundtrip_tea"])
+                val restoredOrders = restored.allOrders()
+                assertEquals("The backup should preserve both synthetic orders", 2, restoredOrders.size)
+                val refundedOrder = restoredOrders.single { order -> order.lines.any { it.productId == "saf_roundtrip_tea" } }
+                assertEquals(1500, refundedOrder.paidPaise)
+                assertEquals(1500, refundedOrder.refundedPaise)
+                assertEquals(1500, refundedOrder.creditReversedPaise)
+                assertEquals(0, restored.creditBalance("saf_roundtrip_customer"))
+                assertEquals(1, restored.creditRepayments().count { it.customerId == "saf_roundtrip_customer" && it.amountPaise == 500 })
+                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" && it.amountPaise == 1000 })
+                assertEquals(1, restored.paymentHistory().count { it.method == "upi" && it.status == "pending" })
+                assertEquals(1, restored.paymentHistory().count { it.kind == "credit_reversal" && it.amountPaise == -1500 })
+                assertEquals(7, restored.stockLevels()["saf_roundtrip_tea"])
+                assertEquals(7, restored.stockLevels()["saf_roundtrip_samosa"])
+                assertTrue(restored.stockMovements().any { it.reason == "sale_refund_restock" && it.productId == "saf_roundtrip_tea" })
+                assertTrue(restored.auditEvents().any { it.contains("saf-roundtrip-partial-refund") })
+                assertEquals("Duplicate command ignored.", restored.quickSaleSplit(listOf("saf_roundtrip_tea" to 2), 1000, "saf_roundtrip_customer", "saf-roundtrip-split-sale"))
+                restoredStore.readableDatabase.use { db ->
+                    fun count(table: String) = db.rawQuery("SELECT COUNT(*) FROM $table", null).use { it.moveToFirst(); it.getInt(0) }
+                    assertEquals(count("command_receipts"), count("sync_outbox"))
+                    assertEquals(restored.auditEvents().size, count("audit_events"))
+                    assertEquals(restored.paymentHistory().size, count("payment_entries"))
+                }
             } finally {
                 restored.close()
             }
@@ -1510,13 +1535,33 @@ class SqliteCounterPersistenceTest {
             }
             assertTrue("Restore should finish and hand off to local access", finished)
 
-            val restored = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            val restoredStore = SqliteCounterPersistence(context)
+            val restored = CounterModel(restoredStore, setOf("saf_roundtrip_tea"), requireConfiguredProducts = true)
             try {
-                val order = restored.allOrders().single()
-                assertTrue("Clean-install restore should retain the synthetic product", order.lines.any { it.productId == "saf_roundtrip_tea" })
-                assertEquals(3000, order.paidPaise)
-                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" })
-                assertEquals(6, restored.stockLevels()["saf_roundtrip_tea"])
+                val orders = restored.allOrders()
+                assertEquals("Clean-install restore must retain both orders", 2, orders.size)
+                val teaOrder = orders.single { order -> order.lines.any { it.productId == "saf_roundtrip_tea" } }
+                assertEquals(1500, teaOrder.paidPaise)
+                assertEquals(1500, teaOrder.refundedPaise)
+                assertEquals(1500, teaOrder.creditReversedPaise)
+                assertTrue(orders.any { it.lines.any { line -> line.productId == "saf_roundtrip_samosa" } })
+                assertEquals(0, restored.creditBalance("saf_roundtrip_customer"))
+                assertEquals(1, restored.creditRepayments().count { it.customerId == "saf_roundtrip_customer" && it.amountPaise == 500 })
+                assertEquals(1, restored.paymentHistory().count { it.kind == "order_collection" && it.method == "cash" && it.amountPaise == 1000 })
+                assertEquals(1, restored.paymentHistory().count { it.method == "upi" && it.status == "pending" })
+                assertEquals(1, restored.paymentHistory().count { it.kind == "credit_reversal" && it.amountPaise == -1500 })
+                assertEquals(7, restored.stockLevels()["saf_roundtrip_tea"])
+                assertEquals(7, restored.stockLevels()["saf_roundtrip_samosa"])
+                assertTrue(restored.stockMovements().any { it.reason == "sale_refund_restock" && it.productId == "saf_roundtrip_tea" })
+                assertTrue(restored.auditEvents().any { it.contains("saf-roundtrip-partial-refund") })
+                restoredStore.readableDatabase.use { db ->
+                    fun count(table: String) = db.rawQuery("SELECT COUNT(*) FROM $table", null).use { it.moveToFirst(); it.getInt(0) }
+                    assertEquals(count("command_receipts"), count("sync_outbox"))
+                    assertEquals(restored.auditEvents().size, count("audit_events"))
+                    assertEquals(restored.paymentHistory().size, count("payment_entries"))
+                }
+                assertEquals("Duplicate command ignored.", restored.quickSaleSplit(listOf("saf_roundtrip_tea" to 2), 1000, "saf_roundtrip_customer", "saf-roundtrip-split-sale"))
+                assertEquals("A replay after clean-install restore must not create another order", 2, restored.allOrders().size)
                 val localKey = SecureDatabaseKeyManager(context, context.getDatabasePath(SqliteCounterPersistence.DATABASE_NAME)).getOrCreatePassphrase()
                 assertTrue("Fresh install should have usable device-local database key material", localKey.isNotEmpty())
                 localKey.fill(0)

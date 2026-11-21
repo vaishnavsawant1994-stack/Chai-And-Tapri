@@ -1,0 +1,44 @@
+# Chai And Tapri OS — Project Progress Audit
+
+**Date:** 22 November 2026  
+**Authority:** Current local source, current test outputs, and synthetic emulator recovery evidence.
+
+## Current verification
+
+| Suite / check | Result |
+|---|---:|
+| Prototype Node tests | 52/52 passed |
+| Kotlin JVM tests | 63/63 passed |
+| API 37 instrumentation | 101/101 passed; 0 failures, errors, or skips |
+| CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
+| CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
+| CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
+| Debug and instrumentation APK builds | Passed |
+| Android lint | 0 errors / 171 warnings |
+
+The 101-test Android run used `Tapri_Recovery_Isolated` to protect the existing AVD data. The optional live backend Android test class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL.
+
+## Wave status
+
+| Wave | Status |
+|---|---|
+| W1 — CAT-051B encrypted recovery | Same-emulator current-source UI export, app uninstall/reinstall, and UI restore now demonstrated with a synthetic multi-order dataset. Still partial: hard power loss, real filesystem exhaustion, hardware Keystore invalidation, second physical device/person, OEM transfer behavior, and independent security review remain open. |
+| W2 — Android CT-01–CT-32 | In progress; the screens and connected workflows remain partial. CT-06 cart quantity controls and rich recovery integrations have current emulator evidence; this is not full screen/product qualification. |
+| W3 — CAT-052 sync/backend | Local synthetic PostgreSQL suite passes 23/23. A limited Android SQLCipher-outbox to isolated PostgreSQL retry across database close/reopen is qualified. Process-death recovery during sync, full authoritative accounting, production TLS/operations, and reviewed deployment remain unqualified. |
+| W4 — Owner dashboard | Partial owner views exist; remaining OW screens and browser visual/usability qualification are open. |
+| W5 — Selling modes | One-tap/cart and scan paths are partial; voice remains reviewed single-utterance. Continuous Bluetooth, physical scanning, and field use remain unqualified. |
+| W6 — Release qualification | Not complete. Independent security review, supported-device and shop trials, operational recovery, performance, privacy, deployment, and release gates remain. |
+
+## CAT-051B recovery evidence
+
+On the isolated API 37 AVD, the application created an encrypted backup through the Android Storage Access Framework CreateDocument picker. The backup file was copied to local test evidence outside app-private storage. The app was uninstalled and reinstalled while the file remained in Downloads, then the clean-install recovery test used OpenDocument, secret entry, authenticated preview, and explicit replacement confirmation.
+
+The restored synthetic records include two orders; declared cash; pending UPI; a partial item refund; customer credit and a repayment; credit reversal; stock movements; audit/payment history; and command/outbox records. Assertions verify financial/stock projections, event-count consistency, duplicate-command rejection after restoration, and that the fresh installation can open the encrypted database with usable local Keystore key material.
+
+Focused test evidence: `../test-evidence/2026-11-22/cat051b-clean-install-rich-restore-ui.log`. Full API 37 result: `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. The encrypted synthetic artifact and build evidence are local ignored files; no shop data was used.
+
+## Product status and remaining scope
+
+The 28 business modules and 52 planned Android/owner screens are not complete. Many Android screens are partial; most owner dashboard views and modules remain unimplemented. The backend is a local prototype. One synthetic Android SQLCipher-outbox retry slice against isolated PostgreSQL is qualified; broad domain synchronization is not. Local encryption and backups have synthetic emulator coverage, not independent security qualification or production support. Physical camera/scanner, microphone/Bluetooth, noisy-shop, field, public deployment, and production-readiness claims are not made.
+
+See [master implementation tracker](MASTER-IMPLEMENTATION-TRACKER.md), [CAT-051B implementation report](CAT-051B-IMPLEMENTATION-REPORT.md), [CAT-052 PostgreSQL integration report](CAT-052-POSTGRESQL-INTEGRATION-REPORT-2026-11-22.md), and [project plan](../PROJECT_PLAN.md).
