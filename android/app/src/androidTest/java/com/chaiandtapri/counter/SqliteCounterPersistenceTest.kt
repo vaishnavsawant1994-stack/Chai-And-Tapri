@@ -3377,7 +3377,7 @@ class SqliteCounterPersistenceTest {
         }
     }
 
-    @Test fun productScannerInputAddsExactConfiguredProductToCartWithoutCommittingSale() {
+    @Test fun productScannerInputAddsExactProductAndCheckoutPostsCanonicalSale() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
@@ -3417,6 +3417,45 @@ class SqliteCounterPersistenceTest {
             val check = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             assertTrue("Scanning selects cart items only; checkout alone commits a sale", check.allOrders().isEmpty())
             check.close()
+
+            val checkout = descendants(activity.window.decorView).filterIsInstance<Button>()
+                .firstOrNull { it.text.toString().startsWith("Checkout") }
+            assertNotNull("Scanner cart should use the normal checkout", checkout)
+            instrumentation.runOnMainSync { checkout!!.performClick() }
+            instrumentation.waitForIdleSync()
+            fun awaitNode(prefix: String): AccessibilityNodeInfo {
+                repeat(80) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                        if (node == null) return null
+                        if (node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) return node
+                        for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                        return null
+                    }
+                    find(root)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Checkout item did not appear: $prefix")
+            }
+            val cashOption = awaitNode("Cash received")
+            val cashBounds = android.graphics.Rect().also(cashOption::getBoundsInScreen)
+            assertTrue("Cash option should have visible bounds: $cashBounds", cashBounds.width() > 0 && cashBounds.height() > 0)
+            val tapX = cashBounds.centerX().toFloat()
+            val tapY = cashBounds.centerY().toFloat()
+            val downTime = android.os.SystemClock.uptimeMillis()
+            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(downTime, downTime, android.view.MotionEvent.ACTION_DOWN, tapX, tapY, 0))
+            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(downTime, android.os.SystemClock.uptimeMillis() + 80, android.view.MotionEvent.ACTION_UP, tapX, tapY, 0))
+            instrumentation.waitForIdleSync()
+
+            val posted = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            val sale = posted.allOrders().single()
+            assertTrue(sale.salePosted)
+            assertEquals(1250, sale.salePaise)
+            assertEquals(id, sale.lines.single().productId)
+            assertEquals(Payment.STAFF_DECLARED, sale.payment)
+            assertEquals(1, posted.stockLevels()[id])
+            assertEquals("staff_declared", posted.paymentHistory().single { it.method == "cash" }.status)
+            posted.close()
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
