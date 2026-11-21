@@ -47,3 +47,8 @@ The project is still a prototype. No physical Bluetooth, field, independent secu
 ## Current-source addendum — CAT-051B barrier concurrency — 21 November 2026
 
 A deterministic JVM test now exercises the real maintenance barrier with a concurrent in-flight commit: maintenance blocks until the commit permit closes, new commits are rejected while maintenance is active, and normal commit access resumes after release. After correcting a test-harness double-close, Kotlin JVM tests passed 61/61. The backend database-independent suite passed 19 tests with 0 failures and skipped 4 PostgreSQL-dependent cases. This change does not add new Android recovery UI coverage and does not close CAT-051B. Physical key invalidation, actual power loss/storage exhaustion, second-device/person recovery, independent security review, and production qualification remain open.
+
+
+## Current-source addendum - CT-06 scanner input - 21 November 2026
+
+Quick Sale now supports exact product-code input from a paired keyboard-wedge barcode/QR reader, using owner-configured local catalogue codes. A valid scan adds one item to the current cart only; normal checkout still commits the transaction. Unknown/ambiguous codes and ineligible products do not alter the cart or business ledger. The additive SQLCipher schema v26->v27 migration retains previous order and stock records. The scanner-code field is device-local and camera scanning is not implemented. API 37 full regression passed 98/98 (0 failures/errors/skips), Kotlin JVM passed 63/63, APK builds passed, and lint reported 0 errors / 161 warnings. Backend Node passed 19 tests and skipped 4 PostgreSQL-dependent tests. Physical scanner and shop trials remain open.

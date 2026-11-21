@@ -3,6 +3,7 @@
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.view.KeyEvent
 import android.text.InputType
 import android.text.Editable
 import android.text.TextWatcher
@@ -16,6 +17,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import android.view.inputmethod.EditorInfo
 import java.util.Locale
 
 /** CT-06 native first slice: catalogue-backed cart and single atomic tender commit. */
@@ -23,6 +25,7 @@ class QuickSaleActivity : Activity() {
     private lateinit var model: CounterModel
     private lateinit var products: LinearLayout
     private lateinit var search: EditText
+    private lateinit var scanInput: EditText
     private lateinit var categoryFilter: Spinner
     private lateinit var emptyNotice: TextView
     private lateinit var cart: TextView
@@ -40,6 +43,21 @@ class QuickSaleActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
         root.addView(label("Quick Sale", 25f))
         root.addView(label("Prices use the confirmed shop catalogue. One checkout records the order, stock and selected payment state together.", 14f))
+        scanInput = EditText(this).apply {
+            hint = "Scan barcode / QR with paired keyboard scanner"
+            contentDescription = hint
+            inputType = InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            setSingleLine(true)
+            setOnEditorActionListener { _, actionId, event ->
+                if (actionId == EditorInfo.IME_ACTION_DONE || event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                    addScannedProduct()
+                    true
+                } else false
+            }
+        }
+        root.addView(scanInput)
+        root.addView(button("Add scanned product") { addScannedProduct() })
         search = EditText(this).apply {
             hint = "Search product, category or alias"
             contentDescription = hint
@@ -179,6 +197,25 @@ class QuickSaleActivity : Activity() {
         val result = model.quickSaleSplit(quantities.map { it.key to it.value }, cashPaise, customerId)
         status.text = result
         if (result.startsWith("Quick sale")) { quantities.clear(); render() }
+    }
+
+    private fun addScannedProduct() {
+        val code = scanInput.text.toString().trim()
+        val product = ProductScanResolver.resolve(model.products(), code)
+        status.text = when {
+            code.isEmpty() -> "Scan or enter a product code first. No order changed."
+            product == null -> "No unique active product matches this code. No order changed."
+            !product.priceConfirmed || product.unitPricePaise <= 0 -> "${product.name} has no confirmed selling price. No order changed."
+            !model.isStockConfirmed(product.productId) -> "${product.name} needs a confirmed physical stock count. No order changed."
+            (model.stockLevels()[product.productId] ?: 0) <= (quantities[product.productId] ?: 0) -> "Not enough recorded stock for ${product.name}. No order changed."
+            (quantities[product.productId] ?: 0) >= 99 -> "Maximum cart quantity is 99. No order changed."
+            else -> {
+                quantities[product.productId] = (quantities[product.productId] ?: 0) + 1
+                "Scanned ${product.name}; added one item to the current order."
+            }
+        }
+        scanInput.text.clear()
+        render()
     }
 
     private fun money(paise: Int) = money(paise.toLong())

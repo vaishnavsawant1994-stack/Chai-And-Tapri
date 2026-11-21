@@ -105,8 +105,13 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (product.estimatedUnitCostPaise != null && product.estimatedUnitCostPaise !in 0..10_000_000) return "Estimated unit cost must be 0 to ₹100000, or blank."
         if (product.aliases.any { it.trim().length > 40 }) return "Product aliases must be 40 characters or less."
         if (product.reorderThreshold != null && product.reorderThreshold !in 1..100_000) return "Low-stock threshold must be 1 to 100000 units, or blank."
+        val scanCode = product.scanCode?.trim()?.takeIf(String::isNotEmpty)
+        if (scanCode != null && (scanCode.length > 128 || scanCode.any(Char::isISOControl))) return "Scan code must be 1 to 128 printable characters, or blank."
+        if (scanCode != null && products().any { it.productId != product.productId && it.scanCode?.equals(scanCode, ignoreCase = true) == true }) {
+            return "That scan code is already assigned to another product."
+        }
         return try {
-            if (persistence?.saveProduct(product.copy(name = product.name.trim(), category = product.category.trim()), "product-${java.util.UUID.randomUUID()}") == true) {
+            if (persistence?.saveProduct(product.copy(name = product.name.trim(), category = product.category.trim(), scanCode = scanCode), "product-${java.util.UUID.randomUUID()}") == true) {
                 stock.putIfAbsent(product.productId, 0)
                 "Product saved in encrypted catalogue."
             } else "Product could not be saved."

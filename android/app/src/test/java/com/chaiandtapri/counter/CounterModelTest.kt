@@ -105,6 +105,25 @@ class CounterModelTest {
         }
     }
 
+    @Test fun barcodeLookupIsExactCaseInsensitiveAndRejectsAmbiguousCodes() {
+        val tea = TapriProduct("scan_tea", "Scan Tea", "Test", 1000, scanCode = "Tea-123")
+        val other = TapriProduct("scan_other", "Scan Other", "Test", 2000, scanCode = "Other-456")
+        assertEquals(tea, ProductScanResolver.resolve(listOf(tea, other), "  tEa-123  "))
+        assertNull(ProductScanResolver.resolve(listOf(tea, other), "Tea-12"))
+        assertNull(ProductScanResolver.resolve(listOf(tea.copy(active = false)), "Tea-123"))
+        assertNull(ProductScanResolver.resolve(listOf(tea, tea.copy(productId = "duplicate")), "Tea-123"))
+        assertNull(ProductScanResolver.resolve(listOf(tea), "  "))
+    }
+
+    @Test fun catalogueRejectsDuplicateAndUnprintableScannerCodes() {
+        val model = CounterModel(MemoryPersistence())
+        assertTrue(model.saveProduct(TapriProduct("scan_first", "First Product", "Test", 1000, scanCode = "  BOX-123  ")).startsWith("Product saved"))
+        assertTrue(model.products().single().scanCode == "BOX-123")
+        assertTrue(model.saveProduct(TapriProduct("scan_second", "Second Product", "Test", 1000, scanCode = "box-123")).contains("already assigned"))
+        assertTrue(model.saveProduct(TapriProduct("scan_control", "Control Product", "Test", 1000, scanCode = "ABC\n123")).contains("printable characters"))
+        model.close()
+    }
+
     @Test fun maintenanceWaitsForInFlightCommitAndRejectsNewCommitsUntilRelease() {
         val executor = Executors.newSingleThreadExecutor()
         val maintenanceStarted = CountDownLatch(1)

@@ -226,7 +226,7 @@ class SqliteCounterPersistenceTest {
         prior.close()
 
         SqliteCounterPersistence(context).use { upgraded ->
-            assertEquals(26, upgraded.readableDatabase.version)
+            assertEquals(27, upgraded.readableDatabase.version)
             val record = upgraded.loadAuditRecords().single { it.eventId == "legacy-audit" }
             assertEquals("legacy.event", record.event)
             assertNull(record.actorId)
@@ -2130,7 +2130,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(26, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.purchaseHistory().size)
         assertEquals(null, model.purchaseHistory().single().supplierInvoiceReference)
         assertEquals(3, model.stockLevels()["invoice_migration_tea"])
@@ -2165,7 +2165,7 @@ class SqliteCounterPersistenceTest {
         simulatedV20.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(26, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(4, model.stockLevels()["tea_order_migration"])
         assertEquals(500L, model.supplierPayablePaise("po_migration_supplier"))
         assertEquals(1, model.purchaseHistory().size)
@@ -2557,7 +2557,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(26, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(null, model.products().single { it.productId == "migration_tea" }.reorderThreshold)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
@@ -2588,7 +2588,7 @@ class SqliteCounterPersistenceTest {
         oldStore.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(26, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
         assertEquals(2400, model.creditBalance("legacy-account"))
@@ -2872,18 +2872,24 @@ class SqliteCounterPersistenceTest {
             }
             awaitAndClick({ it.startsWith("Samosa", ignoreCase = true) }, "configured Samosa product")
             awaitAndClick({ it.equals("Add item", ignoreCase = true) }, "add-item confirmation")
-            Thread.sleep(300)
-
             SqliteCounterPersistence(context).use { db ->
-                val snapshot = db.load() ?: error("Order snapshot missing")
-                val order = snapshot.orders.single { it.number == 12 }
+                val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+                var snapshot: CounterSnapshot? = null
+                while (snapshot == null && android.os.SystemClock.elapsedRealtime() < deadline) {
+                    val current = db.load()
+                    if (current?.orders?.singleOrNull { it.number == 12 }?.revision == originalRevision + 1) snapshot = current
+                    else Thread.sleep(100)
+                }
+                assertNotNull("Order item change should commit and increment the revision", snapshot)
+                val committed = snapshot!!
+                val order = committed.orders.single { it.number == 12 }
                 assertEquals(originalRevision + 1, order.revision)
                 assertEquals(3000, order.lines.sumOf { it.quantity * it.unitPricePaise })
                 assertEquals(1, order.lines.single { it.productId == "chai" }.quantity)
                 assertEquals(1, order.lines.single { it.productId == "samosa" }.quantity)
                 assertFalse(order.salePosted)
-                assertTrue(snapshot.paymentEntries.isEmpty())
-                assertTrue(snapshot.stockMovements.isEmpty())
+                assertTrue(committed.paymentEntries.isEmpty())
+                assertTrue(committed.stockMovements.isEmpty())
                 assertTrue(db.loadAuditRecords().any { it.event.contains("add #12") && it.actorId == "detail-cashier" })
             }
         } finally {
@@ -3369,6 +3375,86 @@ class SqliteCounterPersistenceTest {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
         }
+    }
+
+    @Test fun productScannerInputAddsExactConfiguredProductToCartWithoutCommittingSale() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
+        val id = "scan_ui_$token"
+        val name = "Scanner Tea $token"
+        val code = "EAN-$token"
+        val setup = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(setup.saveProduct(TapriProduct(id, name, "Scanner Test", 1250, priceConfirmed = true, scanCode = code)).startsWith("Product saved"))
+        assertTrue(setup.confirmOpeningStock(id, 2, "scanner UI fixture").startsWith("Opening stock confirmed"))
+        setup.close()
+
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(context, QuickSaleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as QuickSaleActivity
+        try {
+            instrumentation.waitForIdleSync()
+            fun descendants(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
+            val scanInput = descendants(activity.window.decorView).filterIsInstance<EditText>()
+                .firstOrNull { it.hint?.toString() == "Scan barcode / QR with paired keyboard scanner" }
+            assertNotNull("Quick Sale must expose the scanner keyboard-wedge field", scanInput)
+            instrumentation.runOnMainSync {
+                scanInput!!.setText("  $code  ")
+                scanInput.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
+            }
+            instrumentation.waitForIdleSync()
+            var views = descendants(activity.window.decorView)
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $name") })
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("Scanned $name") })
+
+            instrumentation.runOnMainSync {
+                scanInput!!.setText("unknown-$token")
+                scanInput.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
+            }
+            instrumentation.waitForIdleSync()
+            views = descendants(activity.window.decorView)
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("No unique active product matches this code") })
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $name") })
+            val check = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            assertTrue("Scanning selects cart items only; checkout alone commits a sale", check.allOrders().isEmpty())
+            check.close()
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.waitForIdleSync()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun schemaV26ToV27AddsScannerCodeWithoutChangingOrdersOrStock() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        var model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("scan_migration_tea", "Scanner Migration Tea", "Test", 1500, priceConfirmed = true)).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("scan_migration_tea", 4, "v26 migration fixture").startsWith("Opening stock confirmed"))
+        assertTrue(model.quickSale(listOf("scan_migration_tea" to 1), "cash", commandId = "scan-v26-sale").startsWith("Quick sale"))
+        model.close()
+
+        val old = SqliteCounterPersistence(context)
+        old.writableDatabase.execSQL("DROP INDEX product_catalog_scan_code_unique")
+        old.writableDatabase.execSQL("ALTER TABLE product_catalog DROP COLUMN scan_code")
+        old.writableDatabase.version = 26
+        old.close()
+
+        model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(27, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertNull(model.products().single { it.productId == "scan_migration_tea" }.scanCode)
+        assertEquals(1, model.allOrders().size)
+        assertEquals(1500, model.allOrders().single().salePaise)
+        assertEquals(3, model.stockLevels()["scan_migration_tea"])
+        assertTrue(model.saveProduct(model.products().single { it.productId == "scan_migration_tea" }.copy(scanCode = "MIG-TEA-01")).startsWith("Product saved"))
+        model.close()
+
+        val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertEquals("MIG-TEA-01", reopened.products().single { it.productId == "scan_migration_tea" }.scanCode)
+        assertEquals(1, reopened.allOrders().size)
+        assertEquals(3, reopened.stockLevels()["scan_migration_tea"])
+        reopened.close()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
     }
 
     @Test fun syncEnvelopeMapperCreatesBackendCompatibleRequestWithRevision() {
@@ -4165,7 +4251,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(26, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(27, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "cost_test_tea" }.estimatedUnitCostPaise)
         assertNull(model.allOrders().single().lines.single().estimatedUnitCostPaise)
         assertEquals(3000, model.allOrders().single().salePaise)

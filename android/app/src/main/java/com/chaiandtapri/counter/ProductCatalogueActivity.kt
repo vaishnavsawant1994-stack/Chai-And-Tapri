@@ -62,6 +62,7 @@ class ProductCatalogueActivity : Activity() {
             card.addView(label("${product.name} · ${product.category}", 18f))
             val price = if (product.priceConfirmed) "₹${rupees(product.unitPricePaise)} · Owner confirmed" else "₹${rupees(product.unitPricePaise)} · Example price, not confirmed"
             card.addView(label("$price · ${if (product.active) "Active" else "Inactive"}${if (product.favorite) " · Favourite" else ""}", 14f))
+            card.addView(label(product.scanCode?.let { "Scanner code · $it" } ?: "Scanner code not configured", 13f))
             card.addView(label(product.estimatedUnitCostPaise?.let { "Estimated unit cost ₹${rupees(it)} · owner-entered, not verified" } ?: "Unit cost not recorded", 14f))
             val countConfirmed = product.productId in confirmedStock
             val stockText = if (countConfirmed) "Opening count confirmed · ${stock[product.productId] ?: 0} units" else "Opening count not confirmed · existing value hidden"
@@ -106,6 +107,7 @@ class ProductCatalogueActivity : Activity() {
         val category = field("Category", existing?.category.orEmpty())
         val price = field("Actual selling price in ₹", existing?.let { rupees(it.unitPricePaise) }.orEmpty(), true)
         val estimatedCost = field("Estimated unit cost in ₹ (optional)", existing?.estimatedUnitCostPaise?.let(::rupees).orEmpty(), true)
+        val scanCode = field("Barcode / QR scanner code (optional)", existing?.scanCode.orEmpty())
         val aliases = field("Voice/search aliases, comma separated", existing?.aliases?.joinToString(", ").orEmpty())
         val reorderThreshold = field("Low-stock alert threshold in units (optional, 1–100000)", existing?.reorderThreshold?.toString().orEmpty(), integer = true)
         val active = CheckBox(this).apply { text = "Active for sale"; isChecked = existing?.active ?: true }; form.addView(active)
@@ -128,7 +130,8 @@ class ProductCatalogueActivity : Activity() {
                     active = active.isChecked, favorite = favorite.isChecked, priceConfirmed = confirmed.isChecked,
                     aliases = aliases.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
                     reorderThreshold = reorderThreshold.text.toString().trim().takeIf(String::isNotEmpty)?.toIntOrNull() ?: if (reorderThreshold.text.isNullOrBlank()) null else -1,
-                    estimatedUnitCostPaise = costPaise
+                    estimatedUnitCostPaise = costPaise,
+                    scanCode = scanCode.text.toString().trim().takeIf(String::isNotEmpty)
                 )
                 performMutation("Saving product…") { store -> store.saveProduct(product) }
             }.show()

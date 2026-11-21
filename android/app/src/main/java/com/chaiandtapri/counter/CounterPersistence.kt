@@ -154,7 +154,9 @@ data class TapriProduct(
     val aliases: List<String> = emptyList(),
     val reorderThreshold: Int? = null,
     /** Owner-entered estimate in paise; not a verified purchase cost or accounting valuation. */
-    val estimatedUnitCostPaise: Int? = null
+    val estimatedUnitCostPaise: Int? = null,
+    /** Exact product identifier entered by an optional keyboard-wedge barcode/QR scanner. */
+    val scanCode: String? = null
 )
 
 data class CounterSnapshot(
