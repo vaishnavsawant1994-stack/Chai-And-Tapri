@@ -1767,13 +1767,21 @@ class SqliteCounterPersistenceTest {
             assertTrue(model.saveCustomerProfile(CustomerProfile("ct30-credit-customer", "Route Customer")).startsWith("Customer profile saved"))
             assertTrue(model.quickSale(listOf("ct30_route_coffee" to 1), "udhar", "ct30-credit-customer", "ct30-route-credit-sale").startsWith("Quick sale"))
             assertTrue(model.apply("ct30-route-open-order", ProposedCommand("create", null, "synthetic open order", "ct30_route_tea", 1)).contains("Order #"))
+            assertTrue(model.saveSupplier("ct30_route_dealer", "Route Dealer", "ct30-route-supplier").startsWith("Supplier saved"))
+            assertTrue(model.receivePurchase("ct30_route_dealer", mapOf("ct30_route_coffee" to 1), mapOf("ct30_route_coffee" to 500), "ct30-route-receipt").startsWith("Received"))
+            assertTrue(model.openCashDrawer(5_000, "ct30-route-drawer-close-open").startsWith("Cash drawer opened"))
+            assertTrue(model.closeCashDrawer(6_000, "ct30-route-drawer-close").contains("unresolved variance"))
+            assertTrue(model.openCashDrawer(5_000, "ct30-route-active-drawer").startsWith("Cash drawer opened"))
         }
         val before = SqliteCounterPersistence(context).use { it.load() ?: error("Synthetic alert ledger missing") }
         val routes = listOf(
             "Review live orders" to LiveOrdersActivity::class.java,
             "Review payments" to PaymentActivity::class.java,
             "Review customer credit" to CustomerCreditActivity::class.java,
-            "Review inventory" to InventoryOverviewActivity::class.java
+            "Review inventory" to InventoryOverviewActivity::class.java,
+            "Review purchases" to ProcurementActivity::class.java,
+            "Review shift" to StaffShiftsActivity::class.java,
+            "Review daily closing" to DailyClosingActivity::class.java
         )
         LocalSessionState.establish("Synthetic Owner")
         try {
