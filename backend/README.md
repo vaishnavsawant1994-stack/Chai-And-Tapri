@@ -1,5 +1,11 @@
 ﻿# CAT-052 local sync journal prototype
 
+## Current isolated integration verification - 22 November 2026
+
+A fresh PostgreSQL 17 cluster and dedicated restricted runtime role were used for current-source integration verification. Migrations 001 and 002 and runtime grants applied; backend tests passed 23/23 with no skips. The cluster was stopped afterward. See [`../specs/CAT-052-POSTGRESQL-INTEGRATION-REPORT-2026-11-22.md`](../specs/CAT-052-POSTGRESQL-INTEGRATION-REPORT-2026-11-22.md). This remains local synthetic verification, not production or Android-to-server sync qualification.
+
+
+
 This is a local development service implemented with Node.js and PostgreSQL. It provides owner/shop/device enrollment, password authentication, revocable expiring sessions, shop-scoped access checks, and an immutable receipt journal for versioned business command envelopes.
 
 ## Run locally

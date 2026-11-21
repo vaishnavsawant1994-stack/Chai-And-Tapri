@@ -1,8 +1,12 @@
 # Chai And Tapri OS — Product and Delivery Plan
 
+## Latest continuation - CAT-052 isolated PostgreSQL integration - 22 November 2026
+
+Wave 3 verification now runs all backend integration tests against a fresh isolated PostgreSQL 17 cluster and a restricted application role. Both backend migrations and runtime grants applied; `backend/npm.cmd test` completed 23/23 with no skips or failures. The temporary cluster was stopped after the run. This qualifies local synthetic server tests only; Android-to-server end-to-end synchronization and production sync remain unqualified. See [CAT-052 PostgreSQL integration report](specs/CAT-052-POSTGRESQL-INTEGRATION-REPORT-2026-11-22.md); ignored local test log: `test-evidence/2026-11-22/backend-postgres-tests.log`.
+
 ## Latest continuation - CT-06 Quick Sale cart quantity controls - 22 November 2026
 
-Quick Sale cart rows now support direct increment/decrement controls; increments respect physically confirmed stock and the 99-item cart limit, and do not post financial or stock events. Current-source verification: Node 52/52, Kotlin JVM 63/63, API 37 instrumentation 101/101 (0 failures/errors/skips), APK tasks pass, lint 0 errors/171 warnings; backend suite 19 passed / 4 PostgreSQL-dependent tests skipped. This is emulator evidence for a focused cart workflow, not full screen, device, scanner, Bluetooth, field, security, or production qualification. See [CT-06 cart quantity report](specs/CT-06-CART-QUANTITY-CONTROLS-REPORT.md) and [master implementation tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md).
+Quick Sale cart rows now support direct increment/decrement controls; increments respect physically confirmed stock and the 99-item cart limit, and do not post financial or stock events. Current-source verification: Node 52/52, Kotlin JVM 63/63, API 37 instrumentation 101/101 (0 failures/errors/skips), APK tasks pass, lint 0 errors/171 warnings; backend isolated PostgreSQL 17 suite 23/23 passed. This is emulator evidence for a focused cart workflow, not full screen, device, scanner, Bluetooth, field, security, or production qualification. See [CT-06 cart quantity report](specs/CT-06-CART-QUANTITY-CONTROLS-REPORT.md) and [master implementation tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md).
 
 ## Latest continuation - CT-32 Shop Profile & Settings - 19 November 2026
 
