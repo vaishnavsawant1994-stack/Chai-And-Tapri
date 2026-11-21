@@ -43,3 +43,7 @@ The database-independent backend suite ran 19 tests successfully; its four Postg
 | 6 â€” Release and operations | Production deployment, multi-shop rollout, field validation, independent reviews, and release readiness remain open. |
 
 The project is still a prototype. No physical Bluetooth, field, independent security, production deployment, or complete product qualification is claimed. The next executable backend qualification is to rerun `LiveBackendSyncE2ETest` with a newly initialized isolated PostgreSQL cluster, prove the actual SQLCipher outbox retry across close/reopen, and preserve fresh test evidence. Continue implementing end-to-end shopkeeper workflows in parallel under the six-wave plan.
+
+## Current-source addendum — CAT-051B barrier concurrency — 21 November 2026
+
+A deterministic JVM test now exercises the real maintenance barrier with a concurrent in-flight commit: maintenance blocks until the commit permit closes, new commits are rejected while maintenance is active, and normal commit access resumes after release. After correcting a test-harness double-close, Kotlin JVM tests passed 61/61. The backend database-independent suite passed 19 tests with 0 failures and skipped 4 PostgreSQL-dependent cases. This change does not add new Android recovery UI coverage and does not close CAT-051B. Physical key invalidation, actual power loss/storage exhaustion, second-device/person recovery, independent security review, and production qualification remain open.

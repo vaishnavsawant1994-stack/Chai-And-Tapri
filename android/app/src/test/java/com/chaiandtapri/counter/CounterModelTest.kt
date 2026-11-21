@@ -11,6 +11,9 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class CounterModelTest {
     @Test fun estimatedUnitCostRejectsNegativeAndOutOfRangeValues() {
@@ -99,6 +102,44 @@ class CounterModelTest {
             permit!!.close()
         } finally {
             BusinessWriteBarrier.removeListener(listener)
+        }
+    }
+
+    @Test fun maintenanceWaitsForInFlightCommitAndRejectsNewCommitsUntilRelease() {
+        val executor = Executors.newSingleThreadExecutor()
+        val maintenanceStarted = CountDownLatch(1)
+        val maintenanceEntered = CountDownLatch(1)
+        val releaseMaintenance = CountDownLatch(1)
+        var commitPermit = BusinessWriteBarrier.tryBeginCommit()
+        assertNotNull("Expected an initial commit permit", commitPermit)
+        try {
+            val maintenance = executor.submit {
+                maintenanceStarted.countDown()
+                BusinessWriteBarrier.duringMaintenance("snapshot") {
+                    maintenanceEntered.countDown()
+                    check(releaseMaintenance.await(5, TimeUnit.SECONDS))
+                }
+            }
+            assertTrue("Maintenance task did not start", maintenanceStarted.await(5, TimeUnit.SECONDS))
+            assertFalse("Snapshot must wait while a commit is in flight", maintenanceEntered.await(100, TimeUnit.MILLISECONDS))
+
+            commitPermit!!.close()
+            commitPermit = null
+            assertTrue("Snapshot did not acquire the write barrier", maintenanceEntered.await(5, TimeUnit.SECONDS))
+            assertEquals("snapshot", BusinessWriteBarrier.currentMaintenance())
+            assertNull("New commits must be rejected during snapshot/restore", BusinessWriteBarrier.tryBeginCommit())
+
+            releaseMaintenance.countDown()
+            maintenance.get(5, TimeUnit.SECONDS)
+            assertNull(BusinessWriteBarrier.currentMaintenance())
+            val after = BusinessWriteBarrier.tryBeginCommit()
+            assertNotNull("Commit access must resume after maintenance", after)
+            after!!.close()
+        } finally {
+            releaseMaintenance.countDown()
+            commitPermit?.close()
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS)
         }
     }
 
