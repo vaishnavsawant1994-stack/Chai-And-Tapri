@@ -56,7 +56,12 @@ class LiveOrdersActivity : Activity() {
             }
             if (order.fulfillment == Fulfillment.TAKEN) card.addView(button("Start preparing") { run("preparing", "Start preparing order #${order.number}") })
             if (order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING)) card.addView(button("Mark ready") { run("ready", "Mark order #${order.number} ready") })
-            if (order.fulfillment in setOf(Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) card.addView(button("Hand over remaining items") { run("given", "Hand over order #${order.number}") })
+            if (order.fulfillment in setOf(Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) {
+                if (order.lines.any { it.quantity > it.deliveredQuantity }) {
+                    card.addView(button("Hand over selected items") { collectPartialHandover(order) })
+                    card.addView(button("Hand over remaining items") { run("given", "Hand over order #${order.number}") })
+                }
+            }
             if (order.duePaise > 0 && order.fulfillment in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED) && order.payment != Payment.UPI_PENDING) {
                 card.addView(button("Record cash received · staff declared") { status.text = model.recordCash(order.number, null, "ui-cash-${java.util.UUID.randomUUID()}", revision); render() })
                 card.addView(button("Mark UPI pending") { status.text = model.recordUpiPending(order.number, "ui-upi-${java.util.UUID.randomUUID()}", revision); render() })
@@ -68,6 +73,64 @@ class LiveOrdersActivity : Activity() {
     }
 
     private lateinit var status: TextView
+
+    private fun collectPartialHandover(order: CounterOrder) {
+        val remaining = order.lines.filter { it.quantity > it.deliveredQuantity }
+        if (remaining.isEmpty()) {
+            status.text = "No items remain to hand over."
+            return
+        }
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 4, 20, 0) }
+        val item = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(
+                this@LiveOrdersActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                remaining.map { line -> "${line.name} · ${line.quantity - line.deliveredQuantity} remaining" }
+            )
+        }
+        val count = EditText(this).apply {
+            hint = "Quantity to hand over"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            setText("1")
+        }
+        form.addView(label("Select the ready item", 14f))
+        form.addView(item)
+        form.addView(count)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Partial handover · Order #${order.number}")
+            .setMessage("Only the selected quantity will be marked as given and deducted from confirmed stock. The order sale is recorded when all items have been handed over.")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Record handover", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val selected = remaining.getOrNull(item.selectedItemPosition)
+                val available = selected?.let { it.quantity - it.deliveredQuantity } ?: 0
+                val quantity = count.text.toString().trim().toIntOrNull()
+                if (selected == null || quantity == null || quantity !in 1..available) {
+                    count.error = "Enter a quantity from 1 to $available"
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                val result = model.apply(
+                    "ui-partial-handover-${java.util.UUID.randomUUID()}",
+                    ProposedCommand(
+                        type = "partial_given",
+                        orderNumber = order.number,
+                        description = "Hand over $quantity × ${selected.name} for order #${order.number}",
+                        productId = selected.productId,
+                        quantity = quantity,
+                        expectedRevision = order.revision
+                    )
+                )
+                status.text = result
+                render()
+            }
+        }
+        dialog.show()
+    }
 
     private fun askCash(orderNumber: Int, duePaise: Int, revision: Int) {
         val amount = EditText(this).apply {

@@ -1,4 +1,10 @@
-# Chai And Tapri OS — Product and Delivery Plan
+# Chai And Tapri OS
+
+## Latest continuation - CT-08 selected-item partial handover - 22 November 2026
+
+Live Orders now supports an item-and-quantity handover from its ready-order card. The dialog submits the existing revision-checked `partial_given` command; the screen does not modify stock directly. The focused API 37 UI test passed 1/1, verifying a 1-of-3 synthetic handover, one confirmed-stock deduction and one movement, `PARTIALLY_GIVEN`, and `salePosted == false` until complete delivery. Current regression: Node 52/52, Kotlin JVM 63/63, API 37 instrumentation 102/102 (0 failures/errors/skips), debug/instrumentation APK builds PASS, lint 0 errors / 172 warnings. The optional live-backend-only Android test class was excluded. See [CT-08/10 report](specs/CT-08-10-LIVE-ORDERS-REPORT.md), [progress audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md), and [tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md). CT-08 remains partial; broader full product, real-device, field, security, and release gates remain open.
+
+ — Product and Delivery Plan
 
 ## Latest continuation - CAT-051B real UI export and clean-install recovery - 22 November 2026
 

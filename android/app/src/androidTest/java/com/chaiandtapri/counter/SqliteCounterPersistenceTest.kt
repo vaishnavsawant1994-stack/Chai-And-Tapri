@@ -3383,6 +3383,66 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun liveOrdersCanRecordAValidatedPartialItemHandoverFromTheScreen() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val setup = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(setup.saveProduct(TapriProduct("partial_ui_tea", "Partial UI Tea", "Chai", 1000, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(setup.confirmOpeningStock("partial_ui_tea", 5, "Synthetic partial handover opening count", "partial-ui-stock").contains("5 units"))
+        assertTrue(setup.apply("partial-ui-create", ProposedCommand("create", null, "Create synthetic order", "partial_ui_tea", 3)).contains("Order #"))
+        val order = setup.allOrders().single()
+        assertTrue(setup.apply("partial-ui-ready", ProposedCommand("ready", order.number, "Mark ready", expectedRevision = order.revision)).contains("ready"))
+        setup.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, LiveOrdersActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun awaitNode(prefix: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                        if (node == null) return null
+                        if ((prefix == null || node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) &&
+                            (hint == null || node.hintText?.toString()?.startsWith(hint, ignoreCase = true) == true)) return node
+                        for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                        return null
+                    }
+                    find(root)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("UI control not found: prefix=$prefix hint=$hint")
+            }
+            assertTrue(awaitNode(prefix = "Hand over selected items").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val quantity = awaitNode(hint = "Quantity to hand over")
+            assertTrue(quantity.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "1")
+            }))
+            assertTrue(awaitNode(prefix = "Record handover").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+
+            var updated: CounterOrder? = null
+            for (attempt in 0 until 100) {
+                CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                    val current = model.allOrders().single()
+                    if (current.fulfillment == Fulfillment.PARTIALLY_GIVEN) updated = current
+                }
+                if (updated != null) break
+                Thread.sleep(100)
+            }
+            val handed = requireNotNull(updated)
+            assertEquals(1, handed.lines.single().deliveredQuantity)
+            assertEquals(1000, handed.salePaise)
+            assertTrue("Partial handover must not post a completed sale", !handed.salePosted)
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals(4, model.stockLevels()["partial_ui_tea"])
+                assertEquals(1, model.stockMovements().count { it.orderNumber == handed.number && it.reason == "partial_handover" })
+                assertEquals(Fulfillment.PARTIALLY_GIVEN, model.allOrders().single().fulfillment)
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun quickSaleSearchAndCategoryFiltersUseConfiguredProductAliases() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
