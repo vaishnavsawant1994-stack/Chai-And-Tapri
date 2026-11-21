@@ -9,21 +9,21 @@
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 63/63 passed |
-| API 37 instrumentation | 102/102 passed; 0 failures, errors, or skips |
+| API 37 instrumentation | 103/103 passed; 0 failures, errors, or skips |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 172 warnings |
 
-The 102-test Android run used `Tapri_Recovery_Isolated` to protect the existing AVD data. It includes a new CT-08 UI test for partial item handover. The optional live backend Android test class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL.
+The 102-test Android run used `Tapri_Recovery_Isolated` to protect the existing AVD data. It includes CT-08 UI tests for partial item handover and queue search/status filters. The optional live backend Android test class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL.
 
 ## Wave status
 
 | Wave | Status |
 |---|---|
 | W1 — CAT-051B encrypted recovery | Same-emulator current-source UI export, app uninstall/reinstall, and UI restore now demonstrated with a synthetic multi-order dataset. Still partial: hard power loss, real filesystem exhaustion, hardware Keystore invalidation, second physical device/person, OEM transfer behavior, and independent security review remain open. |
-| W2 — Android CT-01–CT-32 | In progress; the screens and connected workflows remain partial. CT-06 cart quantity controls, CT-08 partial item handover, and rich recovery integrations have current emulator evidence; this is not full screen/product qualification. |
+| W2 — Android CT-01–CT-32 | In progress; the screens and connected workflows remain partial. CT-06 cart quantity controls, CT-08 partial item handover plus local queue search/status filters, and rich recovery integrations have current emulator evidence; this is not full screen/product qualification. |
 | W3 — CAT-052 sync/backend | Local synthetic PostgreSQL suite passes 23/23. A limited Android SQLCipher-outbox to isolated PostgreSQL retry across database close/reopen is qualified. Process-death recovery during sync, full authoritative accounting, production TLS/operations, and reviewed deployment remain unqualified. |
 | W4 — Owner dashboard | Partial owner views exist; remaining OW screens and browser visual/usability qualification are open. |
 | W5 — Selling modes | One-tap/cart and scan paths are partial; voice remains reviewed single-utterance. Continuous Bluetooth, physical scanning, and field use remain unqualified. |
@@ -32,6 +32,10 @@ The 102-test Android run used `Tapri_Recovery_Isolated` to protect the existing 
 ## CT-08 partial item handover - 22 November 2026
 
 Live Orders now offers a review dialog for handing over a selected ready item and quantity. It calls the shared revision-checked `partial_given` command with a unique command ID. The emulator UI test verifies a 1-of-3 handover persists `PARTIALLY_GIVEN`, decrements confirmed stock once, appends one `partial_handover` movement, and leaves `salePosted` false until the order is fully delivered. Focused API 37 test passed 1/1; the full current API 37 suite then passed 102/102 with zero failures, errors, or skips. Kotlin JVM 63/63, Node 52/52, APK tasks PASS, lint 0 errors / 172 warnings. The test XML is the full-suite file listed above. This is one synthetic UI path, not full CT-08 qualification. See [CT-08/10 report](CT-08-10-LIVE-ORDERS-REPORT.md).
+
+## CT-08 Live Orders queue search and filters - 22 November 2026
+
+The local Live Orders queue now filters by order number, item text, fulfillment/payment state, and five queue views: all, needs preparation/handover, ready to hand over, payment due, and UPI pending. Filtering is read-only. A focused API 37 UI test confirmed the Ready filter and item search show the matching order without changing either order or stock. Focused test passed 1/1; the full current API 37 suite passed 103/103, Kotlin JVM 63/63, and Node 52/52; APK tasks passed and lint reported 0 errors / 172 warnings. The full-suite XML is listed above. This is a partial queue interaction qualification; manual usability and complete CT-08 remain open. See [CT-08/10 report](CT-08-10-LIVE-ORDERS-REPORT.md).
 
 ## CAT-051B recovery evidence
 

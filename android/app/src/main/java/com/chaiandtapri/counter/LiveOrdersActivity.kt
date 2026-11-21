@@ -3,12 +3,16 @@ package com.chaiandtapri.counter
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import java.util.Locale
 
@@ -16,6 +20,10 @@ import java.util.Locale
 class LiveOrdersActivity : Activity() {
     private lateinit var model: CounterModel
     private lateinit var list: LinearLayout
+    private lateinit var search: EditText
+    private lateinit var filter: Spinner
+    private var searchQuery = ""
+    private var selectedFilter = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,16 +34,58 @@ class LiveOrdersActivity : Activity() {
         root.addView(label("Live Orders", 25f))
         root.addView(label("Order fulfillment and payment are shown independently. Cash is staff-declared; UPI is pending unless provider evidence is integrated.", 14f))
         status = label("", 14f); root.addView(status)
+        search = EditText(this).apply {
+            hint = "Find order number, item or status"
+            contentDescription = "Search live orders"
+            setSingleLine(true)
+            setText(searchQuery)
+        }
+        root.addView(search)
+        filter = Spinner(this).apply {
+            adapter = ArrayAdapter(this@LiveOrdersActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("All orders", "Needs preparation or handover", "Ready to hand over", "Payment due", "UPI pending"))
+            contentDescription = "Filter live orders"
+            setSelection(selectedFilter, false)
+        }
+        root.addView(filter)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; root.addView(list)
         root.addView(button("Back to counter") { finish() })
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchQuery = s?.toString().orEmpty()
+                render()
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        filter.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                selectedFilter = position
+                render()
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
         render()
     }
 
     private fun render() {
         list.removeAllViews()
         val orders = model.allOrders()
-        if (orders.isEmpty()) list.addView(label("No recorded orders yet.", 17f))
-        orders.forEach { order ->
+        val query = searchQuery.trim().lowercase(Locale.ROOT)
+        val filtered = orders.filter { order ->
+            val matchesText = query.isEmpty() || listOf(order.number.toString(), order.items, order.fulfillment.name, order.payment.name)
+                .any { it.lowercase(Locale.ROOT).contains(query) }
+            val matchesFilter = when (selectedFilter) {
+                1 -> order.fulfillment !in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED)
+                2 -> order.fulfillment in setOf(Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)
+                3 -> order.duePaise > 0 && order.fulfillment in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED)
+                4 -> order.payment == Payment.UPI_PENDING
+                else -> true
+            }
+            matchesText && matchesFilter
+        }
+        if (filtered.isEmpty()) list.addView(label(if (orders.isEmpty()) "No recorded orders yet." else "No orders match this search and filter.", 17f))
+        filtered.forEach { order ->
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 14, 12, 14) }
             card.addView(label("Order #${order.number} · ${order.fulfillment}", 19f))
             card.addView(label(order.items, 16f))

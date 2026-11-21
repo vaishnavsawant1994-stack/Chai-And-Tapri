@@ -3443,6 +3443,67 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun liveOrdersSearchAndStatusFilterOnlyChangeVisibleCards() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val setup = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(setup.saveProduct(TapriProduct("queue_filter_tea", "Queue Filter Tea", "Chai", 1000, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(setup.saveProduct(TapriProduct("queue_filter_samosa", "Queue Filter Samosa", "Snacks", 2000, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(setup.confirmOpeningStock("queue_filter_tea", 5, "Synthetic queue filter count", "queue-filter-tea-stock").contains("5 units"))
+        assertTrue(setup.confirmOpeningStock("queue_filter_samosa", 5, "Synthetic queue filter count", "queue-filter-samosa-stock").contains("5 units"))
+        assertTrue(setup.apply("queue-filter-create-ready", ProposedCommand("create", null, "Create ready order", "queue_filter_tea", 1)).contains("Order #"))
+        val readyOrder = setup.allOrders().last()
+        assertTrue(setup.apply("queue-filter-set-ready", ProposedCommand("ready", readyOrder.number, "Mark ready", expectedRevision = readyOrder.revision)).contains("ready"))
+        assertTrue(setup.apply("queue-filter-create-open", ProposedCommand("create", null, "Create open order", "queue_filter_samosa", 1)).contains("Order #"))
+        val openOrder = setup.allOrders().first()
+        assertTrue(openOrder.number != readyOrder.number)
+        setup.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, LiveOrdersActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun findNode(prefix: String? = null, description: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if ((prefix == null || node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) &&
+                        (description == null || node.contentDescription?.toString() == description)) return node
+                    for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                    return null
+                }
+                return find(root)
+            }
+            fun await(prefix: String? = null, description: String? = null): AccessibilityNodeInfo {
+                repeat(80) {
+                    findNode(prefix, description)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Live Orders UI item not found: prefix=$prefix description=$description")
+            }
+            assertTrue(await(description = "Filter live orders").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(await(prefix = "Ready to hand over").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertNotNull("Ready order should remain visible", await(prefix = "Order #${readyOrder.number}"))
+            assertNull("Taken order should be hidden by ready filter", findNode(prefix = "Order #${openOrder.number}"))
+
+            assertTrue(await(description = "Filter live orders").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(await(prefix = "All orders").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val search = await(description = "Search live orders")
+            assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Samosa")
+            }))
+            assertNotNull("Matching item should remain visible", await(prefix = "Order #${openOrder.number}"))
+            assertNull("Non-matching item should be hidden by search", findNode(prefix = "Order #${readyOrder.number}"))
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals("Filtering must not change either order", 2, model.allOrders().size)
+                assertEquals(5, model.stockLevels()["queue_filter_tea"])
+                assertEquals(5, model.stockLevels()["queue_filter_samosa"])
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun quickSaleSearchAndCategoryFiltersUseConfiguredProductAliases() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
