@@ -18,6 +18,11 @@ android {
 dependencies {
     implementation("androidx.activity:activity-ktx:1.12.0")
     implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.camera:camera-camera2:1.7.0")
+    implementation("androidx.camera:camera-lifecycle:1.7.0")
+    implementation("androidx.camera:camera-mlkit-vision:1.7.0")
+    implementation("androidx.camera:camera-view:1.7.0")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("net.zetetic:sqlcipher-android:4.20.0@aar")
     implementation("androidx.sqlite:sqlite:2.7.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")

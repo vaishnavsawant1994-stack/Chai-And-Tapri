@@ -58,6 +58,9 @@ class QuickSaleActivity : Activity() {
         }
         root.addView(scanInput)
         root.addView(button("Add scanned product") { addScannedProduct() })
+        root.addView(button("Scan product with camera") {
+            startActivityForResult(android.content.Intent(this, CameraBarcodeScannerActivity::class.java), CAMERA_SCAN_REQUEST)
+        })
         search = EditText(this).apply {
             hint = "Search product, category or alias"
             contentDescription = hint
@@ -218,6 +221,20 @@ class QuickSaleActivity : Activity() {
         render()
     }
 
+    @Deprecated("Activity result API is retained here because QuickSaleActivity extends platform Activity.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != CAMERA_SCAN_REQUEST) return
+        if (resultCode == RESULT_OK) {
+            val code = data?.getStringExtra(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE).orEmpty()
+            scanInput.setText(code)
+            addScannedProduct()
+        } else {
+            status.text = data?.getStringExtra(CameraBarcodeScannerActivity.EXTRA_RESULT_MESSAGE)
+                ?: "Camera scan was cancelled. Type a code or use a paired scanner instead. No order changed."
+        }
+    }
+
     private fun money(paise: Int) = money(paise.toLong())
     private fun money(paise: Long) = String.format(Locale.ROOT, "%.2f", paise / 100.0)
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 10, 0, 10) }
@@ -245,4 +262,6 @@ class QuickSaleActivity : Activity() {
     }
 
     override fun onDestroy() { if (::model.isInitialized) model.close(); super.onDestroy() }
+
+    companion object { private const val CAMERA_SCAN_REQUEST = 6406 }
 }

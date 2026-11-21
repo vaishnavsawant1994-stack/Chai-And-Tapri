@@ -35,3 +35,7 @@ This slice does not implement camera-based decoding, scanner pairing, a physical
 ## Remaining work
 
 Implement a camera scanning flow only with an explicit camera permission and a supported decoding library, test keyboard-wedge scanner models on hardware, review product sync/privacy requirements before syncing scan identifiers, and continue complete CT-06/CT-13 usability qualification.
+
+## Superseding addendum - camera scanner - 21 November 2026
+
+The previously keyboard-wedge-only Quick Sale scanner now has an explicit CameraX + bundled ML Kit on-device scan route. Optional camera permission is requested only when opening the scanner; it returns only raw product codes to Quick Sale's exact catalogue resolver. Permission denial/cancel retains typed and paired scanner fallback. It does not interpret UPI QR codes or commit a sale. Focused API 37 tests passed for raw scan result, permission/fallback UI, and code selection without a sale or stock mutation. Camera hardware/decoding remain unqualified. See `CT-06-CAMERA-BARCODE-SCANNER-REPORT.md`.

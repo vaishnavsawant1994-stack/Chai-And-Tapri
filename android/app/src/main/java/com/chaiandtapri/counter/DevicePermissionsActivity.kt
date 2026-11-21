@@ -25,6 +25,9 @@ class DevicePermissionsActivity : ComponentActivity() {
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         render("Permission result received; current Android state is shown above.")
     }
+    private val cameraPermissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        render("Camera permission result received; current Android state is shown above.")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,13 +48,14 @@ class DevicePermissionsActivity : ComponentActivity() {
         content.addView(label("Used to inspect/select a supported communication route when you choose to use speech. A connected headset does not prove that its microphone is the active audio source.", 14f))
         content.addView(label("Permission help", 17f))
         content.addView(label("If an optional permission was denied, typed counter workflows remain available. If Android no longer shows its permission prompt, use Open Android app settings to review access.", 14f))
-        content.addView(label("Camera · Not requested", 17f))
-        content.addView(label("Barcode scanning is not available yet, so this app does not request camera access.", 14f))
+        content.addView(label("Camera · ${permissionState(Manifest.permission.CAMERA)}", 17f))
+        content.addView(label("Used only when you choose Scan product with camera in Quick Sale. The camera scanner reads product codes locally; it does not read payment QR codes or save images. Typed and paired-scanner fallback remain available.", 14f))
         content.addView(label("Files · No broad storage permission requested", 17f))
         content.addView(label("Encrypted backup and restore use Android's document picker.", 14f))
         status = label(message ?: "Permission status refreshed from Android.", 14f)
         content.addView(status)
         content.addView(button("Request optional voice permissions") { requestVoicePermissions() })
+        content.addView(button("Request camera permission for product scanning") { requestCameraPermission() })
         content.addView(button("Open Android app settings") {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
         })
@@ -69,6 +73,15 @@ class DevicePermissionsActivity : ComponentActivity() {
         else {
             requested.forEach { permissionHistory.edit().putBoolean("requested:$it", true).apply() }
             permissionRequest.launch(requested.toTypedArray())
+        }
+    }
+
+    private fun requestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            render("Camera permission is already granted; the camera opens only when you start a product scan.")
+        } else {
+            permissionHistory.edit().putBoolean("requested:${Manifest.permission.CAMERA}", true).apply()
+            cameraPermissionRequest.launch(Manifest.permission.CAMERA)
         }
     }
 

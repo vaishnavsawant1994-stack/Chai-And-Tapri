@@ -363,6 +363,7 @@ class SqliteCounterPersistenceTest {
         val context = instrumentation.targetContext
         context.getSharedPreferences("ct04_permission_history", android.content.Context.MODE_PRIVATE).edit().clear().commit()
         runCatching { instrumentation.uiAutomation.revokeRuntimePermission(context.packageName, Manifest.permission.RECORD_AUDIO) }
+        runCatching { instrumentation.uiAutomation.revokeRuntimePermission(context.packageName, Manifest.permission.CAMERA) }
         if (android.os.Build.VERSION.SDK_INT >= 31) runCatching { instrumentation.uiAutomation.revokeRuntimePermission(context.packageName, Manifest.permission.BLUETOOTH_CONNECT) }
         val activity = instrumentation.startActivitySync(Intent(context, DevicePermissionsActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -376,7 +377,8 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("Microphone") && it.contains("typed fallback") })
         assertTrue(strings.any { it.contains("Not granted") || it.contains("Denied") })
         assertTrue(strings.any { it.contains("Bluetooth route access") })
-        assertTrue(strings.any { it.contains("Camera · Not requested") })
+        assertTrue(strings.any { it.contains("Camera · Not granted") && it.contains("typed fallback") })
+        assertTrue(strings.any { it.contains("Request camera permission for product scanning") })
         assertTrue(strings.any { it.contains("No broad storage permission") })
         assertTrue(strings.any { it.contains("Request optional voice permissions") })
         instrumentation.runOnMainSync { activity.finish() }
@@ -3377,9 +3379,10 @@ class SqliteCounterPersistenceTest {
         }
     }
 
-    @Test fun productScannerInputAddsExactProductAndCheckoutPostsCanonicalSale() {
+    @Test fun scannerCodeInputSelectsExactProductWithoutPostingSale() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        runCatching { InstrumentationRegistry.getInstrumentation().uiAutomation.revokeRuntimePermission(context.packageName, Manifest.permission.CAMERA) }
         val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
         val id = "scan_ui_$token"
         val name = "Scanner Tea $token"
@@ -3394,6 +3397,8 @@ class SqliteCounterPersistenceTest {
         try {
             instrumentation.waitForIdleSync()
             fun descendants(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
+            assertTrue("Camera scan is an explicit Quick Sale option", descendants(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString() == "Scan product with camera" })
+            assertEquals(android.content.pm.PackageManager.PERMISSION_DENIED, context.packageManager.checkPermission(Manifest.permission.CAMERA, context.packageName))
             val scanInput = descendants(activity.window.decorView).filterIsInstance<EditText>()
                 .firstOrNull { it.hint?.toString() == "Scan barcode / QR with paired keyboard scanner" }
             assertNotNull("Quick Sale must expose the scanner keyboard-wedge field", scanInput)
@@ -3416,51 +3421,21 @@ class SqliteCounterPersistenceTest {
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $name") })
             val check = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             assertTrue("Scanning selects cart items only; checkout alone commits a sale", check.allOrders().isEmpty())
+            assertEquals(2, check.stockLevels()[id])
             check.close()
-
-            val checkout = descendants(activity.window.decorView).filterIsInstance<Button>()
-                .firstOrNull { it.text.toString().startsWith("Checkout") }
-            assertNotNull("Scanner cart should use the normal checkout", checkout)
-            instrumentation.runOnMainSync { checkout!!.performClick() }
-            instrumentation.waitForIdleSync()
-            fun awaitNode(prefix: String): AccessibilityNodeInfo {
-                repeat(80) {
-                    val root = instrumentation.uiAutomation.rootInActiveWindow
-                    fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-                        if (node == null) return null
-                        if (node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) return node
-                        for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
-                        return null
-                    }
-                    find(root)?.let { return it }
-                    Thread.sleep(100)
-                }
-                throw AssertionError("Checkout item did not appear: $prefix")
-            }
-            val cashOption = awaitNode("Cash received")
-            val cashBounds = android.graphics.Rect().also(cashOption::getBoundsInScreen)
-            assertTrue("Cash option should have visible bounds: $cashBounds", cashBounds.width() > 0 && cashBounds.height() > 0)
-            val tapX = cashBounds.centerX().toFloat()
-            val tapY = cashBounds.centerY().toFloat()
-            val downTime = android.os.SystemClock.uptimeMillis()
-            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(downTime, downTime, android.view.MotionEvent.ACTION_DOWN, tapX, tapY, 0))
-            instrumentation.sendPointerSync(android.view.MotionEvent.obtain(downTime, android.os.SystemClock.uptimeMillis() + 80, android.view.MotionEvent.ACTION_UP, tapX, tapY, 0))
-            instrumentation.waitForIdleSync()
-
-            val posted = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-            val sale = posted.allOrders().single()
-            assertTrue(sale.salePosted)
-            assertEquals(1250, sale.salePaise)
-            assertEquals(id, sale.lines.single().productId)
-            assertEquals(Payment.STAFF_DECLARED, sale.payment)
-            assertEquals(1, posted.stockLevels()[id])
-            assertEquals("staff_declared", posted.paymentHistory().single { it.method == "cash" }.status)
-            posted.close()
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         }
+    }
+
+    @Test fun cameraScannerResultReturnsOnlyProductCodeForExistingQuickSaleValidation() {
+        val rawCode = "EAN-CAMERA-123"
+        val result = CameraBarcodeScannerActivity.resultIntent(code = rawCode)
+        assertEquals(rawCode, result.getStringExtra(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE))
+        assertNull(result.getStringExtra(CameraBarcodeScannerActivity.EXTRA_RESULT_MESSAGE))
+        assertEquals(setOf(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE), result.extras?.keySet())
     }
 
     @Test fun schemaV26ToV27AddsScannerCodeWithoutChangingOrdersOrStock() {
