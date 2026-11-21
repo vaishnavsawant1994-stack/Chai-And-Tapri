@@ -7,7 +7,7 @@ This audit supersedes previous test totals only for the checks explicitly rerun 
 
 | Suite/check | Result | Scope |
 | --- | ---: | --- |
-| Android API 37 instrumentation | **95/95 passed** | Full connected suite with the opt-in live-backend test class excluded; 0 failures, errors, or skips |
+| Android API 37 instrumentation | **96/96 passed** | Full connected suite with the opt-in live-backend test class excluded; 0 failures, errors, or skips |
 | Kotlin JVM | **60/60 passed** | `testDebugUnitTest` |
 | Backend Node, no DB configured | **19 passed, 0 failed, 4 skipped** | PostgreSQL-dependent cases skipped |
 | Backend PostgreSQL suite | **23/23 passed previously** | Isolated PostgreSQL 17 cluster and restricted runtime login, 20 November; not rerun 21 November |
@@ -22,11 +22,12 @@ Current emulator XML: `android/app/build/outputs/androidTest-results/connected/d
 - Its intended sequence sends an opening-stock event, simulates response loss after the backend receives the cash sale, closes and reopens SQLCipher, verifies the pending sale and cursor, retries, then checks duplicate acknowledgment and owner projection.
 - Fixed an E2E fixture mistake where a custom product was sold using the demo catalogue, and replaced a weak substring assertion that had accepted an error containing “No sale recorded.”
 - Added validated per-test namespaces for encrypted sync-session vault preferences and Keystore aliases. The default production namespace and API remain unchanged.
-- Verified the existing encrypted outbox/restart test and new namespace-isolation test on the API 37 emulator. Both focused instrumented tests passed; the suite regression contains these tests.
+- Added and passed an API 37 SQLCipher outbox retry test using a deterministic in-process server double. It accepts the opening-stock event, commits the cash sale and drops its acknowledgment, closes and reopens SQLCipher, then retries as a duplicate. The local cursor advances once, both outbox events are acknowledged, and the server double records one accepted command per event.
+- Verified the existing encrypted outbox/restart test and new namespace-isolation test on the API 37 emulator. The latest full connected suite includes these tests.
 
 ## CAT-052 qualification boundary
 
-The corrected SQLCipher-outbox-to-live-backend loss/retry scenario compiled but **was not executed** on 21 November because the isolated PostgreSQL test server was not active. The earlier 20 November Android/backend success used an in-memory journal and remains valid only for that earlier source. A fresh isolated database/server provisioning attempt was denied by the execution policy, so no alternate local database or production service was used.
+The corrected SQLCipher-outbox-to-live-backend loss/retry scenario compiled but **was not executed** on 21 November because the isolated PostgreSQL test server was not active. The new local retry test validates outbox/runner recovery against a deterministic server double, not the backend implementation. The earlier 20 November Android/backend success used an in-memory journal and remains valid only for that earlier source. A fresh isolated database/server provisioning attempt was denied by the execution policy, so no alternate local database or production service was used.
 
 The database-independent backend suite ran 19 tests successfully; its four PostgreSQL cases were skipped. A separate earlier 23/23 isolated PostgreSQL test result is preserved in `test-evidence/2026-11-20/android-sync-e2e/backend-tests.log`.
 
