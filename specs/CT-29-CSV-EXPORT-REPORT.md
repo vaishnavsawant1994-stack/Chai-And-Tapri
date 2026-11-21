@@ -1,7 +1,7 @@
 # CT-29 Local Report CSV Export
 
 **Updated:** 22 November 2026
-**Status:** Formatter JVM-tested; Android SAF export qualified on API 37 with both empty and nonzero synthetic ledger data.
+**Status:** Formatter JVM-tested; API 37 Android SAF success and cancellation paths qualified with synthetic ledger data.
 
 ## Delivered
 
@@ -35,8 +35,12 @@ Added `dailyReportExportsNonzeroSyntheticLedgerThroughSafSaveDialog`, an Android
 
 The exported values were ₹35 (3500 paise) recorded sales, ₹15 (1500 paise) staff-declared cash, ₹20 (2000 paise) UPI pending, and ₹5 (500 paise) recorded operating expenses. It also included one delivered unit for each seeded product, with the all-local-records scope and evidence labels intact. The test exercises the actual Android document picker and destination write; it does not establish provider compatibility beyond this emulator, cancellation/failure behavior, or report usability.
 
-The focused run passed 1/1. The subsequent qualified full-suite XML at `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` includes this export test in the 86-test persistence suite (0 failures/errors/skips across the full 104-test run). The synthetic CSV evidence is ignored by Git and contains no real shop data.
+The focused run passed 1/1. The subsequent qualified full-suite XML at `../android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` includes this export test in the 87-test persistence suite (0 failures/errors/skips across the full 105-test run). A stable ignored copy is at `../test-evidence/2026-11-22/ct29-cancellation-full-suite.xml`. The synthetic CSV/XML evidence is ignored by Git and contains no real shop data.
+
+## Cancellation behavior - 22 November 2026
+
+Added `dailyReportExportCancellationLeavesLedgerUnchanged`. The test seeds a synthetic cash sale, opens the real CreateDocument picker, presses Android system Back to cancel (DocumentsUI does not expose a Cancel node on this API 37 layout), waits for the explicit cancellation message, then compares the complete persisted `CounterSnapshot` before and after. Focused test passed 1/1; the isolated-device full instrumentation suite passed 105/105 with zero failures/errors/skips. The wrapper `android/scripts/run-isolated-connected-tests.cmd emulator-5556` was used; its invalid-device guard was also checked and returned exit code 4 for a nonexistent serial. The full suite evidence is `../test-evidence/2026-11-22/ct29-cancellation-full-suite.xml`. This validates picker cancellation and local ledger immutability on this emulator only.
 
 ## Remaining CT-29 work
 
-Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting, cancellation/write-failure qualification and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
+Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting, destination write-failure qualification and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.

@@ -1838,6 +1838,66 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun dailyReportExportCancellationLeavesLedgerUnchanged() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("ct29_cancel_tea", "Cancel Test Tea", "Chai", 1200, true, true, true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct29_cancel_tea", 4, "synthetic cancellation test", "ct29-cancel-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.quickSale(listOf("ct29_cancel_tea" to 1), "cash", commandId = "ct29-cancel-sale").startsWith("Quick sale"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Seeded synthetic ledger missing") }
+
+        val activity = instrumentation.startActivitySync(Intent(context, DailyReportActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun findNode(prefix: String): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if (node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) return node
+                    for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
+                    return null
+                }
+                return visit(root)
+            }
+            fun awaitNode(prefix: String): AccessibilityNodeInfo {
+                repeat(100) {
+                    findNode(prefix)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("CT-29 cancellation control not found: $prefix")
+            }
+
+            assertTrue(awaitNode("Export current report as CSV").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            var pickerText = ""
+            val pickerDeadline = System.currentTimeMillis() + 30_000
+            while (System.currentTimeMillis() < pickerDeadline) {
+                pickerText = instrumentation.uiAutomation.rootInActiveWindow?.let { root ->
+                    val values = mutableListOf<String>()
+                    fun collect(node: AccessibilityNodeInfo?) {
+                        if (node == null) return
+                        node.text?.toString()?.let(values::add)
+                        for (index in 0 until node.childCount) collect(node.getChild(index))
+                    }
+                    collect(root)
+                    values.joinToString(" | ")
+                }.orEmpty()
+                if (pickerText.contains("Downloads", true) && pickerText.contains("Save", true)) break
+                Thread.sleep(100)
+            }
+            assertTrue("CreateDocument should be open before cancellation: $pickerText", pickerText.contains("Downloads", true) && pickerText.contains("Save", true))
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            assertTrue("Cancellation result should return to the report", awaitNode("CSV export cancelled. No business data was changed.").text.toString().startsWith("CSV export cancelled"))
+
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Ledger missing after cancellation") }
+            assertEquals("Cancelling the picker must not alter any persisted business projection", before, after)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun purchaseReceivingScreenShowsPersistedStockAndSupplierPayable() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

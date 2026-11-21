@@ -2,6 +2,10 @@
 
 This directory contains a native Kotlin feasibility prototype for the Chai And Tapri voice counter. The current app supports a limited demo order model backed by a local SQLite database and a user-reviewed, one-utterance speech flow. It is not a production POS or continuous Bluetooth counter.
 
+## Current-source qualification — 22 November 2026
+
+CT-29 now has API 37 coverage for nonzero SAF CSV export and picker cancellation with ledger snapshot immutability. The isolated emulator full instrumentation suite passed 105/105 with zero failures/errors/skips; endpoint-dependent live-backend instrumentation is excluded and tested separately. Current Node tests are 52/52, Kotlin JVM tests 63/63, APK build tasks pass, and Android lint reports 0 errors / 172 warnings. To avoid testing every connected AVD, use `scripts/run-isolated-connected-tests.cmd <adb-serial>`; this validates the serial and sets `ANDROID_SERIAL` before invoking Gradle. Hardware Bluetooth, physical shop, write-failure, independent security and release qualification remain open. See the [CT-29 report](../specs/CT-29-CSV-EXPORT-REPORT.md) and [current progress audit](../specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md).
+
 ## Current source continuation — 19 November 2026
 
 The encrypted outbox now includes a privacy-minimized expense projection for accepted local expense commands: expense ID, category, paise amount, tender method and declared status. Free-form notes and drawer-session links remain local. Backend validation keeps legacy `projection_delta.v1` events without `expenses` readable and rejects unknown expense fields. Current checks: Kotlin JVM 56/56; backend 16 passed / 4 PostgreSQL-dependent skipped; prototype Node 52/52; debug and instrumentation APK builds passed; lint 0 errors / 161 warnings. The current API 37 instrumentation run did not complete: the emulator stalled before producing a result XML. A focused maintenance-barrier test passed earlier; the current financial-restore focused attempt did not start its test runner. Evidence is under `../test-evidence/2026-11-19/`. This source/build scope is not Android emulator qualification of expense upload or the full recovery workflow.
@@ -17,6 +21,10 @@ From this directory on Windows:
 ```
 
 The verified debug APK output is `app/build/outputs/apk/debug/app-debug.apk`. The current clean run passes 23 Kotlin JVM tests and 10 SQLite/backup/profile instrumentation methods on the API 37 AVD. CT-01 Welcome and CT-02's first shop-profile slice are opened in the emulator; the shop name/type/language/currency write persisted through process restart. This is emulator qualification for the listed prototype flows only; see [CT-01/02 implementation report](../specs/CT-01-02-IMPLEMENTATION-REPORT.md), [master tracker](../specs/MASTER-IMPLEMENTATION-TRACKER.md), [Phase 0 qualification report](../specs/PHASE-0-QUALIFICATION-REPORT.md), [CAT-050B report](../specs/CAT-050-NATIVE-TRANSACTION-PARITY.md), [CAT-051 requirements](../specs/CAT-051-SECURE-OFFLINE-REQUIREMENTS.md), [build status](../specs/CAT-049A-ANDROID-BUILD-STATUS.md), and [emulator diagnosis](../specs/CAT-049-EMULATOR-DIAGNOSTIC.md).
+
+### Isolate instrumentation to one emulator
+
+`connectedDebugAndroidTest` can target every ADB-connected emulator. When more than one device is running, invoke `scripts/run-isolated-connected-tests.cmd <adb-serial>` so the authorized serial is checked and passed through `ANDROID_SERIAL`. Example: `scripts/run-isolated-connected-tests.cmd emulator-5556`. This runner also excludes the optional endpoint-dependent `LiveBackendSyncE2ETest`, which must be run separately with its isolated backend endpoint configured. For a focused Gradle test, set `$env:ANDROID_SERIAL` to the intended test AVD before calling `gradlew.bat` and confirm the Gradle output lists only that serial.
 
 ## Current behavior
 
