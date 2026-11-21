@@ -9,14 +9,14 @@
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 63/63 passed |
-| API 37 instrumentation | 105/105 passed; 0 failures, errors, or skips |
+| API 37 instrumentation | 106/106 passed; 0 failures, errors, or skips |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 172 warnings |
 
-The 105-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes CT-08 UI tests for partial item handover and queue search/status filters and CT-29 nonzero SAF export plus picker cancellation. The endpoint-dependent live-backend Android class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL. The qualified run has zero failures, errors, or skips.
+The 106-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes CT-08 UI tests for partial item handover and queue search/status filters, CT-29 nonzero SAF export plus picker cancellation, and CT-30 low-stock alert review navigation. The endpoint-dependent live-backend Android class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL. The qualified run has zero failures, errors, or skips.
 
 ## Wave status
 
@@ -40,6 +40,10 @@ The local Live Orders queue now filters by order number, item text, fulfillment/
 ## CT-29 nonzero Daily Reports CSV export - 22 November 2026
 
 Added API 37 instrumentation coverage for nonzero CSV export through the Android Storage Access Framework and picker cancellation. Focused export and cancellation tests passed 1/1 each; the qualified full instrumentation suite passed 105/105 with no failures/errors/skips. The saved Downloads CSV was pulled and inspected: ₹35 recorded sales, ₹15 staff-declared cash, ₹20 pending UPI, ₹5 recorded expenses, and one delivered unit for each product. Cancellation returns the explicit result and leaves the full persisted snapshot unchanged. Current regression: Node 52/52, Kotlin JVM 63/63, API 37 instrumentation 105/105 (endpoint-dependent live-backend class excluded), debug and instrumentation APK build tasks PASS, lint 0 errors / 172 warnings. Backend suite remains the previously verified 23/23 isolated PostgreSQL run; it was unchanged and not rerun for this Android-only slice. See [CT-29 report](CT-29-CSV-EXPORT-REPORT.md), the isolated runner `../android/scripts/run-isolated-connected-tests.cmd`, and ignored synthetic evidence `../test-evidence/2026-11-22/ct29-nonzero-export.csv`.
+
+## CT-30 actionable low-stock alert review - 22 November 2026
+
+Business Alerts now provides review navigation from alert cards to the related existing local workflow. The low-stock Review inventory action opens CT-15 Inventory; the focused API 37 test confirms the target screen and verifies the persisted ledger snapshot is unchanged. Focused test passed 1/1; the full serial-pinned API 37 suite passed 106/106 with zero failures/errors/skips. Node 52/52, Kotlin JVM 63/63, APK builds passed, lint 0 errors / 172 warnings. This is selected routing qualification, not full CT-30 or alert usability qualification. The optional backend-only Android class was excluded; backend PostgreSQL 23/23 is the unchanged prior run. See [CT-30 report](CT-30-LOW-STOCK-ALERTS-REPORT.md), ignored [full-suite XML](../test-evidence/2026-11-22/ct30-alert-routing-full-suite.xml), and [test log](../test-evidence/2026-11-22/ct30-alert-routing-full.log).
 
 ## CAT-051B recovery evidence
 

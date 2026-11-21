@@ -1717,6 +1717,43 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun lowStockAlertReviewOpensInventoryWithoutChangingLedger() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("ct30_route_tea", "Route Test Tea", "Chai", 1000, true, false, true, reorderThreshold = 4)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct30_route_tea", 2, "synthetic low-stock route", "ct30-route-stock").startsWith("Opening stock confirmed"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Synthetic alert ledger missing") }
+        val monitor = instrumentation.addMonitor(InventoryOverviewActivity::class.java.name, null, false)
+        val alerts = instrumentation.startActivitySync(Intent(context, BusinessAlertsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var inventory: Activity? = null
+        try {
+            var reviewButton: Button? = null
+            repeat(50) {
+                instrumentation.runOnMainSync {
+                    fun visit(view: View) {
+                        if (view is Button && view.text.toString() == "Review inventory") reviewButton = view
+                        if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+                    }
+                    visit(alerts.findViewById(android.R.id.content))
+                }
+                if (reviewButton == null) Thread.sleep(100)
+            }
+            assertNotNull("Low-stock alert should provide a direct inventory review action", reviewButton)
+            instrumentation.runOnMainSync { requireNotNull(reviewButton).performClick() }
+            inventory = instrumentation.waitForMonitorWithTimeout(monitor, 5_000)
+            assertNotNull("Review inventory should open CT-15", inventory)
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Alert navigation removed the ledger") }
+            assertEquals("Alert navigation is read-only", before, after)
+        } finally {
+            instrumentation.removeMonitor(monitor)
+            instrumentation.runOnMainSync { inventory?.finish(); alerts.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun dailyReportRendersOnlyPersistedLifetimeLedgerTotalsAndDisclaimsProfit() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

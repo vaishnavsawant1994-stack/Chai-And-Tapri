@@ -36,24 +36,24 @@ class BusinessAlertsActivity : Activity() {
                     val products = model.products()
                     val alerts = buildList {
                         model.allOrders().filter { !it.voided && it.fulfillment !in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED) }
-                            .forEach { add(Alert("Open order #${it.number}", "${it.items} · ${it.fulfillment}", false)) }
-                        if (summary.upiPendingPaise > 0) add(Alert("UPI collection pending", money(summary.upiPendingPaise), false))
-                        if (summary.customerReceivablePaise > 0) add(Alert("Customer credit outstanding", money(summary.customerReceivablePaise), false))
+                            .forEach { add(Alert("Open order #${it.number}", "${it.items} · ${it.fulfillment}", false, "Review live orders", LiveOrdersActivity::class.java)) }
+                        if (summary.upiPendingPaise > 0) add(Alert("UPI collection pending", money(summary.upiPendingPaise), false, "Review payments", PaymentActivity::class.java))
+                        if (summary.customerReceivablePaise > 0) add(Alert("Customer credit outstanding", money(summary.customerReceivablePaise), false, "Review customer credit", CustomerCreditActivity::class.java))
                         products.filter { it.active && it.priceConfirmed && !model.isStockConfirmed(it.productId) }
-                            .forEach { add(Alert("Opening stock count required", "${it.name} · quantity is not verified", true)) }
+                            .forEach { add(Alert("Opening stock count required", "${it.name} · quantity is not verified", true, "Review inventory", InventoryOverviewActivity::class.java)) }
                         model.lowStockProducts().forEach { (product, quantity) ->
-                            add(Alert("Low stock · ${product.name}", "$quantity units on hand · alert threshold ${product.reorderThreshold} units", true))
+                            add(Alert("Low stock · ${product.name}", "$quantity units on hand · alert threshold ${product.reorderThreshold} units", true, "Review inventory", InventoryOverviewActivity::class.java))
                         }
                         model.suppliers().forEach { supplier ->
                             val payable = model.supplierPayablePaise(supplier.supplierId)
-                            if (payable > 0) add(Alert("Supplier balance outstanding", "${supplier.name} · ${money(payable)}", false))
+                            if (payable > 0) add(Alert("Supplier balance outstanding", "${supplier.name} · ${money(payable)}", false, "Review purchases", ProcurementActivity::class.java))
                         }
-                        model.activeCashDrawer()?.let { add(Alert("Cash drawer session still open", "Opened ${it.staffLabel?.takeIf(String::isNotBlank) ?: "without an authenticated staff identity"}", true)) }
+                        model.activeCashDrawer()?.let { add(Alert("Cash drawer session still open", "Opened ${it.staffLabel?.takeIf(String::isNotBlank) ?: "without an authenticated staff identity"}", true, "Review shift", StaffShiftsActivity::class.java)) }
                         model.closedCashDrawerHistory().firstOrNull()?.let { session ->
                             val expected = model.expectedCashPaise(session.sessionId)
                             val counted = session.closingCashPaise?.toLong()
                             if (expected != null && counted != null && counted != expected) {
-                                add(Alert("Cash count difference unresolved", "${money(counted - expected)} · closed drawer session", true))
+                                add(Alert("Cash count difference unresolved", "${money(counted - expected)} · closed drawer session", true, "Review daily closing", DailyClosingActivity::class.java))
                             }
                         }
                     }
@@ -71,6 +71,9 @@ class BusinessAlertsActivity : Activity() {
                     alerts.forEach { alert ->
                         content.addView(label("${if (alert.actionRequired) "Action" else "Follow-up"} · ${alert.title}", 17f))
                         content.addView(label(alert.detail, 14f))
+                        if (alert.actionLabel != null && alert.destination != null) {
+                            content.addView(button(alert.actionLabel) { startActivity(Intent(this, alert.destination)) })
+                        }
                     }
                     content.addView(label("Low-stock alerts use only owner-configured thresholds and physically confirmed stock. Overdue-credit and sync alerts are unavailable because due dates and server synchronization are not configured.", 14f))
                     content.addView(button("Refresh") { loadAlerts() })
@@ -86,7 +89,13 @@ class BusinessAlertsActivity : Activity() {
         }
     }
 
-    private data class Alert(val title: String, val detail: String, val actionRequired: Boolean)
+    private data class Alert(
+        val title: String,
+        val detail: String,
+        val actionRequired: Boolean,
+        val actionLabel: String? = null,
+        val destination: Class<out Activity>? = null
+    )
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }
     private fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; minHeight = 56; setOnClickListener { action() } }
     override fun onDestroy() { destroyed = true; super.onDestroy() }
