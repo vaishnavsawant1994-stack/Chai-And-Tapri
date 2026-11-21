@@ -3994,9 +3994,12 @@ class SqliteCounterPersistenceTest {
         val report = recoveryReport.readText(Charsets.US_ASCII).lines()
         assertEquals(expected.number.toString(), report[0])
         assertEquals(expected.salePaise.toString(), report[1])
-        assertEquals("true", report[2])
+        assertEquals("1", report[2])
         assertEquals("true", report[3])
         assertEquals("false", report[4])
+        assertEquals("true", report[5])
+        assertEquals("false", report[6])
+        assertEquals("false", report[7])
 
         // Reopen in the test process too, proving the recovered encrypted database is usable.
         val recovered = CounterModel(SqliteCounterPersistence(context))
@@ -4008,6 +4011,115 @@ class SqliteCounterPersistenceTest {
         assertTrue(recoveryReport.delete())
         assertTrue(marker.delete())
         context.deleteDatabase(databaseName)
+    }
+
+    @Test fun restoreStartupRollsBackReplacementAfterCrashBeforeCommitMarker() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = SqliteCounterPersistence.DATABASE_NAME
+        val token = java.util.UUID.randomUUID().toString()
+        val stagedName = "$databaseName.crash-staged-$token"
+        val marker = java.io.File(context.cacheDir, "restore-process-crash-$token.marker")
+        val recoveryReport = java.io.File(context.cacheDir, "restore-process-recovered-$token.report")
+        val active = context.getDatabasePath(databaseName)
+        val previous = context.getDatabasePath("$databaseName.pre-restore")
+        val interrupted = context.getDatabasePath("$databaseName.restore-interrupted")
+        val staged = context.getDatabasePath(stagedName)
+        context.deleteDatabase(databaseName)
+        context.deleteDatabase(stagedName)
+        context.deleteDatabase(previous.name)
+        context.deleteDatabase(interrupted.name)
+        marker.delete()
+        recoveryReport.delete()
+
+        val original = CounterModel(SqliteCounterPersistence(context))
+        original.apply("real-process-crash-original", ProposedCommand("create", null, "one chai", "chai", 1))
+        val originalOrder = original.allOrders().single()
+        original.close()
+        val localPassphrase = SecureDatabaseKeyManager(context, active, "default").getOrCreatePassphrase()
+        val stagedStore = SqliteCounterPersistence(
+            context, localPassphrase.copyOf(), stagedName, context.applicationContext,
+            false, CounterPersistenceFaultInjector { }
+        )
+        val replacement = CounterModel(stagedStore)
+        replacement.apply("real-process-crash-replacement", ProposedCommand("create", null, "two samosa", "samosa", 2))
+        val replacementOrder = replacement.allOrders().single()
+        replacement.close()
+        assertTrue(staged.exists())
+
+        fun bindHarness(): Pair<ServiceConnection, Messenger> {
+            val connected = java.util.concurrent.CountDownLatch(1)
+            var harness: Messenger? = null
+            val connection = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                    harness = Messenger(service)
+                    connected.countDown()
+                }
+                override fun onServiceDisconnected(name: ComponentName) = Unit
+            }
+            assertTrue(context.bindService(Intent(context, RestoreCrashHarnessService::class.java), connection, Context.BIND_AUTO_CREATE))
+            assertTrue("Crash harness service must bind", connected.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            return connection to checkNotNull(harness)
+        }
+
+        val (crashConnection, crashHarness) = bindHarness()
+        val crashMessage = Message.obtain(null, RestoreCrashHarnessService.WHAT_CRASH_AFTER_REPLACEMENT).apply {
+            data = Bundle().apply {
+                putString(RestoreCrashHarnessService.EXTRA_DATABASE_NAME, databaseName)
+                putString(RestoreCrashHarnessService.EXTRA_STAGED_DATABASE_NAME, stagedName)
+                putString(RestoreCrashHarnessService.EXTRA_TOKEN, token)
+            }
+        }
+        runCatching { crashHarness.send(crashMessage) }
+        val deadline = System.currentTimeMillis() + 15_000
+        while (!marker.exists() && System.currentTimeMillis() < deadline) Thread.sleep(50)
+        assertTrue("Replacement checkpoint must be durable before process exit", marker.exists())
+        context.unbindService(crashConnection)
+        val crashedPid = marker.readText(Charsets.US_ASCII).toInt()
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val processExitDeadline = System.currentTimeMillis() + 10_000
+        while (activityManager.runningAppProcesses.orEmpty().any { it.pid == crashedPid } && System.currentTimeMillis() < processExitDeadline) Thread.sleep(50)
+        assertFalse("Replacement process must exit before startup recovery", activityManager.runningAppProcesses.orEmpty().any { it.pid == crashedPid })
+        assertTrue("Activated replacement database must exist at the crash checkpoint", active.exists())
+        assertTrue("Previous encrypted database must remain available for rollback", previous.exists())
+
+        val (recoveryConnection, recoveryHarness) = bindHarness()
+        recoveryHarness.send(Message.obtain(null, RestoreCrashHarnessService.WHAT_RECOVER_AND_REPORT).apply {
+            data = Bundle().apply { putString(RestoreCrashHarnessService.EXTRA_TOKEN, token) }
+        })
+        val recoveryDeadline = System.currentTimeMillis() + 15_000
+        while (!recoveryReport.exists() && System.currentTimeMillis() < recoveryDeadline) Thread.sleep(50)
+        assertTrue("Fresh process must recover original data", recoveryReport.exists())
+        context.unbindService(recoveryConnection)
+
+        val report = recoveryReport.readText(Charsets.US_ASCII).lines()
+        assertEquals(originalOrder.number.toString(), report[0])
+        assertEquals(originalOrder.salePaise.toString(), report[1])
+        assertEquals("1", report[2])
+        assertEquals("true", report[3])
+        assertEquals("false", report[4])
+        assertEquals("true", report[5])
+        assertEquals("false", report[6])
+        assertEquals("true", report[7])
+
+        val restored = CounterModel(SqliteCounterPersistence(context))
+        assertEquals(originalOrder.number, restored.allOrders().single().number)
+        assertTrue(restored.auditEvents().any { it.contains("real-process-crash-original") })
+        restored.close()
+        val interruptedStore = SqliteCounterPersistence(
+            context, localPassphrase.copyOf(), interrupted.name, context.applicationContext,
+            false, CounterPersistenceFaultInjector { }
+        )
+        val preservedReplacement = CounterModel(interruptedStore)
+        assertEquals(replacementOrder.number, preservedReplacement.allOrders().single().number)
+        assertTrue(preservedReplacement.auditEvents().any { it.contains("real-process-crash-replacement") })
+        preservedReplacement.close()
+
+        localPassphrase.fill(0)
+        assertTrue("Recovery report cleanup should succeed", recoveryReport.delete())
+        assertTrue("Crash marker cleanup should succeed", marker.delete())
+        context.deleteDatabase(databaseName)
+        context.deleteDatabase(interrupted.name)
+        context.deleteDatabase(stagedName)
     }
 
     @Test fun restoreJournalFinalizesVerifiedReplacementAfterCommitMarker() {

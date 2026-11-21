@@ -17,8 +17,11 @@ internal class RestoreCrashHarnessService : Service() {
         Messenger(Handler(Looper.getMainLooper()) { message ->
             val token = message.data.getString(EXTRA_TOKEN) ?: error("Missing crash-test token.")
             when (message.what) {
-                WHAT_CRASH_AFTER_PRESERVE -> crashAfterPreserve(
-                    message.data.getString(EXTRA_DATABASE_NAME) ?: error("Missing database name."), token
+                WHAT_CRASH_AFTER_PRESERVE, WHAT_CRASH_AFTER_REPLACEMENT -> crashAtCutover(
+                    message.what,
+                    message.data.getString(EXTRA_DATABASE_NAME) ?: error("Missing database name."),
+                    message.data.getString(EXTRA_STAGED_DATABASE_NAME),
+                    token
                 )
                 WHAT_RECOVER_AND_REPORT -> recoverAndReport(token)
                 else -> error("Unsupported restore crash checkpoint.")
@@ -29,15 +32,25 @@ internal class RestoreCrashHarnessService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = messenger.binder
 
-    private fun crashAfterPreserve(databaseName: String, token: String) {
+    private fun crashAtCutover(checkpoint: Int, databaseName: String, stagedDatabaseName: String?, token: String) {
         check(databaseName == SqliteCounterPersistence.DATABASE_NAME) { "Only the synthetic default test database is allowed." }
         check(token.matches(Regex("[A-Za-z0-9-]{1,64}"))) { "Invalid crash-test token." }
 
         val active = getDatabasePath(databaseName)
         val previous = getDatabasePath("$databaseName.pre-restore")
         check(active.exists() && !previous.exists()) { "Crash checkpoint requires one active database and no previous copy." }
-        check(moveDatabaseFamily(active, previous)) { "Could not preserve the active database for the crash drill." }
+        val staged = if (checkpoint == WHAT_CRASH_AFTER_REPLACEMENT) {
+            val expected = "$databaseName.crash-staged-$token"
+            check(stagedDatabaseName == expected) { "Replacement checkpoint requires its token-bound staged database." }
+            getDatabasePath(expected).also { check(it.exists()) { "Staged replacement database is missing." } }
+        } else null
         RestoreRecoveryJournal.markPending(this, databaseName, "process-crash-$token")
+        check(moveDatabaseFamily(active, previous)) { "Could not preserve the active database for the crash drill." }
+        if (staged != null && !moveDatabaseFamily(staged, active)) {
+            check(moveDatabaseFamily(previous, active)) { "Could not roll back synthetic crash-harness setup." }
+            RestoreRecoveryJournal.clearPending(this, databaseName)
+            error("Could not activate staged replacement for the crash drill.")
+        }
 
         val marker = File(cacheDir, "restore-process-crash-$token.marker")
         FileOutputStream(marker).use { stream ->
@@ -59,9 +72,12 @@ internal class RestoreCrashHarnessService : Service() {
             val report = listOf(
                 order.number.toString(),
                 order.salePaise.toString(),
+                model.allOrders().size.toString(),
                 model.auditEvents().any { it.contains("real-process-crash-original") }.toString(),
+                model.auditEvents().any { it.contains("real-process-crash-replacement") }.toString(),
                 (pending == null).toString(),
-                getDatabasePath("${SqliteCounterPersistence.DATABASE_NAME}.pre-restore").exists().toString()
+                getDatabasePath("${SqliteCounterPersistence.DATABASE_NAME}.pre-restore").exists().toString(),
+                getDatabasePath("${SqliteCounterPersistence.DATABASE_NAME}.restore-interrupted").exists().toString()
             ).joinToString("\n")
             FileOutputStream(File(cacheDir, "restore-process-recovered-$token.report")).use { stream ->
                 stream.write(report.toByteArray(Charsets.US_ASCII))
@@ -90,7 +106,9 @@ internal class RestoreCrashHarnessService : Service() {
     companion object {
         const val WHAT_CRASH_AFTER_PRESERVE = 1
         const val WHAT_RECOVER_AND_REPORT = 2
+        const val WHAT_CRASH_AFTER_REPLACEMENT = 3
         const val EXTRA_DATABASE_NAME = "database_name"
+        const val EXTRA_STAGED_DATABASE_NAME = "staged_database_name"
         const val EXTRA_TOKEN = "test_token"
     }
 }
