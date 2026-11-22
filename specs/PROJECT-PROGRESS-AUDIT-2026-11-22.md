@@ -25,7 +25,7 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 
 ## CAT-052 live encrypted-outbox retry update
 
-After the full Android regression, the excluded endpoint-dependent live test was separately executed: **1/1 API 37 instrumentation passed**. The PostgreSQL-backed backend suite passed **23/23, 0 skipped** on a fresh isolated local PostgreSQL 17 cluster. The synthetic run verified SQLCipher outbox retry after a backend commit and simulated lost acknowledgment, with database close/reopen; final PostgreSQL counts were 1 shop, 2 accepted events, 0 conflicts. Evidence: `../test-evidence/2026-11-22/android-sync-e2e-refresh/`. This does not test process-death recovery or production synchronization; CAT-052 remains prototype-qualified. See [CAT-052 report](CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md).
+After the full Android regression, the excluded endpoint-dependent live test passed **1/1 API 37 instrumentation** against isolated PostgreSQL. A two-invocation extension also passed **1/1 prepare and 1/1 resume** after the prior instrumentation process ended with an open SQLCipher connection and pending sale. It proves app-scoped encrypted-store recovery across instrumentation-process termination, not production app-process, WorkManager or in-flight request recovery. The original E2E run reported 1 synthetic shop, 2 accepted events, 0 conflicts; backend suite passed **24/24** after OW-12 work. Evidence: `../test-evidence/2026-11-22/android-sync-e2e-refresh/`. CAT-052 remains prototype-qualified. See [CAT-052 report](CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md) and [restart report](CAT-052-INSTRUMENTATION-PROCESS-RESTART-REPORT.md).
 
 | Suite / check | Result |
 |---|---:|

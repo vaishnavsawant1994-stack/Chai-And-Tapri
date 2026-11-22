@@ -11,6 +11,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.IOException
+import java.io.File
 import java.net.URL
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
@@ -61,9 +62,17 @@ class LiveBackendSyncE2ETest {
         val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        val phase = args.getString("syncE2ePhase") ?: "close_reopen"
+        if (phase == "resume_after_process_death") {
+            resumeAfterProcessDeath(endpointBase!!, context, instrumentation)
+            return
+        }
+        assumeTrue("Unsupported syncE2ePhase.", phase in setOf("close_reopen", "prepare_process_death"))
         val storeId = UUID.randomUUID().toString().replace("-", "")
         val databaseName = "sync_e2e_$storeId.db"
         val keyNamespace = "sync_e2e_$storeId"
+        val processDeathState = File(context.noBackupFilesDir, "cat052-process-death-state.json")
+        var preserveForProcessDeath = false
         var model: CounterModel? = null
         var reopened: SqliteCounterPersistence? = null
         try {
@@ -113,6 +122,17 @@ class LiveBackendSyncE2ETest {
             assertTrue("The test fault should simulate the lost response", firstAttempt.exceptionOrNull() is IOException)
             assertEquals("Sale remains the only unacknowledged local event", listOf(saleEvent!!.eventId), persistence.loadPendingSyncEvents(20).map { it.eventId })
             assertEquals("Earlier stock event should have advanced the stored cursor", 1L, persistence.loadSyncCursor())
+            if (phase == "prepare_process_death") {
+                processDeathState.writeText(JSONObject()
+                    .put("databaseName", databaseName)
+                    .put("keyNamespace", keyNamespace)
+                    .put("preparedProcessId", android.os.Process.myPid())
+                    .toString(), Charsets.UTF_8)
+                // Intentionally keep the SQLCipher connection open. The host
+                // force-stops this instrumentation process before phase two.
+                preserveForProcessDeath = true
+                return
+            }
             model!!.close()
             model = null
 
@@ -143,13 +163,69 @@ class LiveBackendSyncE2ETest {
             assertFalse("A server retry must not duplicate the accepted order", overview.getInt("recordedOrderCount") > 1)
             SyncAccountClient(transport).logout(session)
         } finally {
-            model?.close()
-            reopened?.close()
+            if (!preserveForProcessDeath) {
+                model?.close()
+                reopened?.close()
+                instrumentation.runOnMainSync { LocalSessionState.clear() }
+                context.deleteDatabase(databaseName)
+                context.getSharedPreferences("chai_tapri_secure_key_envelope.$keyNamespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+                SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace)
+                SyncSessionVault(context, keyNamespace).clear()
+                processDeathState.delete()
+            }
+            HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
+        }
+    }
+
+    private fun resumeAfterProcessDeath(endpointBase: String, context: android.content.Context, instrumentation: android.app.Instrumentation) {
+        val processDeathState = File(context.noBackupFilesDir, "cat052-process-death-state.json")
+        assertTrue("First phase must leave a synthetic encrypted outbox before the host force-stops the app.", processDeathState.isFile)
+        val state = JSONObject(processDeathState.readText(Charsets.UTF_8))
+        val databaseName = state.getString("databaseName")
+        val keyNamespace = state.getString("keyNamespace")
+        val preparedProcessId = state.getInt("preparedProcessId")
+        assertTrue("The app process must have been restarted between phases.", preparedProcessId != android.os.Process.myPid())
+        val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        var persistence: SqliteCounterPersistence? = null
+        try {
+            configureTestTrust()
+            val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
+            val session = SyncSessionVault(context, keyNamespace).load()
+                ?: throw AssertionError("Encrypted test sync session should survive process death.")
+            persistence = SqliteCounterPersistence(context, databaseName, keyNamespace)
+            val model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            assertEquals(2_500, model.allOrders().single().salePaise)
+            assertEquals(9, model.stockLevels()["e2e_chai"])
+            assertEquals(1L, persistence!!.loadSyncCursor())
+            val pending = persistence!!.loadPendingSyncEvents(20)
+            assertEquals("The sale remains pending after actual app process termination.", 1, pending.size)
+            assertTrue(pending.single().commandId.startsWith("e2e-sale-"))
+
+            val retry = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(session.endpointBase, session.identity, session.bearerToken)
+            assertEquals(1, retry.acknowledged)
+            assertEquals(2L, retry.serverRevision)
+            assertTrue(persistence!!.loadPendingSyncEvents(20).isEmpty())
+            assertEquals(2L, persistence!!.loadSyncCursor())
+            model.close()
+            persistence!!.close()
+            persistence = null
+
+            val overview = getJson("${session.endpointBase}/v1/dashboard/overview?shopId=${session.identity.shopId}", session.bearerToken)
+            assertEquals(2L, overview.getLong("serverRevision"))
+            assertEquals(2, overview.getInt("acceptedEventCount"))
+            assertEquals(1, overview.getInt("recordedOrderCount"))
+            assertEquals(2_500, overview.getLong("cashCollectedPaise"))
+            assertFalse("A process-death retry must not duplicate the accepted order.", overview.getInt("recordedOrderCount") > 1)
+            SyncAccountClient(transport).logout(session)
             instrumentation.runOnMainSync { LocalSessionState.clear() }
+        } finally {
+            persistence?.close()
             context.deleteDatabase(databaseName)
             context.getSharedPreferences("chai_tapri_secure_key_envelope.$keyNamespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
-            SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace)
-            SyncSessionVault(context, keyNamespace).clear()
+            runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace) }
+            runCatching { SyncSessionVault(context, keyNamespace).clear() }
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            processDeathState.delete()
             HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
         }
     }

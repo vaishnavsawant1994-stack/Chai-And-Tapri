@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CAT-052 outbox recovery after process termination - 22 November 2026
+
+The live sync test now runs in two instrumentation invocations. The first leaves the SQLCipher model open with a sale pending after a server-committed lost acknowledgment; the next process reopens the encrypted session and database, retries idempotently, and verifies the order is not duplicated. Both phases passed 1/1 on API 37 after debug and test APK builds. Evidence logs are local under `test-evidence/2026-11-22/android-sync-e2e-refresh/`. This verifies app-scoped SQLCipher recovery across instrumentation-process termination, not production app/WorkManager/background-request recovery. See [CAT-052 process-restart report](specs/CAT-052-INSTRUMENTATION-PROCESS-RESTART-REPORT.md).
+
 ## Latest continuation - OW-12 accepted event history - 22 November 2026
 
 Added an owner-only authenticated endpoint and dashboard tab for the latest server-accepted sync event metadata. It shows bounded revisions, server receipt timestamps, opaque event IDs, and counts of changed record categories; raw payloads, amounts, product/customer IDs, device IDs, and staff identity are excluded. The view discloses that the current command contract cannot attribute activity to an employee and that this is not a complete audit trail. The PostgreSQL-backed backend suite passed 24/24 with no skips on an isolated PostgreSQL 17 cluster; backend and owner-web JavaScript syntax checks passed. Browser visual review remains authorization-gated. See [OW-12 report](specs/OW-12-AUDIT-HISTORY-REPORT.md). The complete dashboard and product remain partial.

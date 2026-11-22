@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## CAT-052 outbox recovery across instrumentation-process termination - 22 November 2026
+
+Two independently invoked API 37 test phases passed 1/1 each. Phase one left the SQLCipher store open with a sale pending after the backend committed but its acknowledgment was lost; the next instrumentation process verified a new PID, reopened the encrypted database and session, retried idempotently, and confirmed one server order. This qualifies app-scoped storage recovery across instrumentation-process termination, not the production app/WorkManager/background-request lifecycle. See [report](CAT-052-INSTRUMENTATION-PROCESS-RESTART-REPORT.md).
+
 ## OW-12 accepted event history - 22 November 2026
 
 Added a bounded, owner-only server event-history API and dashboard view with privacy-limited metadata/counts and explicit limits. PostgreSQL backend tests passed 24/24, zero skipped; JavaScript syntax checks passed. This is not a complete staff audit trail and remains subject to authorized browser visual review. See [OW-12 report](OW-12-AUDIT-HISTORY-REPORT.md).
