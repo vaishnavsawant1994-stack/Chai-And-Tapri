@@ -4,6 +4,7 @@ import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, bui
 import { ApiError } from '../src/errors.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
+import { buildOwnerReportCsv } from '../../owner-web/report-export.mjs';
 
 const row = (serverRevision, payload, receivedAt = new Date(`2026-11-01T10:00:${String(serverRevision).padStart(2, '0')}Z`)) => ({
   server_revision: serverRevision,
@@ -11,6 +12,20 @@ const row = (serverRevision, payload, receivedAt = new Date(`2026-11-01T10:00:${
   envelope: { payload: { kind: 'projection_delta.v1', ...payload } }
 });
 const empty = { orders: [], stock: [], stockMovements: [], customerCredits: [], repayments: [], paymentEntries: [] };
+
+test('owner report CSV preserves Unicode and numeric negatives while neutralizing spreadsheet formulas', () => {
+  const csv = buildOwnerReportCsv({
+    title: 'Sales activity', shopName: 'चाय "Tapri"', scope: 'Accepted events only', loadedAt: '2026-11-23T12:00:00.000Z',
+    metrics: [{ title: 'Refund', value: '-₹10.00', note: 'Declared' }], evidence: ['Not profit'],
+    sections: [{ title: 'Products', headers: ['Product', 'Value'], rows: [['=HYPERLINK("x")', '-10']] }]
+  });
+  assert.ok(csv.startsWith('\uFEFF'));
+  assert.match(csv, /चाय ""Tapri""/);
+  assert.match(csv, /'=HYPERLINK\(""x""\)/);
+  assert.match(csv, /,"-10"/);
+  assert.match(csv, /Not profit/);
+  assert.throws(() => buildOwnerReportCsv({ title: 'Bad', sections: [{ headers: ['A', 'B'], rows: [['only one']] }] }), /Invalid report row/);
+});
 
 test('owner audit history returns newest accepted-event metadata without payload identifiers or amounts', () => {
   const result = buildAuditHistory({
@@ -350,6 +365,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="profit-missing-list"/);
   assert.match(pageText, /Accepted event history/);
   assert.match(pageText, /id="audit-rows"/);
+  assert.match(pageText, /id="export-report-button"/);
+  assert.match(pageText, /type="module"/);
   const script = await fetch(`${base}/owner/app.js`);
   assert.equal(script.status, 200);
   const scriptText = await script.text();
@@ -360,6 +377,11 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
   assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
   assert.match(scriptText, /\/v1\/dashboard\/audit/);
+  assert.match(scriptText, /buildOwnerReportCsv/);
+  const exporter = await fetch(`${base}/owner/report-export.mjs`);
+  assert.equal(exporter.status, 200);
+  assert.match(exporter.headers.get('content-type'), /javascript/);
+  assert.match(await exporter.text(), /buildOwnerReportCsv/);
 
   const denied = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`);
   assert.equal(denied.status, 401);

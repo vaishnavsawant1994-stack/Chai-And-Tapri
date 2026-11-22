@@ -1,3 +1,5 @@
+import { buildOwnerReportCsv } from './report-export.mjs';
+
 (() => {
   const $ = (id) => document.getElementById(id);
   const loginPanel = $('login-panel');
@@ -5,6 +7,8 @@
   const connection = $('connection-state');
   let session = null;
   let activeShopId = null;
+  let activeView = 'overview';
+  const reportSnapshots = new Map();
 
   const money = (paise) => new Intl.NumberFormat('en-IN', {
     style: 'currency', currency: 'INR', maximumFractionDigits: 2
@@ -35,6 +39,8 @@
   const showError = (error) => error instanceof Error ? error.message : 'The request could not be completed.';
 
   function setView(view) {
+    activeView = view;
+    $('export-report-button').disabled = !reportSnapshots.has(view);
     const overview = view === 'overview';
     const products = view === 'products';
     const inventory = view === 'inventory';
@@ -66,9 +72,49 @@
     $('audit-tab').setAttribute('aria-current', audit ? 'page' : 'false');
   }
 
+  function captureReport(view, title, scopeId, metricsId, evidenceIds) {
+    const container = $(`${view}-view`);
+    const metrics = metricsId ? [...$(metricsId).querySelectorAll('.metric-card')].map((card) => ({
+      title: card.querySelector('h3')?.textContent ?? '',
+      value: card.querySelector('.metric-value')?.textContent ?? '',
+      note: card.querySelector('.metric-note')?.textContent ?? ''
+    })) : [];
+    const sections = [...container.querySelectorAll('table')].map((table) => ({
+      title: table.closest('.panel')?.querySelector('h3')?.textContent ?? title,
+      headers: [...table.querySelectorAll('thead th')].map((cell) => cell.textContent.trim()),
+      rows: [...table.querySelectorAll('tbody tr')].map((row) => {
+        const values = [...row.cells].map((cell) => cell.textContent.trim());
+        return values.length === 1 && row.cells[0].colSpan > 1
+          ? [values[0], ...Array(sectionWidth(table) - 1).fill('')]
+          : values;
+      })
+    })).filter((section) => section.headers.length);
+    const evidence = evidenceIds.flatMap((id) => [...$(id).querySelectorAll('li')].map((item) => item.textContent.trim()));
+    reportSnapshots.set(view, {
+      title,
+      shopName: $('shop-name').textContent.trim(),
+      scope: $(scopeId).textContent.trim(),
+      loadedAt: new Date().toISOString(),
+      metrics,
+      evidence,
+      sections
+    });
+    $('export-report-button').disabled = activeView !== view;
+  }
+
+  function sectionWidth(table) {
+    return table.querySelectorAll('thead th').length;
+  }
+
+  function invalidateReport(view) {
+    reportSnapshots.delete(view);
+    if (activeView === view) $('export-report-button').disabled = true;
+  }
+
   async function loadOverview() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('overview');
     setStatus($('dashboard-status'), 'Loading accepted shop records…');
     try {
       const data = await request(`/v1/dashboard/overview?shopId=${encodeURIComponent(activeShopId)}`, {
@@ -97,6 +143,7 @@
       connection.textContent = 'Connected';
       connection.dataset.state = 'ready';
       setStatus($('dashboard-status'), 'Overview refreshed from accepted server events.', 'success');
+      captureReport('overview', 'Shop overview', 'data-scope', 'metrics', ['evidence-list']);
     } catch (error) {
       setStatus($('dashboard-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -108,6 +155,7 @@
   async function loadProducts() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('products');
     setStatus($('products-status'), 'Loading latest accepted product recordsâ€¦');
     try {
       const data = await request(`/v1/dashboard/products?shopId=${encodeURIComponent(activeShopId)}`, {
@@ -141,6 +189,7 @@
         const item = document.createElement('li'); item.textContent = text; return item;
       }));
       setStatus($('products-status'), `Product performance refreshed at server revision ${data.serverRevision}.`, 'success');
+      captureReport('products', 'Product performance', 'products-scope', 'product-metrics', ['product-evidence-list']);
     } catch (error) {
       setStatus($('products-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -152,6 +201,7 @@
   async function loadInventory() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('inventory');
     setStatus($('inventory-status'), 'Loading latest accepted inventory records…');
     try {
       const data = await request(`/v1/dashboard/inventory?shopId=${encodeURIComponent(activeShopId)}`, {
@@ -196,6 +246,7 @@
         const item = document.createElement('li'); item.textContent = text; return item;
       }));
       setStatus($('inventory-status'), `Inventory refreshed at server revision ${data.serverRevision}.`, 'success');
+      captureReport('inventory', 'Inventory snapshot', 'inventory-scope', 'inventory-metrics', ['inventory-evidence-list']);
     } catch (error) {
       setStatus($('inventory-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -207,6 +258,7 @@
   async function loadActivity() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('activity');
     setStatus($('activity-status'), 'Loading server-accepted sales activity…');
     try {
       const days = $('activity-range').value;
@@ -246,6 +298,7 @@
         const item = document.createElement('li'); item.textContent = text; return item;
       }));
       setStatus($('activity-status'), `Sales activity refreshed at server revision ${data.serverRevision}.`, 'success');
+      captureReport('activity', 'Sales activity', 'activity-scope', 'activity-metrics', ['activity-expense-categories', 'activity-evidence-list']);
     } catch (error) {
       setStatus($('activity-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -257,6 +310,7 @@
   async function loadCashflow() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('cashflow');
     setStatus($('cashflow-status'), 'Loading accepted money movement records…');
     try {
       const days = $('cashflow-range').value;
@@ -289,6 +343,7 @@
         const item = document.createElement('li'); item.textContent = text; return item;
       }));
       setStatus($('cashflow-status'), `Recorded money movements refreshed at server revision ${data.serverRevision}.`, 'success');
+      captureReport('cashflow', 'Recorded money movements', 'cashflow-scope', 'cashflow-metrics', ['cashflow-evidence-list']);
     } catch (error) {
       setStatus($('cashflow-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -300,6 +355,7 @@
   async function loadProfitReadiness() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('profit');
     setStatus($('profit-status'), 'Checking accepted sales and cost-data coverage…');
     try {
       const days = $('profit-range').value;
@@ -322,6 +378,7 @@
       appendEvidence('profit-missing-list', data.missingInputs);
       appendEvidence('profit-evidence-list', [data.evidence.sales, data.evidence.expenses, data.evidence.result]);
       setStatus($('profit-status'), `Profit readiness refreshed at server revision ${data.serverRevision}; calculation remains unavailable.`, 'success');
+      captureReport('profit', 'Profit readiness', 'profit-scope', 'profit-metrics', ['profit-missing-list', 'profit-evidence-list']);
     } catch (error) {
       setStatus($('profit-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -333,6 +390,7 @@
   async function loadAuditHistory() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    invalidateReport('audit');
     setStatus($('audit-status'), 'Loading accepted event metadata…');
     try {
       const limit = $('audit-limit').value;
@@ -351,6 +409,7 @@
       $('audit-rows').replaceChildren(...rows);
       $('audit-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
       setStatus($('audit-status'), `${data.returnedEventCount} accepted events loaded through server revision ${data.serverRevision}.`, 'success');
+      captureReport('audit', 'Accepted event history', 'audit-scope', null, ['audit-evidence-list']);
     } catch (error) {
       setStatus($('audit-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
@@ -360,6 +419,8 @@
   function signOutLocally() {
     session = null;
     activeShopId = null;
+    reportSnapshots.clear();
+    $('export-report-button').disabled = true;
     setView('overview');
     dashboardPanel.classList.add('hidden');
     loginPanel.classList.remove('hidden');
@@ -407,6 +468,19 @@
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
     else if (!$('audit-view').classList.contains('hidden')) loadAuditHistory();
     else loadOverview();
+  });
+  $('export-report-button').addEventListener('click', () => {
+    const report = reportSnapshots.get(activeView);
+    if (!report || !session) return;
+    const csv = buildOwnerReportCsv(report);
+    const blobUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `chai-and-tapri-${activeView}-${new Date(report.loadedAt).toISOString().replaceAll(':', '-')}.csv`;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
+    const statusId = activeView === 'overview' ? 'dashboard-status' : `${activeView}-status`;
+    setStatus($(statusId), 'Exported the currently displayed accepted-server report as CSV.', 'success');
   });
   $('overview-tab').addEventListener('click', () => setView('overview'));
   $('products-tab').addEventListener('click', () => { setView('products'); loadProducts(); });

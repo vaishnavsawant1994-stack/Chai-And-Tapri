@@ -7,6 +7,7 @@ const ownerAssets = new Map([
   ['/owner/', ['../../owner-web/index.html', 'text/html; charset=utf-8']],
   ['/owner/index.html', ['../../owner-web/index.html', 'text/html; charset=utf-8']],
   ['/owner/app.js', ['../../owner-web/app.js', 'text/javascript; charset=utf-8']],
+  ['/owner/report-export.mjs', ['../../owner-web/report-export.mjs', 'text/javascript; charset=utf-8']],
   ['/owner/styles.css', ['../../owner-web/styles.css', 'text/css; charset=utf-8']]
 ]);
 async function serveOwnerAsset(path,res) {

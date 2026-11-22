@@ -935,6 +935,10 @@ On the fresh synthetic API 37 AVD, a two-phase test queued the production sync w
 
 This covers process death while work is queued, not process death during an in-flight retry or HTTP request. Full Android regression, production synchronization/accounting, physical hardware, field trials, independent security review and release readiness remain open.
 
+## OW-15 owner report CSV export - 23 November 2026
+
+Added an owner-only dashboard export action for the currently displayed accepted-server report. It exports the last successful view for overview, product performance, inventory, activity, cashflow, profit readiness, and accepted event metadata. Export snapshots are invalidated before refresh and cleared at local sign-out; CSV encoding includes visible evidence/limitations, Unicode, safe quoting, and formula-leading text protection. Empty table rows are padded to the visible header width. The static asset is served under the existing same-origin CSP. Validation: owner report CSV test and authenticated owner static-route test passed; Node suite reported 21 passed, 0 failed, 4 database-dependent skipped without the isolated PostgreSQL test connection; both owner JavaScript modules passed `node --check`. No browser visual review was performed. This is a report-export slice, not a general ledger, and connected owner views remain limited by accepted sync entities. See `specs/OW-15-OWNER-REPORT-CSV-EXPORT-REPORT-2026-11-23.md`.
+
 ## CT-29 historical date selection - 22 November 2026
 
 Added `dailyReportDatePickerSelectsPreviousLocalDayWithoutChangingLedger`. It derives the business date from the report UI, selects the preceding day through Android's native date picker, and verifies the persisted ledger snapshot remains unchanged. Focused API 37 instrumentation passed 1/1; evidence: `test-evidence/2026-11-22/ct29-historical-date-focused.xml`. The test uses the full accessible calendar date to avoid matching a neighboring month's same day number. The subsequent current-source isolated API 37 run passed 111/111; the previous 110-attempt/30-ANR result is superseded. Project-wide and six-wave completion remain outstanding.
