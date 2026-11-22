@@ -218,21 +218,24 @@ class LiveBackendSyncE2ETest {
             val receiptId = model!!.purchaseHistory().single().receiptId
             val returnCommand = "supplier-return-${UUID.randomUUID()}"
             assertTrue(model!!.returnPurchase(supplierId, receiptId, mapOf(productId to 1), "synthetic sealed pack return", returnCommand).contains("return recorded", ignoreCase = true))
+            val expenseCommand = "supplier-sync-expense-${UUID.randomUUID()}"
+            assertTrue(model!!.recordExpense("transport", 7_500, "cash", "PRIVATE-EXPENSE-NOTE", expenseCommand).startsWith("Expense recorded"))
 
-            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand)
+            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand, expenseCommand)
             val pending = persistence!!.loadPendingSyncEvents(20)
-            assertEquals("Opening stock, receipt, settlement, and return should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
+            assertEquals("Opening stock, receipt, settlement, return, and expense should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
             val sync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(session!!.endpointBase, session!!.identity, session!!.bearerToken)
-            assertEquals(4, sync.acknowledged)
-            assertEquals(4L, sync.serverRevision)
+            assertEquals(5, sync.acknowledged)
+            assertEquals(5L, sync.serverRevision)
             assertTrue(persistence!!.loadPendingSyncEvents(20).isEmpty())
             assertEquals(300L, model!!.supplierPayablePaise(supplierId))
             assertEquals(4, model!!.stockLevels()[productId])
+            assertEquals(7_500L, model!!.totalExpensesPaise())
             model!!.close(); model = null
             persistence!!.close(); persistence = null
 
             val balances = getJson("${session!!.endpointBase}/v1/dashboard/suppliers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
-            assertEquals(4L, balances.getLong("serverRevision"))
+            assertEquals(5L, balances.getLong("serverRevision"))
             assertEquals(1, balances.getInt("supplierCount"))
             assertEquals(1_000L, balances.getLong("totalReceiptsPaise"))
             assertEquals(200L, balances.getLong("totalPaymentsPaise"))
@@ -242,6 +245,14 @@ class LiveBackendSyncE2ETest {
             assertTrue(summary.getString("supplierId").matches(Regex("^[0-9a-fA-F-]{36}$")))
             assertTrue("Owner projection must not expose supplier or product details", !balances.toString().contains("Private Supplier Name") && !balances.toString().contains("PRIVATE-INVOICE-DETAIL") && !balances.toString().contains("Private Tea Detail") && !balances.toString().contains("+919876543210"))
             assertTrue(balances.getJSONObject("evidence").getString("verification").contains("not bank-verified"))
+            val activity = getJson("${session!!.endpointBase}/v1/dashboard/activity?shopId=${session!!.identity.shopId}&days=7", session!!.bearerToken)
+            assertEquals(5L, activity.getLong("serverRevision"))
+            assertEquals(7_500L, activity.getJSONObject("totals").getLong("staffDeclaredExpensesPaise"))
+            val category = activity.getJSONArray("expenseCategories").getJSONObject(0)
+            assertEquals("transport", category.getString("category"))
+            assertEquals(7_500L, category.getLong("amountPaise"))
+            assertEquals(1, category.getInt("count"))
+            assertFalse("Owner activity projection must not expose private expense notes", activity.toString().contains("PRIVATE-EXPENSE-NOTE"))
             SyncAccountClient(transport).logout(session!!)
         } finally {
             model?.close()
