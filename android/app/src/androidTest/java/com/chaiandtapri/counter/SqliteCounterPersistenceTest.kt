@@ -2275,8 +2275,28 @@ class SqliteCounterPersistenceTest {
                 assertEquals(2, model.stockMovements().count { it.reason == "purchase_receipt" })
                 assertTrue(model.auditEvents().any { it.contains("supplier.payment_recorded") && it.contains("status=staff_declared") })
             }
+            click("Return unused stock from receipt")
+            clickNodeOrClickableParent(findNode(prefix = "CT18 UI Tea"))
+            click("CT18 UI Tea")
+            setField("Return quantity", "1")
+            setField("Reason for return", "Damaged outer pack")
+            click("Review return")
+            click("Confirm return")
+            findNode(prefix = "Purchase return recorded")
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals("One returned unit is deducted exactly once", 8, model.stockLevels()["ct18_ui_tea"])
+                assertEquals("Return reduces payable without deleting the supplier payment", 1000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                val returned = model.purchaseReturnHistory().single()
+                assertEquals(1, returned.lines.single().quantity)
+                assertEquals("ct18_ui_tea", returned.lines.single().productId)
+                assertEquals(500L, returned.totalPaise)
+                assertEquals(500, model.supplierPaymentHistory().single().amountPaise)
+                assertEquals(1, model.stockMovements().count { it.reason == "purchase_return" })
+                assertTrue(model.auditEvents().any { it.contains("purchase.returned") && it.contains("Damaged outer pack") })
+                CounterSnapshotIntegrity.requireConsistent(SqliteCounterPersistence(context).use { it.load()!! })
+            }
             click("View supplier details")
-            assertTrue(findNode(prefix = "Current payable: ₹15.00").text.contains("₹15.00"))
+            assertTrue(findNode(prefix = "Current payable:").text.contains("10.00"))
             assertTrue(findNode(prefix = "₹5.00 · Staff-declared cash").text.contains("Staff-declared cash"))
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

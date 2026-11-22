@@ -15,7 +15,7 @@ CT-16 now records selected final quantities in the existing immutable audit even
 
 ## Verification
 
-- Kotlin JVM tests: **68 passed, 0 failed**. Review/history tests cover variance review, zero and unchanged counts, legacy events without quantity data, malformed event rejection, and newest-first ordering.
+- Kotlin JVM tests: **67 passed, 0 failed**. Review/history tests cover variance review, zero and unchanged counts, legacy events without quantity data, malformed event rejection, and newest-first ordering.
 - Android debug APK: **PASS**.
 - Android instrumentation APK: **PASS**.
 - Focused Android API 37 test: **1/1 passed**, including count-history navigation, reason and exact zero/nonzero quantities, and persisted-snapshot equality before/after history review.

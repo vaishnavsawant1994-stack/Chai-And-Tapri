@@ -1,7 +1,15 @@
 # CT-17–20 Procurement Foundation Report
 
 **Date:** 29 October 2026  
-**Status:** Partial implementation; selected model, persistence, migration, and UI paths passed automated tests. Not a complete purchasing module.
+**Status:** Partial implementation; selected model, persistence, migration, receipt, supplier-settlement, and return UI paths passed synthetic emulator tests. Not a complete purchasing module.
+
+## CT-17 purchase return confirmation UI - 22 November 2026
+
+The return dialog now offers only products present on the selected receipt, with the maximum quantity bounded by both the unreturned receipt quantity and current available stock. It requires a reason and presents a second confirmation that explains the stock and payable effects before calling the existing validated return command. The business engine remains authoritative for payable limits, receipt validation, inventory movement, audit history, and atomic persistence.
+
+The purchase-order UI instrumentation journey now continues through a partial supplier payment, a one-unit return, and Supplier Details. It verifies the declared payment remains in the ledger, one `purchase_return` movement is appended, stock changes from 9 to 8 once, payable falls from ₹15 to ₹10 after the ₹5 payment and ₹5 return, the return reason is audited, and the full snapshot passes integrity checks. A first broad run exposed a test race: the assertion reopened SQLite immediately after the UI tap. The test now waits for the persisted success message before reading state. Focused API 37 rerun passed **1/1**. The first broad run was 110/111 with only that pre-fix assertion failing; a second broad rerun stopped after 37 tests when the emulator lost its activity/package services during a staff-access test. Its JUnit is archived at `../test-evidence/2026-11-22/ct17-broad-rerun-emulator-service-loss.xml`. The full suite is not qualified after the correction.
+
+Current host verification after the correction: prototype Node **52/52**; Kotlin JVM **67/67**; debug and instrumentation APK builds PASS; lint **0 errors / 175 warnings**. Backend tests without PostgreSQL: **19 passed / 4 skipped**; the prior isolated PostgreSQL backend run remains **23/23**, and backend source was unchanged in this Android-only slice. Focused JUnit: `../test-evidence/2026-11-22/ct17-supplier-return-confirmed-ui-focused.xml`.
 
 ## Current continuation — supplier contact and migration (1 November 2026)
 

@@ -338,16 +338,49 @@ class ProcurementActivity : Activity() {
     }
 
     private fun askReturn(receipt: PurchaseReceipt) {
-        val form = fields("Product ID from this receipt", "Return quantity", "Reason for return")
+        val current = model ?: run { status.text = "Storage is unavailable."; return }
+        val priorReturns = current.purchaseReturnHistory().filter { it.receiptId == receipt.receiptId }
+            .flatMap { it.lines }.groupBy { it.productId }.mapValues { (_, rows) -> rows.sumOf { it.quantity } }
+        val stock = current.stockLevels()
+        val returnableLines = receipt.lines.mapNotNull { line ->
+            val unreturned = (line.quantity - (priorReturns[line.productId] ?: 0)).coerceAtLeast(0)
+            val available = (stock[line.productId] ?: 0).coerceAtLeast(0)
+            val maximum = minOf(unreturned, available)
+            if (maximum <= 0) null else line to maximum
+        }
+        if (returnableLines.isEmpty()) {
+            status.text = "This receipt has no unreturned units in available stock. No return recorded."
+            return
+        }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 8, 20, 8) }
+        val selector = Spinner(this).apply {
+            adapter = ArrayAdapter(this@ProcurementActivity, android.R.layout.simple_spinner_dropdown_item,
+                returnableLines.map { (line, maximum) -> "${line.productName} · ${line.productId} (up to $maximum available)" })
+        }
+        root.addView(label("Product from this receipt", 14f)); root.addView(selector)
+        val quantity = EditText(this).apply { hint = "Return quantity"; inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true) }
+        val reason = EditText(this).apply { hint = "Reason for return"; inputType = InputType.TYPE_CLASS_TEXT; setSingleLine(true) }
+        root.addView(quantity); root.addView(reason)
         AlertDialog.Builder(this).setTitle("Return unused stock")
-            .setMessage("Only units still in available stock can be returned. The return reduces the supplier payable and cannot exceed unpaid value.")
-            .setView(form.root).setNegativeButton("Cancel", null).setPositiveButton("Record return") { _, _ ->
-                val productId = form.values[0].text.toString().trim()
-                val quantity = form.values[1].text.toString().trim().toIntOrNull()
-                val reason = form.values[2].text.toString().trim()
-                val result = if (quantity == null) "Enter a valid return quantity. No return recorded."
-                else model?.returnPurchase(receipt.supplierId, receipt.receiptId, mapOf(productId to quantity), reason) ?: "Storage is unavailable."
-                render(result)
+            .setMessage("Choose a product from this receipt. The limit reflects unreturned receipt quantity and current available stock. The return reduces unpaid supplier payable; final validation checks the balance.")
+            .setView(root).setNegativeButton("Cancel", null).setPositiveButton("Review return") { _, _ ->
+                val selected = returnableLines.getOrNull(selector.selectedItemPosition)
+                val enteredQuantity = quantity.text.toString().trim().toIntOrNull()
+                val note = reason.text.toString().trim()
+                val result = when {
+                    selected == null || enteredQuantity == null || enteredQuantity !in 1..selected.second -> "Enter a return quantity within the available limit. No return recorded."
+                    note.length !in 3..120 -> "Enter a reason between 3 and 120 characters. No return recorded."
+                    else -> ""
+                }
+                if (result.isNotEmpty()) { render(result); return@setPositiveButton }
+                val (line, _) = selected!!
+                val confirmed = AlertDialog.Builder(this).setTitle("Confirm supplier return")
+                    .setMessage("Return $enteredQuantity × ${line.productName} to ${receipt.supplierId} for ${money(line.unitCostPaise.toLong() * enteredQuantity!!)}. This reduces stock and supplier payable only after the business engine accepts it. Continue?")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Confirm return") { _, _ ->
+                val saved = model?.returnPurchase(receipt.supplierId, receipt.receiptId, mapOf(line.productId to enteredQuantity), note) ?: "Storage is unavailable."
+                render(saved)
+                    }.create()
+                confirmed.show()
             }.show()
     }
 
