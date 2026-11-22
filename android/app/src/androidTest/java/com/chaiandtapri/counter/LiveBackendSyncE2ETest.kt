@@ -180,6 +180,81 @@ class LiveBackendSyncE2ETest {
         }
     }
 
+    @Test fun androidSupplierFinanceOutboxReachesOwnerBalanceProjection() {
+        val endpointBase = InstrumentationRegistry.getArguments().getString("syncE2eEndpoint")
+        assumeTrue("Provide syncE2eEndpoint for the isolated supplier-finance backend drill.", !endpointBase.isNullOrBlank())
+        val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val storeId = UUID.randomUUID().toString().replace("-", "")
+        val databaseName = "supplier_sync_e2e_$storeId.db"
+        val keyNamespace = "supplier_sync_e2e_$storeId"
+        var model: CounterModel? = null
+        var persistence: SqliteCounterPersistence? = null
+        var session: SyncSession? = null
+        try {
+            configureTestTrust()
+            val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
+            val deviceId = UUID.randomUUID().toString()
+            session = SyncAccountClient(transport).register(
+                endpointBase!!,
+                SyncRegistration("supplier-${UUID.randomUUID()}@example.test", "Synthetic-Only-Password-2026!", "Synthetic Supplier Owner", "Synthetic Supplier Business", "Supplier Sync Shop", deviceId, "API 37 Supplier Sync Test")
+            )
+            val vault = SyncSessionVault(context, keyNamespace)
+            vault.save(session!!)
+            instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic supplier sync owner") }
+            persistence = SqliteCounterPersistence(context, databaseName, keyNamespace)
+            model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            val supplierId = "local_supplier_${UUID.randomUUID().toString().replace("-", "").take(24)}"
+            val productId = "supplier_sync_tea"
+            assertTrue(model!!.saveProduct(TapriProduct(productId, "Private Tea Detail", "Pantry", 1_000, true, false, true)).startsWith("Product saved"))
+            val openingId = "supplier-opening-${UUID.randomUUID()}"
+            assertTrue(model!!.confirmOpeningStock(productId, 3, "synthetic supplier sync setup", openingId).contains("3 units"))
+            assertTrue(model!!.saveSupplier(supplierId, "Private Supplier Name", "supplier-profile-${UUID.randomUUID()}", "+919876543210").startsWith("Supplier saved"))
+            val receiptCommand = "supplier-receipt-${UUID.randomUUID()}"
+            assertTrue(model!!.receivePurchase(supplierId, mapOf(productId to 2), mapOf(productId to 500), receiptCommand, supplierInvoiceReference = "PRIVATE-INVOICE-DETAIL").startsWith("Received"))
+            val paymentCommand = "supplier-payment-${UUID.randomUUID()}"
+            assertTrue(model!!.recordSupplierPayment(supplierId, 200, "cash", paymentCommand).contains("Staff-declared cash payment"))
+            val receiptId = model!!.purchaseHistory().single().receiptId
+            val returnCommand = "supplier-return-${UUID.randomUUID()}"
+            assertTrue(model!!.returnPurchase(supplierId, receiptId, mapOf(productId to 1), "synthetic sealed pack return", returnCommand).contains("return recorded", ignoreCase = true))
+
+            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand)
+            val pending = persistence!!.loadPendingSyncEvents(20)
+            assertEquals("Opening stock, receipt, settlement, and return should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
+            val sync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(session!!.endpointBase, session!!.identity, session!!.bearerToken)
+            assertEquals(4, sync.acknowledged)
+            assertEquals(4L, sync.serverRevision)
+            assertTrue(persistence!!.loadPendingSyncEvents(20).isEmpty())
+            assertEquals(300L, model!!.supplierPayablePaise(supplierId))
+            assertEquals(4, model!!.stockLevels()[productId])
+            model!!.close(); model = null
+            persistence!!.close(); persistence = null
+
+            val balances = getJson("${session!!.endpointBase}/v1/dashboard/suppliers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
+            assertEquals(4L, balances.getLong("serverRevision"))
+            assertEquals(1, balances.getInt("supplierCount"))
+            assertEquals(1_000L, balances.getLong("totalReceiptsPaise"))
+            assertEquals(200L, balances.getLong("totalPaymentsPaise"))
+            assertEquals(500L, balances.getLong("totalReturnsPaise"))
+            assertEquals(300L, balances.getLong("netPayablePaise"))
+            val summary = balances.getJSONArray("suppliers").getJSONObject(0)
+            assertTrue(summary.getString("supplierId").matches(Regex("^[0-9a-fA-F-]{36}$")))
+            assertTrue("Owner projection must not expose supplier or product details", !balances.toString().contains("Private Supplier Name") && !balances.toString().contains("PRIVATE-INVOICE-DETAIL") && !balances.toString().contains("Private Tea Detail") && !balances.toString().contains("+919876543210"))
+            assertTrue(balances.getJSONObject("evidence").getString("verification").contains("not bank-verified"))
+            SyncAccountClient(transport).logout(session!!)
+        } finally {
+            model?.close()
+            persistence?.close()
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            context.deleteDatabase(databaseName)
+            context.getSharedPreferences("chai_tapri_secure_key_envelope.$keyNamespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace) }
+            runCatching { SyncSessionVault(context, keyNamespace).clear() }
+            HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
+        }
+    }
+
     private fun resumeAfterProcessDeath(endpointBase: String, context: android.content.Context, instrumentation: android.app.Instrumentation) {
         val processDeathState = File(context.noBackupFilesDir, "cat052-process-death-state.json")
         assertTrue("First phase must leave a synthetic encrypted outbox before the host force-stops the app.", processDeathState.isFile)

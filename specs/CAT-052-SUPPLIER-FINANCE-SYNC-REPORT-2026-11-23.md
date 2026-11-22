@@ -24,3 +24,11 @@
 The server remains an immutable event journal with derived owner summaries, not an authoritative supplier payable ledger. Staff-declared payment totals are not cash/bank verified. Negative payable values are surfaced as recorded supplier credit/advance. Profile edits do not sync. This feature is a narrow W3/W4 vertical slice; it does not complete CAT-052, OW-07 as a full supplier-analysis module, the owner dashboard, or the six-wave product plan.
 
 Next: exercise the supplier projection through the Android encrypted-outbox-to-server path on an emulator, and test the OW-07 interaction through the authorized browser review path.
+
+## Android encrypted-outbox end-to-end qualification — 23 November 2026
+
+The native Android instrumentation path now creates synthetic supplier finance records in the SQLCipher store, emits the privacy-minimized outbox events, synchronizes them over the isolated HTTPS backend using the restricted PostgreSQL runtime role, and reads the owner-only OW-07 projection. The API 37 isolated emulator test passed **1/1**. It verified four accepted events (opening stock, receipt, staff-declared cash settlement, return), server revision 4, an empty acknowledged outbox, local stock 4 and payable ₹300; the remote projection reconciled receipts ₹1,000, declared payments ₹200, returns ₹500 and net payable ₹300. It also checked that supplier name, phone, invoice reference and product details are absent and that payment status is explicitly not bank-verified.
+
+Evidence: `../test-evidence/2026-11-23/cat052-android-supplier-finance-e2e.txt`. The full Android verification command `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL** after this test was added. The PostgreSQL backend integration remains 28/28 from the isolated run documented above; this Android-only addition did not change backend source. Lint remains at 0 errors; warning count is recorded in the current Gradle lint report.
+
+This is an isolated synthetic emulator-to-local-test-server flow, not production sync or accounting qualification. It does not qualify owner browser visuals, full CAT-052, cloud deployment, real shop activity, Bluetooth, physical devices, or independent security review. Supplier profiles remain local and backend totals are reconstructed from accepted events.
