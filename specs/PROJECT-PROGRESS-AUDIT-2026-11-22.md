@@ -23,18 +23,22 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 
 ## Current verification
 
+## CAT-052 live encrypted-outbox retry update
+
+After the full Android regression, the excluded endpoint-dependent live test was separately executed: **1/1 API 37 instrumentation passed**. The PostgreSQL-backed backend suite passed **23/23, 0 skipped** on a fresh isolated local PostgreSQL 17 cluster. The synthetic run verified SQLCipher outbox retry after a backend commit and simulated lost acknowledgment, with database close/reopen; final PostgreSQL counts were 1 shop, 2 accepted events, 0 conflicts. Evidence: `../test-evidence/2026-11-22/android-sync-e2e-refresh/`. This does not test process-death recovery or production synchronization; CAT-052 remains prototype-qualified. See [CAT-052 report](CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md).
+
 | Suite / check | Result |
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 67/67 passed |
-| API 37 instrumentation | Current isolated API 37 source: 111/111 passed after cold start at 2 GB guest memory; 0 failures/errors/skips. Endpoint-dependent `LiveBackendSyncE2ETest` excluded. Earlier race and service-loss attempts are superseded. |
+| API 37 instrumentation | Broad isolated suite: 111/111 passed after cold start at 2 GB guest memory, excluding the opt-in backend test; focused live PostgreSQL SQLCipher-outbox E2E: 1/1 passed separately. Earlier race and service-loss attempts are superseded. |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 175 warnings |
 
-An earlier current-source broad attempt on the isolated AVD recorded 80/110 passing and 30 UI failures amid repeated `System UI isn't responding` dialogs. It was superseded by the 111/111 clean run above. The historical 110/110 result predates later source changes and is not used as current qualification. The endpoint-dependent backend E2E remains separately unrun.
+An earlier current-source broad attempt on the isolated AVD recorded 80/110 passing and 30 UI failures amid repeated `System UI isn't responding` dialogs. It was superseded by the 111/111 clean run above. The historical 110/110 result predates later source changes and is not used as current qualification. The live backend E2E is documented separately and does not imply process-death or production sync qualification.
 
 ## Wave status
 

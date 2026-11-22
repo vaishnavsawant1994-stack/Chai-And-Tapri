@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## CAT-052 live encrypted-outbox retry - 22 November 2026
+
+Current-source API 37 live backend test passed 1/1 against a fresh isolated PostgreSQL 17 cluster; backend integration tests passed 23/23 with no skips. The Android SQLCipher outbox survived database close/reopen after a server-committed lost acknowledgment, then retried idempotently. PostgreSQL showed 1 synthetic shop, 2 accepted events and 0 conflicts. JUnit and qualification notes: `../test-evidence/2026-11-22/android-sync-e2e-refresh/`. This is not process-death or production sync qualification. See [CAT-052 report](CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md).
+
 ## Latest continuation - CT-17 confirmed supplier return - 22 November 2026
 
 The procurement return dialog now scopes product selection to the chosen receipt, caps the quantity using unreturned receipt units and current stock, requires a reason, and requests explicit confirmation. The focused API 37 UI journey covers draft, sent order, partial receipts, overpayment rejection, cash settlement, return, supplier details, stock/payable reconciliation and snapshot integrity; focused test passed 1/1. After a cold restart with 2 GB AVD memory, the current API 37 suite passed 111/111, 0 failures/errors/skips, including CT-17. This supersedes the earlier test-race and emulator-service-loss runs. Node 52/52, Kotlin JVM 67/67, APK tasks pass, lint 0 errors/175 warnings. Evidence and run details are in `../test-evidence/2026-11-22/ct17-low-memory-full-instrumentation.*`; see [CT-17–20 report](CT-17-20-PROCUREMENT-REPORT.md). W2 remains partial.
