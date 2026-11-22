@@ -56,6 +56,7 @@ class InventoryOverviewActivity : Activity() {
             content.addView(label("Stock counts and adjustments affect inventory only; they do not create purchases or supplier payables.", 13f))
             content.addView(button("Search full movement history · CT-15") { startActivity(Intent(this, StockMovementHistoryActivity::class.java)) })
             content.addView(button("Count multiple products · CT-16") { startActivity(Intent(this, StockCountActivity::class.java)) })
+            content.addView(button("Stock count history · CT-16") { startActivity(Intent(this, StockCountHistoryActivity::class.java)) })
             content.addView(button("Catalogue and single-product count") { startActivity(Intent(this, ProductCatalogueActivity::class.java)) })
             content.addView(button("Back") { finish() })
         } catch (error: Exception) {

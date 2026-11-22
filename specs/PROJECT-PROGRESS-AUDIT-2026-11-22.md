@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Project Progress Audit
 
+## Latest continuation - CT-16 stock-count history - 22 November 2026
+
+CT-16 now retains all selected final quantities in confirmed count audit events, including no-variance items, and exposes a manager-gated, read-only session history. New entries show device-local time, reason, actor when available and exact counts; legacy entries disclose that quantities are unavailable. Focused API 37 UI test passed 1/1 and compared the full persisted snapshot before/after history viewing. Current-source isolated API 37 instrumentation passed **111/111**, 0 failures/errors/skips, including CT-16. Kotlin JVM **68/68**, Node **52/52**, APK assembly passed, lint **0 errors / 173 warnings**. Only endpoint-dependent `LiveBackendSyncE2ETest` was excluded. Evidence: `test-evidence/2026-11-22/ct16-count-history-full-instrumentation.xml`; see [CT-16 report](CT-16-STOCK-COUNT-REVIEW-REPORT.md). This qualifies one synthetic workflow, not the complete module or product.
+
 ## Latest continuation - CT-29 current-source emulator regression - 22 November 2026
 
 After the historical-date picker test passed individually, the current-source isolated API 37 instrumentation suite passed **111/111**, 0 failures, 0 errors, 0 skipped, in 9m 37s. It includes the previous-local-day selection test. The runner excluded only endpoint-dependent `LiveBackendSyncE2ETest`; this is not a live backend sync test. JUnit: `test-evidence/2026-11-22/ct29-current-full-instrumentation.xml`. Current host checks: Node **52/52**, Kotlin JVM **64/64**, APK assembly pass, lint **0 errors / 173 warnings**. This supersedes the earlier 110-test/30-System-UI-failure attempt documented below.
@@ -22,7 +26,7 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 | Suite / check | Result |
 |---|---:|
 | Prototype Node tests | 52/52 passed |
-| Kotlin JVM tests | 64/64 passed |
+| Kotlin JVM tests | 68/68 passed |
 | API 37 instrumentation | Current source: 111/111 passed on isolated API 37; only endpoint-dependent live backend E2E excluded. Earlier 110/30 failure is superseded. |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |

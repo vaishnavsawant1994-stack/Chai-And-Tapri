@@ -2,6 +2,7 @@ package com.chaiandtapri.counter
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
@@ -70,6 +71,7 @@ class StockCountActivity : Activity() {
             reason = EditText(this).apply { hint = "Count reason (e.g. evening shelf count)"; setSingleLine(true) }
             content.addView(reason)
             content.addView(button("Save selected counts atomically") { save(current) })
+            content.addView(button("Review stock count history") { startActivity(Intent(this, StockCountHistoryActivity::class.java)) })
             content.addView(button("Back") { finish() })
         } catch (failure: Exception) {
             content.addView(label("Stock count could not be opened. No count was created. (${failure.javaClass.simpleName})", 16f))

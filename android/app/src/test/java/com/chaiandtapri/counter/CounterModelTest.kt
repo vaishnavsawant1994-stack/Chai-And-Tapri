@@ -368,7 +368,13 @@ class CounterModelTest {
         assertEquals(0, model.stockLevels()["sugar_count"])
         assertEquals(-2, model.stockMovements().single { it.movementId == "stock-count-session:tea_count:physical-count" }.quantityDelta)
         assertEquals(-8, model.stockMovements().single { it.movementId == "stock-count-session:sugar_count:physical-count" }.quantityDelta)
-        assertTrue(model.auditEvents().any { it.contains("stock.physical_count") && it.contains("products=sugar_count,tea_count") })
+        assertTrue(model.auditEvents().any {
+            it.contains("stock.physical_count") && it.contains("products=sugar_count,tea_count") && it.contains("counted=sugar_count:0,tea_count:3")
+        })
+        val movementsBeforeNoOpCount = model.stockMovements().size
+        assertTrue(model.confirmPhysicalStockCounts(mapOf("tea_count" to 3), "unchanged shelf count", "stock-count-noop").contains("1 products"))
+        assertTrue(model.auditEvents().any { it.contains("stock-count-noop stock.physical_count") && it.contains("counted=tea_count:3") })
+        assertEquals("No-variance count is audited without inventing a stock movement", movementsBeforeNoOpCount, model.stockMovements().size)
         assertTrue(model.purchaseHistory().isEmpty())
         assertEquals("Duplicate command ignored.", model.confirmPhysicalStockCounts(mapOf("tea_count" to 99), "duplicate physical count", "stock-count-session"))
         assertEquals(3, model.stockLevels()["tea_count"])

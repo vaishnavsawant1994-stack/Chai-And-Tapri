@@ -242,9 +242,10 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             )
         }
         val productIds = counts.keys.sorted().joinToString(",")
+        val countedQuantities = counts.toSortedMap().entries.joinToString(",") { (productId, quantity) -> "$productId:$quantity" }
         return commitMutation(
             before, commandId, "Physical count saved for ${counts.size} products.",
-            "stock.physical_count products=$productIds reason=${reason.trim()}"
+            "stock.physical_count products=$productIds counted=$countedQuantities reason=${reason.trim()}"
         )
     }
     fun auditEvents(): List<String> = events.toList()

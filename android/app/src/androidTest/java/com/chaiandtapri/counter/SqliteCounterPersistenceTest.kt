@@ -2957,8 +2957,10 @@ class SqliteCounterPersistenceTest {
         seed.close()
 
         val monitor = instrumentation.addMonitor(StockCountActivity::class.java.name, null, false)
+        val historyMonitor = instrumentation.addMonitor(StockCountHistoryActivity::class.java.name, null, false)
         val inventory = instrumentation.startActivitySync(Intent(context, InventoryOverviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var countActivity: StockCountActivity? = null
+        var historyActivity: StockCountHistoryActivity? = null
         try {
             fun findNode(textPrefix: String? = null, hintPrefix: String? = null, description: String? = null): AccessibilityNodeInfo {
                 repeat(100) {
@@ -3018,9 +3020,29 @@ class SqliteCounterPersistenceTest {
                 assertTrue(it.moveToFirst()); assertEquals(1, it.getInt(0))
             }
             db.close()
+
+            val beforeHistory = SqliteCounterPersistence(context).use { it.load() ?: error("Physical count history source disappeared") }
+            assertTrue(findNode(textPrefix = "Review stock count history").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            historyActivity = instrumentation.waitForMonitorWithTimeout(historyMonitor, 5000) as? StockCountHistoryActivity
+            assertNotNull("CT-16 should open its read-only count history", historyActivity)
+            val historyTexts = mutableListOf<String>()
+            instrumentation.runOnMainSync {
+                fun collect(view: View) {
+                    if (view is TextView) historyTexts += view.text.toString()
+                    if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                }
+                collect(requireNotNull(historyActivity).findViewById(android.R.id.content))
+            }
+            assertTrue(historyTexts.any { it == "Stock Count History · CT-16" })
+            assertTrue(historyTexts.any { it == "Reason: evening shelf count" })
+            assertTrue(historyTexts.any { it == "UI Count Tea · counted 3 units" })
+            assertTrue(historyTexts.any { it == "UI Count Sugar · counted 0 units" })
+            val afterHistory = SqliteCounterPersistence(context).use { it.load() ?: error("Count history removed the ledger") }
+            assertEquals("Reading count history must not mutate inventory or audit state", beforeHistory, afterHistory)
         } finally {
-            instrumentation.runOnMainSync { countActivity?.finish(); inventory.finish() }
+            instrumentation.runOnMainSync { historyActivity?.finish(); countActivity?.finish(); inventory.finish() }
             instrumentation.removeMonitor(monitor)
+            instrumentation.removeMonitor(historyMonitor)
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         }
     }
