@@ -15,6 +15,43 @@ function safeMultiply(left, right) {
   return value;
 }
 
+/** Supplier payable view uses opaque device-issued IDs and accepted declared events only. */
+export function buildSupplierBalances({ shopId, shopName, serverRevision, events }) {
+  const suppliers = new Map();
+  const totalsFor = (id) => {
+    if (!suppliers.has(id)) suppliers.set(id, { supplierId: id, receiptCount: 0, receiptsPaise: 0, paymentCount: 0, paymentsPaise: 0, returnCount: 0, returnsPaise: 0 });
+    return suppliers.get(id);
+  };
+  for (const row of events) {
+    const payload = row.envelope?.payload;
+    if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const receipt of payload.purchaseReceipts ?? []) {
+      const total = totalsFor(receipt.supplierId); total.receiptCount += 1; total.receiptsPaise = safeTotal([total.receiptsPaise, receipt.totalPaise]);
+    }
+    for (const payment of payload.supplierPayments ?? []) {
+      const total = totalsFor(payment.supplierId); total.paymentCount += 1; total.paymentsPaise = safeTotal([total.paymentsPaise, payment.amountPaise]);
+    }
+    for (const returned of payload.purchaseReturns ?? []) {
+      const total = totalsFor(returned.supplierId); total.returnCount += 1; total.returnsPaise = safeTotal([total.returnsPaise, returned.amountPaise]);
+    }
+  }
+  const rows = [...suppliers.values()].map((row) => ({ ...row, outstandingPaise: row.receiptsPaise - row.paymentsPaise - row.returnsPaise }))
+    .sort((a, b) => b.outstandingPaise - a.outstandingPaise || a.supplierId.localeCompare(b.supplierId));
+  return {
+    shopId, shopName, serverRevision, supplierCount: rows.length,
+    totalReceiptsPaise: safeTotal(rows.map((row) => row.receiptsPaise)),
+    totalPaymentsPaise: safeTotal(rows.map((row) => row.paymentsPaise)),
+    totalReturnsPaise: safeTotal(rows.map((row) => row.returnsPaise)),
+    netPayablePaise: safeTotal(rows.map((row) => row.outstandingPaise)), suppliers: rows,
+    evidence: {
+      scope: 'Accepted server events only; offline, blocked and unsynchronized activity is excluded.',
+      identity: 'Suppliers are represented by opaque device-generated identifiers. Names, contacts, invoice references and product lines are not uploaded or displayed.',
+      accounting: 'Net payable is recorded receipt value minus staff-declared settlements and recorded returns. A negative value represents a recorded supplier credit/advance.',
+      verification: 'Supplier payment values are staff-declared and are not bank-verified. This view is an operational payable summary, not a reconciled accounting statement.'
+    }
+  };
+}
+
 /** Build owner-facing numbers only from accepted, validated server journal entries. */
 export function buildShopOverview({ shopId, shopName, serverRevision, events }) {
   const orders = new Map();

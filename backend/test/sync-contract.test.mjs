@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, validateProjectionDelta } from '../src/service.mjs';
+import { ApiError, applySupplierLedgerDelta, emptySupplierLedger, validateProjectionDelta } from '../src/service.mjs';
 
 const emptyDelta = () => ({
   kind:'projection_delta.v1',orders:[],stock:[],stockMovements:[],customerCredits:[],repayments:[],paymentEntries:[]
@@ -77,4 +77,29 @@ test('projection contract accepts privacy-minimized declared expenses and legacy
   invalid({ ...payload, expenses: [{ ...payload.expenses[0], amountPaise:0 }] });
   invalid({ ...payload, expenses: [{ ...payload.expenses[0], category:'Rent / Shop Owner' }] });
   invalid({ ...payload, expenses: [{ ...payload.expenses[0], method:'udhar' }] });
+});
+
+test('supplier financial projection accepts only opaque IDs and privacy-minimized paise records', () => {
+  const payload = emptyDelta();
+  payload.purchaseReceipts = [{ receiptId:'11111111-1111-4111-8111-111111111111', supplierId:'22222222-2222-4222-8222-222222222222', totalPaise:5000 }];
+  payload.supplierPayments = [{ paymentId:'33333333-3333-4333-8333-333333333333', supplierId:'22222222-2222-4222-8222-222222222222', amountPaise:1000, method:'cash', status:'staff_declared' }];
+  payload.purchaseReturns = [{ returnId:'44444444-4444-4444-8444-444444444444', supplierId:'22222222-2222-4222-8222-222222222222', receiptId:'11111111-1111-4111-8111-111111111111', amountPaise:500 }];
+  assert.equal(validateProjectionDelta(payload), true);
+  invalid({ ...payload, supplierPayments:[{ ...payload.supplierPayments[0], phone:'private' }] });
+  invalid({ ...payload, supplierPayments:[{ ...payload.supplierPayments[0], amountPaise:1.2 }] });
+  invalid({ ...payload, purchaseReturns:[{ ...payload.purchaseReturns[0], receiptId:'not-a-uuid' }] });
+  invalid({ ...payload, purchaseReceipts:[{ ...payload.purchaseReceipts[0], supplierId:'local-supplier-id' }] });
+});
+
+test('supplier ledger rejects replayed identities, mismatched returns and returns above receipt value', () => {
+  const supplierId = '22222222-2222-4222-8222-222222222222';
+  const receiptId = '11111111-1111-4111-8111-111111111111';
+  const ledger = emptySupplierLedger();
+  const receipt = { ...emptyDelta(), purchaseReceipts:[{ receiptId, supplierId, totalPaise:5000 }] };
+  applySupplierLedgerDelta(ledger, receipt);
+  assert.throws(() => applySupplierLedgerDelta(ledger, receipt), (error) => error.code === 'supplier_finance_id_conflict');
+  assert.throws(() => applySupplierLedgerDelta(ledger, { ...emptyDelta(), purchaseReturns:[{ returnId:'33333333-3333-4333-8333-333333333333', supplierId, receiptId, amountPaise:5001 }] }), (error) => error.code === 'supplier_return_exceeds_receipt');
+  assert.throws(() => applySupplierLedgerDelta(ledger, { ...emptyDelta(), purchaseReturns:[{ returnId:'44444444-4444-4444-8444-444444444444', supplierId:'55555555-5555-4555-8555-555555555555', receiptId, amountPaise:100 }] }), (error) => error.code === 'supplier_return_exceeds_receipt');
+  applySupplierLedgerDelta(ledger, { ...emptyDelta(), purchaseReturns:[{ returnId:'66666666-6666-4666-8666-666666666666', supplierId, receiptId, amountPaise:5000 }] });
+  assert.equal(ledger.totals.get(supplierId).returns, 5000);
 });

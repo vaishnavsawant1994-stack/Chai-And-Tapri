@@ -67,7 +67,13 @@ data class PaymentEntry(
     val createdAtEpochMs: Long = 0L
 )
 
-data class SupplierRecord(val supplierId: String, val name: String, val phone: String? = null)
+data class SupplierRecord(
+    val supplierId: String,
+    val name: String,
+    val phone: String? = null,
+    /** Random opaque cross-device key; the user-entered local account ID is never sent to sync. */
+    val syncId: String = java.util.UUID.randomUUID().toString()
+)
 data class PurchaseReceiptLine(val productId: String, val productName: String, val quantity: Int, val unitCostPaise: Int) {
     val lineCostPaise: Long get() = quantity.toLong() * unitCostPaise
 }
@@ -77,7 +83,8 @@ data class PurchaseReceipt(
     val lines: List<PurchaseReceiptLine>,
     val totalPaise: Long = lines.sumOf { it.lineCostPaise },
     val purchaseOrderId: String? = null,
-    val supplierInvoiceReference: String? = null
+    val supplierInvoiceReference: String? = null,
+    val syncId: String = java.util.UUID.randomUUID().toString()
 )
 enum class PurchaseOrderStatus { DRAFT, SENT, CANCELLED }
 data class PurchaseOrderDraftLine(val productId: String, val productName: String, val orderedQuantity: Int, val unitCostPaise: Int) {
@@ -93,11 +100,26 @@ data class PurchaseOrderDraft(
 ) {
     val totalPaise: Long get() = lines.sumOf { it.lineCostPaise }
 }
-data class SupplierPayment(val paymentId: String, val supplierId: String, val amountPaise: Int, val method: String, val status: String, val drawerSessionId: String? = null)
+data class SupplierPayment(
+    val paymentId: String,
+    val supplierId: String,
+    val amountPaise: Int,
+    val method: String,
+    val status: String,
+    val drawerSessionId: String? = null,
+    val syncId: String = java.util.UUID.randomUUID().toString()
+)
 data class PurchaseReturnLine(val productId: String, val productName: String, val quantity: Int, val unitCostPaise: Int) {
     val lineValuePaise: Long get() = quantity.toLong() * unitCostPaise
 }
-data class PurchaseReturn(val returnId: String, val supplierId: String, val receiptId: String, val lines: List<PurchaseReturnLine>, val totalPaise: Long = lines.sumOf { it.lineValuePaise })
+data class PurchaseReturn(
+    val returnId: String,
+    val supplierId: String,
+    val receiptId: String,
+    val lines: List<PurchaseReturnLine>,
+    val totalPaise: Long = lines.sumOf { it.lineValuePaise },
+    val syncId: String = java.util.UUID.randomUUID().toString()
+)
 data class BusinessExpense(
     val expenseId: String,
     val category: String,

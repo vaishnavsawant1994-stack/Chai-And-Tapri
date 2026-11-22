@@ -231,7 +231,7 @@ class SqliteCounterPersistenceTest {
         prior.close()
 
         SqliteCounterPersistence(context).use { upgraded ->
-            assertEquals(27, upgraded.readableDatabase.version)
+            assertEquals(28, upgraded.readableDatabase.version)
             val record = upgraded.loadAuditRecords().single { it.eventId == "legacy-audit" }
             assertEquals("legacy.event", record.event)
             assertNull(record.actorId)
@@ -2727,7 +2727,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(28, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.purchaseHistory().size)
         assertEquals(null, model.purchaseHistory().single().supplierInvoiceReference)
         assertEquals(3, model.stockLevels()["invoice_migration_tea"])
@@ -2740,6 +2740,47 @@ class SqliteCounterPersistenceTest {
         assertEquals(4, model.stockLevels()["invoice_migration_tea"])
         assertEquals(1000L, model.supplierPayablePaise("invoice_migration_dealer"))
         model.close()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+    }
+
+    @Test fun schemaV27AddsOpaqueProcurementSyncIdsWithoutChangingLocalRecords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        var model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("sync_migration_tea", "Private Tea", "Pantry", 1000, true, false, true)).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("sync_migration_tea", 3, "synthetic sync identity fixture", "sync-id-stock").contains("3 units"))
+        assertTrue(model.saveSupplier("local_supplier_777", "Private Supplier Name", "sync-id-supplier", "+919876543210").startsWith("Supplier saved"))
+        assertTrue(model.receivePurchase("local_supplier_777", mapOf("sync_migration_tea" to 2), mapOf("sync_migration_tea" to 500), "sync-id-receipt", supplierInvoiceReference = "PRIVATE-INV-1").startsWith("Received"))
+        assertTrue(model.recordSupplierPayment("local_supplier_777", 200, "cash", "sync-id-payment").contains("Staff-declared cash payment"))
+        val receiptId = model.purchaseHistory().single().receiptId
+        val returnResult = model.returnPurchase("local_supplier_777", receiptId, mapOf("sync_migration_tea" to 1), "damaged sealed pack", "sync-id-return")
+        assertTrue(returnResult, returnResult.contains("return recorded", ignoreCase = true))
+        val expectedStock = model.stockLevels()["sync_migration_tea"]
+        val expectedPayable = model.supplierPayablePaise("local_supplier_777")
+        model.close()
+
+        val legacy = SqliteCounterPersistence(context)
+        listOf("suppliers", "purchase_receipts", "supplier_payments", "purchase_returns").forEach { table ->
+            legacy.writableDatabase.execSQL("DROP INDEX IF EXISTS ${table}_sync_id_unique")
+            legacy.writableDatabase.execSQL("ALTER TABLE $table DROP COLUMN sync_id")
+        }
+        legacy.writableDatabase.version = 27
+        legacy.close()
+
+        model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        val uuid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
+        assertTrue(uuid.matches(model.suppliers().single().syncId))
+        assertTrue(uuid.matches(model.purchaseHistory().single().syncId))
+        assertTrue(uuid.matches(model.supplierPaymentHistory().single().syncId))
+        assertTrue(uuid.matches(model.purchaseReturnHistory().single().syncId))
+        assertEquals("Private Supplier Name", model.suppliers().single().name)
+        assertEquals("PRIVATE-INV-1", model.purchaseHistory().single().supplierInvoiceReference)
+        assertEquals(expectedStock, model.stockLevels()["sync_migration_tea"])
+        assertEquals(expectedPayable, model.supplierPayablePaise("local_supplier_777"))
+        model.close()
+        val upgraded = SqliteCounterPersistence(context)
+        assertEquals(28, upgraded.readableDatabase.version)
+        upgraded.close()
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
     }
 
@@ -2762,7 +2803,7 @@ class SqliteCounterPersistenceTest {
         simulatedV20.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(28, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(4, model.stockLevels()["tea_order_migration"])
         assertEquals(500L, model.supplierPayablePaise("po_migration_supplier"))
         assertEquals(1, model.purchaseHistory().size)
@@ -3244,7 +3285,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(28, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(null, model.products().single { it.productId == "migration_tea" }.reorderThreshold)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
@@ -3275,7 +3316,7 @@ class SqliteCounterPersistenceTest {
         oldStore.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(28, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
         assertEquals(2400, model.creditBalance("legacy-account"))
@@ -4329,8 +4370,8 @@ class SqliteCounterPersistenceTest {
         old.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence.DATABASE_VERSION)
-        assertEquals(27, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(28, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(28, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "scan_migration_tea" }.scanCode)
         assertEquals(1, model.allOrders().size)
         assertEquals(1500, model.allOrders().single().salePaise)
@@ -5334,7 +5375,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(27, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(28, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "cost_test_tea" }.estimatedUnitCostPaise)
         assertNull(model.allOrders().single().lines.single().estimatedUnitCostPaise)
         assertEquals(3000, model.allOrders().single().salePaise)

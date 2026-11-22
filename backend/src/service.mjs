@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from './dashboard.mjs';
+import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -19,14 +19,17 @@ const enumIs = (value, values) => typeof value === 'string' && values.includes(v
 /** Validate the only Android payload contract currently eligible for upload. */
 export function validateProjectionDelta(payload) {
   const requiredTopKeys = ['kind','orders','stock','stockMovements','customerCredits','repayments','paymentEntries'];
-  const allowedTopKeys = [...requiredTopKeys, 'expenses'];
+  const allowedTopKeys = [...requiredTopKeys, 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'];
   if (!object(payload) || requiredTopKeys.some((key) => !Object.hasOwn(payload, key)) ||
     Object.keys(payload).some((key) => !allowedTopKeys.includes(key)) || payload.kind !== 'projection_delta.v1') throw new ApiError(400, 'invalid_projection_delta');
   for (const key of requiredTopKeys.slice(1)) if (!Array.isArray(payload[key]) || payload[key].length > 500) throw new ApiError(400, 'invalid_projection_delta');
   const expenses = payload.expenses ?? [];
-  if (!Array.isArray(expenses) || expenses.length > 500) throw new ApiError(400, 'invalid_projection_delta');
+  const purchaseReceipts = payload.purchaseReceipts ?? [];
+  const supplierPayments = payload.supplierPayments ?? [];
+  const purchaseReturns = payload.purchaseReturns ?? [];
+  if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
   if (payload.customerCredits.length !== 0 || payload.repayments.length !== 0) throw new ApiError(400, 'customer_identity_contract_pending');
-  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.paymentEntries.length + expenses.length === 0) throw new ApiError(400, 'empty_projection_delta');
+  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length === 0) throw new ApiError(400, 'empty_projection_delta');
   if (payload.paymentEntries.some((entry) => object(entry) && Object.hasOwn(entry, 'customerId') && entry.customerId !== null)) throw new ApiError(400, 'customer_identity_contract_pending');
 
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
@@ -70,8 +73,53 @@ export function validateProjectionDelta(payload) {
       throw new ApiError(400, 'invalid_projection_delta');
     }
   }
+  const uniqueOpaqueIds = new Set();
+  for (const [items, idKey, keys] of [
+    [purchaseReceipts, 'receiptId', ['receiptId','supplierId','totalPaise']],
+    [supplierPayments, 'paymentId', ['paymentId','supplierId','amountPaise','method','status']],
+    [purchaseReturns, 'returnId', ['returnId','supplierId','receiptId','amountPaise']]
+  ]) {
+    for (const item of items) {
+      if (!hasExactKeys(item, keys) || !UUID.test(item[idKey] ?? '') || !UUID.test(item.supplierId ?? '') ||
+        uniqueOpaqueIds.has(item[idKey])) throw new ApiError(400, 'invalid_projection_delta');
+      uniqueOpaqueIds.add(item[idKey]);
+      if (idKey === 'receiptId' && !isInt(item.totalPaise, { min: 1, max: 100_000_000 })) throw new ApiError(400, 'invalid_projection_delta');
+      if (idKey === 'paymentId' && (!isInt(item.amountPaise, { min: 1, max: 100_000_000 }) || !enumIs(item.method, ['cash','upi','card']) || item.status !== 'staff_declared')) throw new ApiError(400, 'invalid_projection_delta');
+      if (idKey === 'returnId' && (!UUID.test(item.receiptId ?? '') || !isInt(item.amountPaise, { min: 1, max: 100_000_000 }))) throw new ApiError(400, 'invalid_projection_delta');
+    }
+  }
   return true;
 }
+
+export function applySupplierLedgerDelta(ledger, payload) {
+  const ids = [...(payload.purchaseReceipts ?? []).map((x) => x.receiptId), ...(payload.supplierPayments ?? []).map((x) => x.paymentId), ...(payload.purchaseReturns ?? []).map((x) => x.returnId)];
+  if (ids.some((id) => ledger.eventIds.has(id))) throw new ApiError(409, 'supplier_finance_id_conflict');
+  for (const receipt of payload.purchaseReceipts ?? []) ledger.receipts.set(receipt.receiptId, { supplierId: receipt.supplierId, totalPaise: receipt.totalPaise, returnedPaise: 0 });
+  for (const payment of payload.supplierPayments ?? []) {
+    ledger.totals.set(payment.supplierId, (ledger.totals.get(payment.supplierId) ?? { receipts: 0, payments: 0, returns: 0 }));
+    const total = ledger.totals.get(payment.supplierId); total.payments = checkedAdd(total.payments, payment.amountPaise);
+  }
+  for (const receipt of payload.purchaseReceipts ?? []) {
+    const total = ledger.totals.get(receipt.supplierId) ?? { receipts: 0, payments: 0, returns: 0 };
+    total.receipts = checkedAdd(total.receipts, receipt.totalPaise); ledger.totals.set(receipt.supplierId, total);
+  }
+  for (const returned of payload.purchaseReturns ?? []) {
+    const receipt = ledger.receipts.get(returned.receiptId);
+    if (!receipt || receipt.supplierId !== returned.supplierId || checkedAdd(receipt.returnedPaise, returned.amountPaise) > receipt.totalPaise) throw new ApiError(409, 'supplier_return_exceeds_receipt');
+    receipt.returnedPaise = checkedAdd(receipt.returnedPaise, returned.amountPaise);
+    const total = ledger.totals.get(returned.supplierId) ?? { receipts: 0, payments: 0, returns: 0 };
+    total.returns = checkedAdd(total.returns, returned.amountPaise); ledger.totals.set(returned.supplierId, total);
+  }
+  ids.forEach((id) => ledger.eventIds.add(id));
+}
+
+function checkedAdd(left, right) {
+  const total = left + right;
+  if (!Number.isSafeInteger(total)) throw new ApiError(422, 'supplier_total_out_of_range');
+  return total;
+}
+
+export function emptySupplierLedger() { return { receipts: new Map(), totals: new Map(), eventIds: new Set() }; }
 
 export class SyncService {
   constructor(pool, { sessionHours = 8, maxEvents = 100, maxPayloadBytes = 64 * 1024 } = {}) {
@@ -196,6 +244,17 @@ export class SyncService {
     });
   }
 
+  async shopSupplierBalances(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildSupplierBalances({ shopId: actor.shop_id, shopName: shop.rows[0].display_name, serverRevision: Number(shop.rows[0].server_revision), events: journal.rows });
+    });
+  }
+
   async shopDailySalesActivity(actor, days = 30) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     return withTransaction(this.pool, async (c) => {
@@ -245,6 +304,9 @@ export class SyncService {
       await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
       const shop = await c.query('SELECT server_revision,business_id FROM shops WHERE shop_id=$1 FOR UPDATE', [actor.shop_id]);
       if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT envelope FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      const supplierLedger = emptySupplierLedger();
+      for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
       const results = [];
       for (const e of events) {
         if (!e || e.type !== 'business.command.v1' || e.schemaVersion !== 1 || !UUID.test(e.eventId ?? '') || typeof e.commandId !== 'string' || e.commandId.length < 1 || e.commandId.length > 160 || !UUID.test(e.deviceId ?? '') || e.shopId !== actor.shop_id || e.businessId !== actor.business_id || !Number.isSafeInteger(e.baseRevision) || e.baseRevision < 0 || !e.payload || typeof e.payload !== 'object' || Array.isArray(e.payload)) throw new ApiError(400, 'invalid_event_envelope');
@@ -264,6 +326,7 @@ export class SyncService {
             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.business_id,actor.shop_id,e.eventId,e.commandId,e.deviceId,e.baseRevision,revision,e]);
           results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
         }
+        applySupplierLedgerDelta(supplierLedger, e.payload);
         const next = revision + 1;
         await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,event_type,schema_version,base_revision,payload_hash,envelope)
           VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,e.type,e.baseRevision,payloadHash,e]);

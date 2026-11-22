@@ -57,6 +57,7 @@
           <button id="overview-tab" class="nav-tab active" type="button" aria-current="page">Overview</button>
           <button id="products-tab" class="nav-tab" type="button" aria-current="false">Product performance</button>
           <button id="inventory-tab" class="nav-tab" type="button" aria-current="false">Inventory snapshot</button>
+          <button id="suppliers-tab" class="nav-tab" type="button" aria-current="false">Supplier balances</button>
           <button id="activity-tab" class="nav-tab" type="button" aria-current="false">Sales activity</button>
           <button id="cashflow-tab" class="nav-tab" type="button" aria-current="false">Recorded money movements</button>
           <button id="profit-tab" class="nav-tab" type="button" aria-current="false">Profit readiness</button>
@@ -104,6 +105,14 @@
             <ul id="inventory-evidence-list"></ul>
           </section>
           <p id="inventory-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="suppliers-view" class="hidden" aria-labelledby="suppliers-heading">
+          <div class="section-heading"><div><p class="eyebrow">ACCEPTED PROCUREMENT EVENTS</p><h2 id="suppliers-heading">Supplier balances</h2></div></div>
+          <p id="suppliers-scope" class="scope-note"></p>
+          <div id="supplier-metrics" class="metrics" aria-live="polite"></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">Opaque supplier ID</th><th scope="col">Receipts</th><th scope="col">Staff-declared payments</th><th scope="col">Returns</th><th scope="col">Recorded net payable</th></tr></thead><tbody id="supplier-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="supplier-evidence-heading"><h3 id="supplier-evidence-heading">Scope and accounting limits</h3><ul id="supplier-evidence-list"></ul></section>
+          <p id="suppliers-status" class="status" role="status" aria-live="polite"></p>
         </section>
         <section id="activity-view" class="hidden" aria-labelledby="activity-heading">
           <div class="section-heading">

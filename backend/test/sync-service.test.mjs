@@ -100,7 +100,8 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     const registered=await fetch(`${base}/v1/register`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:`http-${randomUUID()}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'HTTP Owner',businessName:'HTTP Business',shopName:'HTTP Shop',deviceId,deviceLabel:'HTTP Test'})});
     assert.equal(registered.status,201); enrollment=await registered.json();
     const expenseId=randomUUID();
-    const event={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`ui-sale-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:0,payload:{...projectionDelta([{productId:'chai',quantity:4}]),expenses:[{
+    const supplierId=randomUUID(); const receiptId=randomUUID();
+    const event={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`ui-sale-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:0,payload:{...projectionDelta([{productId:'chai',quantity:4}]),purchaseReceipts:[{receiptId,supplierId,totalPaise:5000}],supplierPayments:[{paymentId:randomUUID(),supplierId,amountPaise:1000,method:'cash',status:'staff_declared'}],purchaseReturns:[{returnId:randomUUID(),supplierId,receiptId,amountPaise:500}],expenses:[{
       expenseId,category:'utilities',amountPaise:25050,method:'cash',status:'staff_declared'
     }],orders:[{
       orderNumber:12,fulfillment:'GIVEN',payment:'STAFF_DECLARED',paidPaise:2000,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,
@@ -120,6 +121,12 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(performance.products[0].productId,'chai'); assert.equal(performance.products[0].netDeliveredUnits,2);
     assert.equal(performance.products[0].netDeliveredItemValuePaise,2000); assert.equal(performance.products[0].stockQuantity,4);
     assert.match(performance.evidence.itemValue,/not recognized profit/);
+    const supplierResponse=await fetch(`${base}/v1/dashboard/suppliers?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(supplierResponse.status,200); const supplierSummary=await supplierResponse.json();
+    assert.equal(supplierSummary.supplierCount,1); assert.equal(supplierSummary.totalReceiptsPaise,5000);
+    assert.equal(supplierSummary.totalPaymentsPaise,1000); assert.equal(supplierSummary.totalReturnsPaise,500);
+    assert.equal(supplierSummary.netPayablePaise,3500); assert.equal(supplierSummary.suppliers[0].supplierId,supplierId);
+    assert.match(supplierSummary.evidence.verification,/not bank-verified/);
     const activity=await fetch(`${base}/v1/dashboard/activity?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(activity.status,200); const daily=await activity.json();
     assert.equal(daily.shopId,enrollment.shopId); assert.equal(daily.serverRevision,1);

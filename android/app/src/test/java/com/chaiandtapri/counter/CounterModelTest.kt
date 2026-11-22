@@ -320,6 +320,49 @@ class CounterModelTest {
         assertTrue(costPayload.json!!.contains("\"estimatedUnitCostPaise\":425"))
     }
 
+    @Test fun supplierFinancialProjectionUsesPersistedOpaqueIdsAndOmitsSupplierPii() {
+        val supplier = SupplierRecord(
+            "local_tea_dealer", "Private Distributor Name", "+919876543210",
+            "11111111-1111-4111-8111-111111111111"
+        )
+        val before = CounterSnapshot(12, emptyList(), emptyMap(), emptySet(), emptyList(), emptyList(), emptyList(), emptyList(), suppliers = listOf(supplier))
+        val profileOnly = SyncOutboxPayloadEncoder.between(before.copy(suppliers = emptyList()), before)
+        assertFalse(profileOnly.sendable)
+        assertEquals("entity_contract_pending", profileOnly.blockedReason)
+
+        val receipt = PurchaseReceipt(
+            "local-invoice-command-9876543210", supplier.supplierId,
+            listOf(PurchaseReceiptLine("local_tea", "Private Tea Name", 4, 1000)),
+            totalPaise = 4000,
+            supplierInvoiceReference = "PRIVATE-INVOICE-REFERENCE",
+            syncId = "22222222-2222-4222-8222-222222222222"
+        )
+        val payment = SupplierPayment(
+            "local-payment-command", supplier.supplierId, 1000, "cash", "staff_declared",
+            syncId = "33333333-3333-4333-8333-333333333333"
+        )
+        val returned = PurchaseReturn(
+            "local-return-command", supplier.supplierId, receipt.receiptId,
+            listOf(PurchaseReturnLine("local_tea", "Private Tea Name", 1, 1000)), 1000,
+            syncId = "44444444-4444-4444-8444-444444444444"
+        )
+        val projection = SyncOutboxPayloadEncoder.between(before, before.copy(
+            purchaseReceipts = listOf(receipt),
+            supplierPayments = listOf(payment),
+            purchaseReturns = listOf(returned)
+        ))
+        assertTrue(projection.blockedReason.orEmpty(), projection.sendable)
+        val json = projection.json!!
+        assertTrue(json.contains("\"supplierId\":\"${supplier.syncId}\""))
+        assertTrue(json.contains("\"receiptId\":\"${receipt.syncId}\""))
+        assertTrue(json.contains("\"paymentId\":\"${payment.syncId}\""))
+        assertTrue(json.contains("\"returnId\":\"${returned.syncId}\""))
+        assertTrue(json.contains("\"amountPaise\":1000"))
+        listOf(supplier.supplierId, supplier.name, supplier.phone!!, receipt.receiptId, receipt.supplierInvoiceReference!!,
+            payment.paymentId, returned.returnId, "Private Tea Name", "local_tea")
+            .forEach { privateValue -> assertFalse("Sync payload leaked $privateValue", json.contains(privateValue)) }
+    }
+
     @Test fun syncEnvelopeMapperRejectsInvalidIdentityRevisionVersionAndEventIds() {
         val identity = SyncEnvelopeIdentity(
             "11111111-1111-4111-8111-111111111111",

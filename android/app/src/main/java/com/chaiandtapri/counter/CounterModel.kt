@@ -478,7 +478,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val before = snapshot()
         val index = supplierRecords.indexOfFirst { it.supplierId == id }
         val existingPhone = supplierRecords.getOrNull(index)?.phone
-        val record = SupplierRecord(id, displayName, if (phone == null) existingPhone else normalizedPhone)
+        val existing = supplierRecords.getOrNull(index)
+        val record = SupplierRecord(id, displayName, if (phone == null) existingPhone else normalizedPhone, existing?.syncId ?: java.util.UUID.randomUUID().toString())
         if (index >= 0) supplierRecords[index] = record else supplierRecords += record
         return commitMutation(before, commandId, "Supplier saved: $displayName.", "supplier.saved id=$id name=$displayName contact=${if (normalizedPhone == null) "none" else "set"}")
     }

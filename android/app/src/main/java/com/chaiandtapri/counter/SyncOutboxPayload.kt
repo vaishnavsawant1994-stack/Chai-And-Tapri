@@ -1,6 +1,6 @@
 package com.chaiandtapri.counter
 
-/** Small allow-listed projection delta. Customer-linked credit/repayments are blocked until IDs are opaque and privacy-reviewed. */
+/** Small allow-listed projection delta. Customer-linked credit/repayments remain local until identity is reviewed. */
 data class SyncOutboxPayload(val version: Int?, val json: String?, val blockedReason: String?) {
     val sendable: Boolean get() = version != null && json != null && blockedReason == null
 }
@@ -8,9 +8,6 @@ data class SyncOutboxPayload(val version: Int?, val json: String?, val blockedRe
 object SyncOutboxPayloadEncoder {
     fun between(before: CounterSnapshot, after: CounterSnapshot): SyncOutboxPayload {
         val unsupported = before.suppliers != after.suppliers ||
-            before.purchaseReceipts != after.purchaseReceipts ||
-            before.supplierPayments != after.supplierPayments ||
-            before.purchaseReturns != after.purchaseReturns ||
             before.cashDrawerSessions != after.cashDrawerSessions ||
             before.cashDrawerMovements != after.cashDrawerMovements ||
             before.cashClosingReviews != after.cashClosingReviews
@@ -23,6 +20,15 @@ object SyncOutboxPayloadEncoder {
         val credits = changedBy(before.customerCredits, after.customerCredits, CustomerCredit::creditId)
         val repayments = after.creditRepayments.drop(before.creditRepayments.size)
         val payments = after.paymentEntries.drop(before.paymentEntries.size)
+        val supplierSyncIds = after.suppliers.associate { it.supplierId to it.syncId }
+        val receipts = after.purchaseReceipts.drop(before.purchaseReceipts.size)
+        val supplierPayments = after.supplierPayments.drop(before.supplierPayments.size)
+        val purchaseReturns = after.purchaseReturns.drop(before.purchaseReturns.size)
+        if ((receipts.map { it.supplierId } + supplierPayments.map { it.supplierId } + purchaseReturns.map { it.supplierId })
+                .any { supplierId -> supplierSyncIds[supplierId]?.isOpaqueUuid() != true } ||
+            receipts.any { !it.syncId.isOpaqueUuid() } || supplierPayments.any { !it.syncId.isOpaqueUuid() } || purchaseReturns.any { !it.syncId.isOpaqueUuid() }) {
+            return SyncOutboxPayload(null, null, "opaque_supplier_sync_identity_required")
+        }
         val previousExpenses = before.expenses.associateBy(BusinessExpense::expenseId)
         val expenses = after.expenses.filter { expense ->
             val previous = previousExpenses[expense.expenseId]
@@ -34,7 +40,7 @@ object SyncOutboxPayloadEncoder {
         if (credits.isNotEmpty() || repayments.isNotEmpty() || payments.any { it.customerId != null }) {
             return SyncOutboxPayload(null, null, "customer_identity_contract_pending")
         }
-        if (orders.isEmpty() && stock.isEmpty() && movements.isEmpty() && credits.isEmpty() && repayments.isEmpty() && payments.isEmpty() && expenses.isEmpty()) {
+        if (orders.isEmpty() && stock.isEmpty() && movements.isEmpty() && credits.isEmpty() && repayments.isEmpty() && payments.isEmpty() && expenses.isEmpty() && receipts.isEmpty() && supplierPayments.isEmpty() && purchaseReturns.isEmpty()) {
             return SyncOutboxPayload(null, null, "empty_delta")
         }
 
@@ -83,6 +89,25 @@ object SyncOutboxPayloadEncoder {
                 number("amountPaise", expense.amountPaise); append(','); field("method", expense.method); append(',')
                 field("status", expense.status); append('}')
             }
+            append(','); append("\"purchaseReceipts\":"); array(receipts) { receipt ->
+                append('{'); field("receiptId", receipt.syncId); append(',')
+                field("supplierId", supplierSyncIds.getValue(receipt.supplierId)); append(',')
+                long("totalPaise", receipt.totalPaise); append('}')
+            }
+            append(','); append("\"supplierPayments\":"); array(supplierPayments) { payment ->
+                append('{'); field("paymentId", payment.syncId); append(',')
+                field("supplierId", supplierSyncIds.getValue(payment.supplierId)); append(',')
+                number("amountPaise", payment.amountPaise); append(','); field("method", payment.method); append(',')
+                field("status", payment.status); append('}')
+            }
+            append(','); append("\"purchaseReturns\":"); array(purchaseReturns) { purchaseReturn ->
+                val receiptSyncId = after.purchaseReceipts.firstOrNull { it.receiptId == purchaseReturn.receiptId }?.syncId
+                    ?: return SyncOutboxPayload(null, null, "purchase_return_receipt_sync_identity_missing")
+                if (!receiptSyncId.isOpaqueUuid()) return SyncOutboxPayload(null, null, "purchase_return_receipt_sync_identity_missing")
+                append('{'); field("returnId", purchaseReturn.syncId); append(',')
+                field("supplierId", supplierSyncIds.getValue(purchaseReturn.supplierId)); append(',')
+                field("receiptId", receiptSyncId); append(','); long("amountPaise", purchaseReturn.totalPaise); append('}')
+            }
             append('}')
         }
         return SyncOutboxPayload(version = 1, json = json, blockedReason = null)
@@ -103,6 +128,8 @@ object SyncOutboxPayloadEncoder {
     private fun StringBuilder.long(name: String, value: Long) { append(quoted(name)).append(':').append(value) }
     private fun StringBuilder.nullableNumber(name: String, value: Int?) { append(quoted(name)).append(':').append(value?.toString() ?: "null") }
     private fun StringBuilder.bool(name: String, value: Boolean) { append(quoted(name)).append(':').append(value) }
+
+    private fun String.isOpaqueUuid(): Boolean = runCatching { java.util.UUID.fromString(this).toString() == this }.getOrDefault(false)
 
     private fun quoted(value: String): String = buildString(value.length + 2) {
         append('"')

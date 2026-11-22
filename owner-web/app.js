@@ -44,14 +44,16 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     const overview = view === 'overview';
     const products = view === 'products';
     const inventory = view === 'inventory';
+    const suppliers = view === 'suppliers';
     const activity = view === 'activity';
     const cashflow = view === 'cashflow';
     const profit = view === 'profit';
     const audit = view === 'audit';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
+    $('suppliers-view').classList.toggle('hidden', !suppliers);
     $('activity-view').classList.toggle('hidden', !activity);
     $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('profit-view').classList.toggle('hidden', !profit);
@@ -62,6 +64,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('products-tab').setAttribute('aria-current', products ? 'page' : 'false');
     $('inventory-tab').classList.toggle('active', inventory);
     $('inventory-tab').setAttribute('aria-current', inventory ? 'page' : 'false');
+    $('suppliers-tab').classList.toggle('active', suppliers);
+    $('suppliers-tab').setAttribute('aria-current', suppliers ? 'page' : 'false');
     $('activity-tab').classList.toggle('active', activity);
     $('activity-tab').setAttribute('aria-current', activity ? 'page' : 'false');
     $('cashflow-tab').classList.toggle('active', cashflow);
@@ -253,6 +257,38 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     } finally {
       $('refresh-button').disabled = false;
     }
+  }
+
+  async function loadSuppliers() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    invalidateReport('suppliers');
+    setStatus($('suppliers-status'), 'Loading accepted supplier finance events…');
+    try {
+      const data = await request(`/v1/dashboard/suppliers?shopId=${encodeURIComponent(activeShopId)}`, { headers: { authorization: `Bearer ${session.token}` } });
+      $('suppliers-scope').textContent = `Server revision ${data.serverRevision}. ${data.evidence.scope}`;
+      $('supplier-metrics').replaceChildren(
+        metric('Suppliers with recorded activity', String(data.supplierCount), 'Opaque IDs only'),
+        metric('Recorded receipts', money(data.totalReceiptsPaise), 'Accepted purchase receipt values'),
+        metric('Staff-declared payments', money(data.totalPaymentsPaise), 'Not bank-verified'),
+        metric('Recorded net payable', money(data.netPayablePaise), 'May include supplier credits/advances')
+      );
+      const rows = data.suppliers.map((supplier) => {
+        const row = document.createElement('tr');
+        for (const value of [supplier.supplierId, money(supplier.receiptsPaise), money(supplier.paymentsPaise), money(supplier.returnsPaise), money(supplier.outstandingPaise)]) {
+          const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+        }
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 5; cell.className = 'empty-row'; cell.textContent = 'No accepted supplier finance records are available.'; row.append(cell); rows.push(row); }
+      $('supplier-rows').replaceChildren(...rows);
+      $('supplier-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+      setStatus($('suppliers-status'), `${data.supplierCount} supplier balances loaded through server revision ${data.serverRevision}.`, 'success');
+      captureReport('suppliers', 'Supplier balances', 'suppliers-scope', 'supplier-metrics', ['supplier-evidence-list']);
+    } catch (error) {
+      setStatus($('suppliers-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
   }
 
   async function loadActivity() {
@@ -463,6 +499,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
   $('refresh-button').addEventListener('click', () => {
     if (!$('products-view').classList.contains('hidden')) loadProducts();
     else if (!$('inventory-view').classList.contains('hidden')) loadInventory();
+    else if (!$('suppliers-view').classList.contains('hidden')) loadSuppliers();
     else if (!$('activity-view').classList.contains('hidden')) loadActivity();
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
@@ -485,6 +522,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
   $('overview-tab').addEventListener('click', () => setView('overview'));
   $('products-tab').addEventListener('click', () => { setView('products'); loadProducts(); });
   $('inventory-tab').addEventListener('click', () => { setView('inventory'); loadInventory(); });
+  $('suppliers-tab').addEventListener('click', () => { setView('suppliers'); loadSuppliers(); });
   $('activity-tab').addEventListener('click', () => { setView('activity'); loadActivity(); });
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });

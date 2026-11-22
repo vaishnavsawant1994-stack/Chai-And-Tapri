@@ -92,6 +92,7 @@ class SqliteCounterPersistence internal constructor(
         createLocalOwnerTable(db)
         createStaffCredentialsTable(db)
         createCustomerProfilesTable(db)
+        migrateOpaqueProcurementSyncIds(db)
     }
 
     override fun onUpgrade(db: CipherDatabase, oldVersion: Int, newVersion: Int) {
@@ -166,8 +167,24 @@ class SqliteCounterPersistence internal constructor(
             if (!hasColumn(db, "product_catalog", "scan_code")) db.execSQL("ALTER TABLE product_catalog ADD COLUMN scan_code TEXT")
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS product_catalog_scan_code_unique ON product_catalog(scan_code COLLATE NOCASE) WHERE scan_code IS NOT NULL AND scan_code <> ''")
         }
-        if (newVersion > DATABASE_VERSION || oldVersion > 26) {
+        if (oldVersion < 28) migrateOpaqueProcurementSyncIds(db)
+        if (newVersion > DATABASE_VERSION || oldVersion > 27) {
             throw IllegalStateException("No migration is defined from database version $oldVersion to $newVersion")
+        }
+    }
+
+    private fun migrateOpaqueProcurementSyncIds(db: CipherDatabase) {
+        listOf("suppliers" to "supplier_id", "purchase_receipts" to "receipt_id", "supplier_payments" to "payment_id", "purchase_returns" to "return_id").forEach { (table, idColumn) ->
+            if (!hasColumn(db, table, "sync_id")) db.execSQL("ALTER TABLE $table ADD COLUMN sync_id TEXT NOT NULL DEFAULT ''")
+            val ids = mutableListOf<String>()
+            db.rawQuery("SELECT $idColumn FROM $table WHERE sync_id='' OR sync_id IS NULL", null).use { c ->
+                while (c.moveToNext()) ids += c.getString(0)
+            }
+            ids.forEach { localId ->
+                val changed = db.update(table, ContentValues().apply { put("sync_id", UUID.randomUUID().toString()) }, "$idColumn=? AND (sync_id='' OR sync_id IS NULL)", arrayOf(localId))
+                check(changed == 1) { "Could not migrate opaque procurement sync identity." }
+            }
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ${table}_sync_id_unique ON $table(sync_id)")
         }
     }
 
@@ -222,6 +239,7 @@ class SqliteCounterPersistence internal constructor(
                                     android.database.Cursor.FIELD_TYPE_BLOB -> row.put(column, cursor.getBlob(index))
                                 }
                             }
+                            if ("sync_id" in targetColumns && "sync_id" !in cursor.columnNames) row.put("sync_id", UUID.randomUUID().toString())
                             encrypted.insertOrThrow(table, null, row)
                             copiedRows++
                         }
@@ -883,14 +901,14 @@ class SqliteCounterPersistence internal constructor(
         val confirmedStock = mutableSetOf<String>()
         db.rawQuery("SELECT product_id FROM stock_baseline_confirmations", null).use { c -> while (c.moveToNext()) confirmedStock += c.getString(0) }
         val suppliers = mutableListOf<SupplierRecord>()
-        db.rawQuery("SELECT supplier_id,name,phone FROM suppliers ORDER BY name COLLATE NOCASE", null).use { c -> while (c.moveToNext()) suppliers += SupplierRecord(c.getString(0), c.getString(1), if (c.isNull(2)) null else c.getString(2)) }
+        db.rawQuery("SELECT supplier_id,name,phone,sync_id FROM suppliers ORDER BY name COLLATE NOCASE", null).use { c -> while (c.moveToNext()) suppliers += SupplierRecord(c.getString(0), c.getString(1), if (c.isNull(2)) null else c.getString(2), c.getString(3)) }
         val receiptLines = mutableMapOf<String, MutableList<PurchaseReceiptLine>>()
         db.rawQuery("SELECT receipt_id,product_id,product_name,quantity,unit_cost_paise FROM purchase_receipt_lines ORDER BY rowid", null).use { c ->
             while (c.moveToNext()) receiptLines.getOrPut(c.getString(0)) { mutableListOf() } += PurchaseReceiptLine(c.getString(1), c.getString(2), c.getInt(3), c.getInt(4))
         }
         val receipts = mutableListOf<PurchaseReceipt>()
-        db.rawQuery("SELECT receipt_id,supplier_id,total_paise,supplier_invoice_reference FROM purchase_receipts ORDER BY created_at,receipt_id", null).use { c ->
-            while (c.moveToNext()) receipts += PurchaseReceipt(c.getString(0), c.getString(1), receiptLines[c.getString(0)].orEmpty(), c.getLong(2), null, if (c.isNull(3)) null else c.getString(3))
+        db.rawQuery("SELECT receipt_id,supplier_id,total_paise,supplier_invoice_reference,sync_id FROM purchase_receipts ORDER BY created_at,receipt_id", null).use { c ->
+            while (c.moveToNext()) receipts += PurchaseReceipt(c.getString(0), c.getString(1), receiptLines[c.getString(0)].orEmpty(), c.getLong(2), null, if (c.isNull(3)) null else c.getString(3), c.getString(4))
         }
         val linkedReceipts = mutableMapOf<String, String>()
         db.rawQuery("SELECT receipt_id,purchase_order_id FROM purchase_receipts WHERE purchase_order_id IS NOT NULL", null).use { c ->
@@ -906,16 +924,16 @@ class SqliteCounterPersistence internal constructor(
             while (c.moveToNext()) purchaseOrderDrafts += PurchaseOrderDraft(c.getString(0), c.getString(1), draftLines[c.getString(0)].orEmpty(), PurchaseOrderStatus.valueOf(c.getString(2)), c.getInt(3), c.getLong(4))
         }
         val supplierPayments = mutableListOf<SupplierPayment>()
-        db.rawQuery("SELECT payment_id,supplier_id,amount_paise,method,status,drawer_session_id FROM supplier_payments ORDER BY created_at,payment_id", null).use { c ->
-            while (c.moveToNext()) supplierPayments += SupplierPayment(c.getString(0), c.getString(1), c.getInt(2), c.getString(3), c.getString(4), if (c.isNull(5)) null else c.getString(5))
+        db.rawQuery("SELECT payment_id,supplier_id,amount_paise,method,status,drawer_session_id,sync_id FROM supplier_payments ORDER BY created_at,payment_id", null).use { c ->
+            while (c.moveToNext()) supplierPayments += SupplierPayment(c.getString(0), c.getString(1), c.getInt(2), c.getString(3), c.getString(4), if (c.isNull(5)) null else c.getString(5), c.getString(6))
         }
         val returnLines = mutableMapOf<String, MutableList<PurchaseReturnLine>>()
         db.rawQuery("SELECT return_id,product_id,product_name,quantity,unit_cost_paise FROM purchase_return_lines ORDER BY rowid", null).use { c ->
             while (c.moveToNext()) returnLines.getOrPut(c.getString(0)) { mutableListOf() } += PurchaseReturnLine(c.getString(1), c.getString(2), c.getInt(3), c.getInt(4))
         }
         val purchaseReturns = mutableListOf<PurchaseReturn>()
-        db.rawQuery("SELECT return_id,supplier_id,receipt_id,total_paise FROM purchase_returns ORDER BY created_at,return_id", null).use { c ->
-            while (c.moveToNext()) purchaseReturns += PurchaseReturn(c.getString(0), c.getString(1), c.getString(2), returnLines[c.getString(0)].orEmpty(), c.getLong(3))
+        db.rawQuery("SELECT return_id,supplier_id,receipt_id,total_paise,sync_id FROM purchase_returns ORDER BY created_at,return_id", null).use { c ->
+            while (c.moveToNext()) purchaseReturns += PurchaseReturn(c.getString(0), c.getString(1), c.getString(2), returnLines[c.getString(0)].orEmpty(), c.getLong(3), c.getString(4))
         }
         val expenses = mutableListOf<BusinessExpense>()
         db.rawQuery("SELECT expense_id,category,amount_paise,method,status,note,drawer_session_id,created_at FROM expenses ORDER BY created_at,expense_id", null).use { c ->
@@ -986,11 +1004,11 @@ class SqliteCounterPersistence internal constructor(
                 put("amount_paise",credit.amountPaise); put("repaid_paise",credit.repaidPaise); put("reversed_paise",credit.reversedPaise)
             }) }
             snapshot.suppliers.forEach { supplier -> db.insertWithOnConflict("suppliers", null, ContentValues().apply {
-                put("supplier_id", supplier.supplierId); put("name", supplier.name); put("active", 1); put("phone", supplier.phone)
+                put("supplier_id", supplier.supplierId); put("name", supplier.name); put("active", 1); put("phone", supplier.phone); put("sync_id", supplier.syncId)
             }, CipherDatabase.CONFLICT_REPLACE) }
             snapshot.purchaseReceipts.forEach { receipt ->
                 db.insertWithOnConflict("purchase_receipts", null, ContentValues().apply {
-                    put("receipt_id", receipt.receiptId); put("supplier_id", receipt.supplierId); put("total_paise", receipt.totalPaise); put("created_at", now); put("purchase_order_id", receipt.purchaseOrderId); put("supplier_invoice_reference", receipt.supplierInvoiceReference)
+                    put("receipt_id", receipt.receiptId); put("supplier_id", receipt.supplierId); put("total_paise", receipt.totalPaise); put("created_at", now); put("purchase_order_id", receipt.purchaseOrderId); put("supplier_invoice_reference", receipt.supplierInvoiceReference); put("sync_id", receipt.syncId)
                 }, CipherDatabase.CONFLICT_IGNORE)
                 receipt.lines.forEach { line -> db.insertWithOnConflict("purchase_receipt_lines", null, ContentValues().apply {
                     put("receipt_id", receipt.receiptId); put("product_id", line.productId); put("product_name", line.productName)
@@ -1011,12 +1029,12 @@ class SqliteCounterPersistence internal constructor(
                 }, CipherDatabase.CONFLICT_IGNORE) }
             }
             snapshot.supplierPayments.forEach { payment -> db.insertWithOnConflict("supplier_payments", null, ContentValues().apply {
-                put("payment_id", payment.paymentId); put("supplier_id", payment.supplierId); put("amount_paise", payment.amountPaise)
+                put("payment_id", payment.paymentId); put("supplier_id", payment.supplierId); put("amount_paise", payment.amountPaise); put("sync_id", payment.syncId)
                 put("method", payment.method); put("status", payment.status); put("drawer_session_id", payment.drawerSessionId); put("created_at", now)
             }, CipherDatabase.CONFLICT_IGNORE) }
             snapshot.purchaseReturns.forEach { purchaseReturn ->
                 db.insertWithOnConflict("purchase_returns", null, ContentValues().apply {
-                    put("return_id", purchaseReturn.returnId); put("supplier_id", purchaseReturn.supplierId); put("receipt_id", purchaseReturn.receiptId)
+                    put("return_id", purchaseReturn.returnId); put("supplier_id", purchaseReturn.supplierId); put("receipt_id", purchaseReturn.receiptId); put("sync_id", purchaseReturn.syncId)
                     put("total_paise", purchaseReturn.totalPaise); put("created_at", now)
                 }, CipherDatabase.CONFLICT_IGNORE)
                 purchaseReturn.lines.forEach { line -> db.insertWithOnConflict("purchase_return_lines", null, ContentValues().apply {
@@ -1063,7 +1081,7 @@ class SqliteCounterPersistence internal constructor(
 
     companion object {
         internal const val DATABASE_NAME = "chai_tapri_counter.db"
-        internal const val DATABASE_VERSION = 27
+        internal const val DATABASE_VERSION = 28
         internal const val STORE_IDENTITY_KEY = "shop_identity"
 
         internal fun locallyBoundShopIdentity(context: Context, databaseName: String, keyNamespace: String): String? =
@@ -1102,10 +1120,10 @@ class SqliteCounterPersistence internal constructor(
     }
 
     private fun createProcurementTables(db: CipherDatabase) {
-        db.execSQL("CREATE TABLE suppliers(supplier_id TEXT PRIMARY KEY,name TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,phone TEXT)")
-        db.execSQL("CREATE TABLE purchase_receipts(receipt_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,total_paise INTEGER NOT NULL CHECK(total_paise >= 0),created_at INTEGER NOT NULL,purchase_order_id TEXT,supplier_invoice_reference TEXT,FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id))")
+        db.execSQL("CREATE TABLE suppliers(supplier_id TEXT PRIMARY KEY,name TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,phone TEXT,sync_id TEXT NOT NULL DEFAULT '')")
+        db.execSQL("CREATE TABLE purchase_receipts(receipt_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,total_paise INTEGER NOT NULL CHECK(total_paise >= 0),created_at INTEGER NOT NULL,purchase_order_id TEXT,supplier_invoice_reference TEXT,sync_id TEXT NOT NULL DEFAULT '',FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id))")
         db.execSQL("CREATE TABLE purchase_receipt_lines(receipt_id TEXT NOT NULL,product_id TEXT NOT NULL,product_name TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity > 0),unit_cost_paise INTEGER NOT NULL CHECK(unit_cost_paise > 0),PRIMARY KEY(receipt_id,product_id),FOREIGN KEY(receipt_id) REFERENCES purchase_receipts(receipt_id))")
-        db.execSQL("CREATE TABLE supplier_payments(payment_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,amount_paise INTEGER NOT NULL CHECK(amount_paise > 0),method TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id))")
+        db.execSQL("CREATE TABLE supplier_payments(payment_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,amount_paise INTEGER NOT NULL CHECK(amount_paise > 0),method TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,sync_id TEXT NOT NULL DEFAULT '',FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id))")
     }
 
     private fun createPurchaseOrderDraftTables(db: CipherDatabase) {
@@ -1116,7 +1134,7 @@ class SqliteCounterPersistence internal constructor(
     }
 
     private fun createPurchaseReturnTables(db: CipherDatabase) {
-        db.execSQL("CREATE TABLE purchase_returns(return_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,receipt_id TEXT NOT NULL,total_paise INTEGER NOT NULL CHECK(total_paise > 0),created_at INTEGER NOT NULL,FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id),FOREIGN KEY(receipt_id) REFERENCES purchase_receipts(receipt_id))")
+        db.execSQL("CREATE TABLE purchase_returns(return_id TEXT PRIMARY KEY,supplier_id TEXT NOT NULL,receipt_id TEXT NOT NULL,total_paise INTEGER NOT NULL CHECK(total_paise > 0),created_at INTEGER NOT NULL,sync_id TEXT NOT NULL DEFAULT '',FOREIGN KEY(supplier_id) REFERENCES suppliers(supplier_id),FOREIGN KEY(receipt_id) REFERENCES purchase_receipts(receipt_id))")
         db.execSQL("CREATE TABLE purchase_return_lines(return_id TEXT NOT NULL,product_id TEXT NOT NULL,product_name TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity > 0),unit_cost_paise INTEGER NOT NULL CHECK(unit_cost_paise > 0),PRIMARY KEY(return_id,product_id),FOREIGN KEY(return_id) REFERENCES purchase_returns(return_id))")
     }
 
