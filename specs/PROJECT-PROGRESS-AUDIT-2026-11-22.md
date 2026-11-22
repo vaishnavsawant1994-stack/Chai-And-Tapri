@@ -1,14 +1,18 @@
 # Chai And Tapri OS — Project Progress Audit
 
-## Latest continuation - CT-29 previous-local-day selection - 22 November 2026
+## Latest continuation - CT-29 current-source emulator regression - 22 November 2026
 
-The operator-selected previous-local-day interaction passed a focused API 37 instrumentation test. The test reads the business date displayed by the report, selects the prior date through Android's date picker, then verifies the complete persisted ledger snapshot is unchanged. Evidence: `test-evidence/2026-11-22/ct29-historical-date-focused.xml`. This focused result does not change the broad-run status below.
+After the historical-date picker test passed individually, the current-source isolated API 37 instrumentation suite passed **111/111**, 0 failures, 0 errors, 0 skipped, in 9m 37s. It includes the previous-local-day selection test. The runner excluded only endpoint-dependent `LiveBackendSyncE2ETest`; this is not a live backend sync test. JUnit: `test-evidence/2026-11-22/ct29-current-full-instrumentation.xml`. Current host checks: Node **52/52**, Kotlin JVM **64/64**, APK assembly pass, lint **0 errors / 173 warnings**. This supersedes the earlier 110-test/30-System-UI-failure attempt documented below.
+
+## CT-29 previous-local-day selection - 22 November 2026
+
+The operator-selected previous-local-day interaction passed a focused API 37 instrumentation test. The test reads the business date displayed by the report, selects the prior date through Android's date picker, then verifies the complete persisted ledger snapshot is unchanged. Evidence: `test-evidence/2026-11-22/ct29-historical-date-focused.xml`. This focused path is also included in the subsequent current-source 111/111 emulator run.
 
 ## Superseding continuation - CT-29 date-scoped report implementation - 22 November 2026
 
 Daily Reports now includes a date picker and a date-scoped projection based on local device-recorded timestamps. Sales and delivered units are grouped by order creation date; current refund allocations reduce net sales on that original order date. Cash collection/refund entries and expenses use their own recorded dates. Current UPI due and customer receivables are presented as current balances for orders created on the selected date, while supplier payables remain current across all dates. Legacy undated orders, payment entries and expenses are excluded and counted. The screen and CSV state that device dates are not server-verified; profit, settlement, tax and close claims remain unavailable.
 
-New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/instrumentation APK builds pass; lint has **0 errors / 173 warnings**. Focused API 37 tests for updated report rendering, nonzero SAF CSV export, cancellation, and previous-local-day selection each passed **1/1**. Pulled synthetic CSV evidence confirms the date-scoped values; its path is recorded in the CT-29 report. In the latest broad serial-pinned API 37 run, **110 tests were attempted: 80 passed and 30 failed**. The updated CT-29 report-render test passed, but its export and cancellation tests failed in that broad run amid repeated System UI ANR dialogs; multiple unrelated UI tests were also obstructed. This broad run is not qualified. Its XML is archived at `../test-evidence/2026-11-22/ct29-current-full-instrumentation.xml`. The focused CT-29 runs remain evidence for those individual paths, not a substitute for a healthy full suite. Other project qualification gates remain open. Details: [CT-29 report](CT-29-CSV-EXPORT-REPORT.md).
+New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/instrumentation APK builds pass; lint has **0 errors / 173 warnings**. Focused API 37 tests for updated report rendering, nonzero SAF CSV export, cancellation, and previous-local-day selection each passed **1/1**. Pulled synthetic CSV evidence confirms the date-scoped values; its path is recorded in the CT-29 report. The current-source serial-pinned API 37 run passed **111/111**, 0 failures/errors/skips; it includes the focused previous-local-day interaction. Only the endpoint-dependent backend E2E test was excluded. Its JUnit is archived at `../test-evidence/2026-11-22/ct29-current-full-instrumentation.xml`. An earlier 110-test/30-System-UI-ANR attempt is superseded. Other project qualification gates remain open. Details: [CT-29 report](CT-29-CSV-EXPORT-REPORT.md).
 
 **Date:** 22 November 2026  
 **Authority:** Current local source, current test outputs, and synthetic emulator recovery evidence.
@@ -19,14 +23,14 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 64/64 passed |
-| API 37 instrumentation | Latest broad run: 110 attempted, 80 passed, 30 failed; repeated System UI ANRs blocked UI automation. Earlier 110/110 applies only to earlier source. |
+| API 37 instrumentation | Current source: 111/111 passed on isolated API 37; only endpoint-dependent live backend E2E excluded. Earlier 110/30 failure is superseded. |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 173 warnings |
 
-The earlier qualified 110/110 Android run used only `Tapri_Recovery_Isolated`; its XML is `test-evidence/2026-11-22/ct15-movement-history-full-instrumentation.xml`. A new current-source broad run on the same isolated AVD attempted 110 tests and recorded 30 UI failures, with repeated `System UI isn't responding` dialogs visibly replacing the app under test. The CT-29 report render passed in that run, while export/cancellation and multiple unrelated UI tests failed under the same obstruction. This source is not broadly emulator-qualified until a clean run completes. Focused current-source tests for CT-29 report rendering, export, and cancellation each passed before the broad run.
+An earlier current-source broad attempt on the isolated AVD recorded 80/110 passing and 30 UI failures amid repeated `System UI isn't responding` dialogs. It was superseded by the 111/111 clean run above. The historical 110/110 result predates later source changes and is not used as current qualification. The endpoint-dependent backend E2E remains separately unrun.
 
 ## Wave status
 
