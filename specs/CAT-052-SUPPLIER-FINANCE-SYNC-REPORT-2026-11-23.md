@@ -1,7 +1,7 @@
 # CAT-052 / OW-07 Supplier Finance Slice
 
 **Date:** 23 November 2026  
-**Status:** Implemented; local Kotlin and backend unit-tested. PostgreSQL-backed acceptance and browser visual qualification remain pending.
+**Status:** Implemented and locally qualified for the synthetic backend contract and SQLite migration. Android-to-server supplier sync and browser visual qualification remain pending.
 
 ## Delivered
 
@@ -13,14 +13,14 @@
 
 ## Verification
 
-- Backend Node suite: **24 passed, 0 failed, 4 PostgreSQL-dependent tests skipped** because this run had no isolated PostgreSQL test connection. Unit coverage checks projection privacy/shape, ledger replay rejection, return allocation, aggregate arithmetic, owner-only route access and dashboard wiring. The PostgreSQL integration test now also exercises receipt/payment/return sync and OW-07 totals when configured, but was skipped in this run.
+- Backend Node suite without a database: **24 passed, 0 failed, 4 PostgreSQL-dependent tests skipped**. Then a new isolated PostgreSQL 17 cluster with a restricted runtime role passed **28/28, 0 failed, 0 skipped**. Integration coverage includes privacy-minimized receipt/payment/return sync, owner OW-07 totals, tenant isolation, idempotency and authentication. Test log: `../test-evidence/2026-11-23/cat052-supplier-finance-postgres-tests.log`; the temporary cluster was stopped after testing.
 - Kotlin JVM unit suite: **68 passed, 0 failed**. The projection test confirms supplier PII and product/invoice details are absent from serialized payloads.
 - Isolated API 37 emulator: **8/8 focused procurement/migration instrumentation tests passed**, including v27→v28 preservation of supplier, receipt, settlement, return, stock and payable records. Evidence: `../test-evidence/2026-11-23/cat052-procurement-migration-regression.txt`. A full persistence class run before correcting old schema-version expectations produced 7 failures, all from tests expecting schema version 27; source expectations were corrected and all seven tests plus the new migration test passed individually.
 - Debug APK and instrumentation APK build tasks passed; Android lint passed with **0 errors / 175 warnings**. Node syntax checks passed for backend and owner web modules.
-- Browser visual inspection and PostgreSQL-backed live sync were **not run** in this slice.
+- Browser visual inspection and Android app-to-server supplier sync were **not run** in this slice. The PostgreSQL service test sends a synthetic authenticated HTTP sync event; it does not exercise the Android outbox/worker.
 
 ## Limits and next work
 
 The server remains an immutable event journal with derived owner summaries, not an authoritative supplier payable ledger. Staff-declared payment totals are not cash/bank verified. Negative payable values are surfaced as recorded supplier credit/advance. Profile edits do not sync. This feature is a narrow W3/W4 vertical slice; it does not complete CAT-052, OW-07 as a full supplier-analysis module, the owner dashboard, or the six-wave product plan.
 
-Next: run the backend suite on an isolated PostgreSQL 17 test cluster, exercise the supplier projection through the full encrypted-outbox-to-server path on an emulator, and test the OW-07 interaction through the authorized browser review path.
+Next: exercise the supplier projection through the Android encrypted-outbox-to-server path on an emulator, and test the OW-07 interaction through the authorized browser review path.
