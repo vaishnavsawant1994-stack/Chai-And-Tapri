@@ -87,6 +87,7 @@ class QuickSaleActivity : Activity() {
         emptyNotice = label("", 15f); root.addView(emptyNotice)
         root.addView(button("Configure products and confirm prices") { startActivity(android.content.Intent(this, ProductCatalogueActivity::class.java)) })
         products = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; root.addView(products)
+        root.addView(button("Repeat last completed sale") { stageRepeatLastSale() })
         root.addView(label("Current order", 20f))
         cart = label("No items", 16f); root.addView(cart)
         cartRowsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; root.addView(cartRowsContainer)
@@ -216,6 +217,62 @@ class QuickSaleActivity : Activity() {
         val result = model.quickSaleSplit(quantities.map { it.key to it.value }, cashPaise, customerId)
         status.text = result
         if (result.startsWith("Quick sale")) { quantities.clear(); render() }
+    }
+
+    /** Copies a prior completed sale into the current draft only; checkout remains a separate explicit action. */
+    @Suppress("SetTextI18n")
+    private fun stageRepeatLastSale() {
+        val previous = model.allOrders().firstOrNull {
+            it.salePosted && !it.voided && it.fulfillment == Fulfillment.GIVEN &&
+                it.lines.any { line -> line.deliveredQuantity > line.refundedQuantity }
+        }
+        if (previous == null) {
+            status.text = "No completed, non-voided sale is available to repeat. No order changed."
+            return
+        }
+        val repeatLines = previous.lines.mapNotNull { line ->
+            (line.deliveredQuantity - line.refundedQuantity).takeIf { it > 0 }?.let { line.productId to it }
+        }
+        val issue = repeatDraftIssue(repeatLines)
+        if (issue != null) {
+            status.text = issue
+            return
+        }
+        val description = repeatLines.joinToString(" + ") { (productId, quantity) ->
+            val product = model.products().first { it.productId == productId }
+            "$quantity × ${product.name}"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Repeat completed sale #${previous.number}?")
+            .setMessage("Stage $description as a draft at today's confirmed catalogue prices. Nothing is sold or charged until you review and check out.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Add to current order") { _, _ ->
+                val recheck = repeatDraftIssue(repeatLines)
+                if (recheck != null) {
+                    status.text = recheck
+                    return@setPositiveButton
+                }
+                repeatLines.forEach { (productId, quantity) -> quantities[productId] = (quantities[productId] ?: 0) + quantity }
+                status.text = "Previous sale staged as a draft. Review items and payment before checkout."
+                render()
+            }
+            .show()
+    }
+
+    @Suppress("SetTextI18n")
+    private fun repeatDraftIssue(lines: List<Pair<String, Int>>): String? {
+        if (lines.isEmpty()) return "The previous sale has no remaining delivered items to repeat. No order changed."
+        val productsById = model.products().associateBy { it.productId }
+        for ((productId, quantity) in lines) {
+            val product = productsById[productId] ?: return "A product from the previous sale is unavailable. No order changed."
+            if (!product.active || !product.priceConfirmed || product.unitPricePaise <= 0) return "${product.name} is inactive or has no confirmed price. Review the catalogue first. No order changed."
+            if (!model.isStockConfirmed(productId)) return "Physically count and confirm stock for ${product.name} before repeating this sale. No order changed."
+            val available = model.stockLevels()[productId] ?: 0
+            val existing = quantities[productId] ?: 0
+            if (quantity > 99 - existing) return "Maximum cart quantity is 99 for ${product.name}. No order changed."
+            if (existing + quantity > available) return "Not enough recorded stock for ${product.name}. No order changed."
+        }
+        return null
     }
 
     private fun addScannedProduct() {

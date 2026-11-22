@@ -3547,6 +3547,44 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun repeatLastSaleStagesCurrentCatalogueDraftWithoutPostingSecondSale() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("repeat_ui_tea", "Repeat Tea", "Chai", 1200, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("repeat_ui_tea", 8, "synthetic repeat-sale baseline", "repeat-ui-stock").contains("8 units"))
+            assertTrue(model.quickSale(listOf("repeat_ui_tea" to 2), "cash", commandId = "repeat-ui-original-sale").startsWith("Quick sale"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Original sale was not persisted") }
+        val activity = instrumentation.startActivitySync(Intent(context, QuickSaleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun awaitNode(textPrefix: String): AccessibilityNodeInfo {
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                        if (node == null) return null
+                        if (node.text?.toString()?.startsWith(textPrefix, ignoreCase = true) == true) return node
+                        for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                        return null
+                    }
+                    find(root)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Quick Sale node not found: $textPrefix")
+            }
+            fun click(textPrefix: String) = assertTrue("Could not click $textPrefix", awaitNode(textPrefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            click("Repeat last completed sale")
+            click("Add to current order")
+            assertTrue("Repeated sale should be staged as an editable draft", awaitNode("2 × Repeat Tea").text.toString().contains("2 × Repeat Tea"))
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Staging repeat sale removed persisted data") }
+            assertEquals("Draft staging must not commit an extra order or payment", before, after)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun quickSaleUiRecordsSplitCashAndUdharInOneAtomicSale() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

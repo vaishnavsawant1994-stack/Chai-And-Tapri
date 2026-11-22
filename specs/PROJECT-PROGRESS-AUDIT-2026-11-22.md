@@ -68,3 +68,6 @@ The alert routing UI test now directly clicks all seven local actions: open orde
 ## Superseding CT-28 UI test result - 22 November 2026
 
 The CT-28 closing review acknowledgement is now exercised through the Android UI. A synthetic follow-up note persists, and expected cash, payment history, and stock movements are unchanged by acknowledgement. Focused test 1/1; full serial-pinned isolated API 37 instrumentation 107/107 (0 failures/errors/skips); Node 52/52; Kotlin JVM 63/63; APK build and lint tasks pass (0 lint errors / 172 warnings). This is only one emulator UI path; session-based daily closing and all six delivery waves remain incomplete.
+## Superseding CT-06 repeat-sale update - 22 November 2026
+
+The native Quick Sale repeat action now stages an eligible prior completed sale into an editable draft, applying current catalogue prices and checking stock; it does not create another transaction until explicit checkout. Focused test 1/1; the current full isolated API 37 suite passed 108/108 with no failures/errors/skips, after an earlier run's Sales History activity launch timed out and passed in isolation. Node 52/52, Kotlin JVM 63/63, APK builds passed, lint 0 errors / 172 warnings. CT-06 remains partial and all six waves remain incomplete.

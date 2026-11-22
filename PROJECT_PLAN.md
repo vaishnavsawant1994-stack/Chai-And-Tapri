@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CT-06 repeat-sale draft - 22 November 2026
+
+Quick Sale now stages the most recent eligible completed sale into an editable cart after checking current active catalogue prices and physically confirmed stock. It asks for confirmation and never commits a sale, payment, inventory movement, or audit mutation until the operator proceeds to checkout. Focused repeat-sale test passed 1/1; full isolated API 37 instrumentation 108/108, Node 52/52, Kotlin JVM 63/63; debug and instrumentation APK builds passed; lint 0 errors / 172 warnings. An initial run had a separate Sales History screen-launch timeout; the focused test and subsequent full rerun passed. This is a tested CT-06 slice, not complete CT-06 or shop qualification. See [CT-06 report](specs/CT-06-NATIVE-QUICK-SALE-REPORT.md) and [latest audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md).
+
 ## Latest continuation - CT-28 daily-closing review UI - 22 November 2026
 
 The CT-28 API 37 test now submits the actual closing-review dialog and a follow-up note, starting from an unacknowledged drawer close. It verifies the note persists while expected cash, payment history, and stock movements remain unchanged. Focused UI test passed 1/1; complete isolated API 37 instrumentation passed 107/107 with zero failures/errors/skips; Node 52/52; Kotlin JVM 63/63; APK build and lint tasks passed (0 lint errors / 172 warnings). Only the isolated test AVD was used. This validates one synthetic review-acknowledgement path; CT-28 is not a calendar-day close or production-ready close process. See [CT-28 report](specs/CT-28-DAILY-CLOSING-REPORT.md) and [current progress audit](specs/PROJECT-PROGRESS-AUDIT-2026-11-22.md).
