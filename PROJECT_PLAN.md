@@ -923,6 +923,12 @@ Expanded the Kotlin source-level supplier-return scenario to cover receipt, part
 The focused test passed 1/1; the complete Kotlin JVM suite passed 63/63 (0 failures/errors); Node passed 52/52; `assembleDebug`, `assembleDebugAndroidTest`, and `lintDebug` passed; lint reports 0 errors / 173 warnings. No Android instrumentation run was completed for this source-level test change. The emulator had repeated System UI/Pixel Launcher launch failures in the preceding UI qualification attempts, so CAT-17 UI full-suite qualification remains open. This test validates synthetic engine accounting only, not receipt-lot provenance or real supplier settlement.
 
 
+## CAT-052 WorkManager retry slice - 23 November 2026
+
+Current-source focused Android instrumentation now exercises the actual background sync worker against the isolated local HTTPS/PostgreSQL backend. A committed sync response is deliberately dropped; WorkManager retries, the local outbox/cursor reconciles, and the owner view retains one order and the correct ₹25 cash total. Focused result: 1/1 passed; `assembleDebug` and `assembleDebugAndroidTest` passed. See `specs/CAT-052-WORKMANAGER-ACK-LOSS-RETRY-REPORT-2026-11-23.md`.
+
+This does not qualify process death during a retry, full-suite regressions for this slice, production synchronization/accounting, physical hardware, independent security review, or release readiness. Continue CAT-052 with process-boundary/background-restriction recovery and server-authoritative financial projection requirements while keeping shopkeeper-screen implementation, real Bluetooth, field trials, and all six waves open.
+
 ## CT-29 historical date selection - 22 November 2026
 
 Added `dailyReportDatePickerSelectsPreviousLocalDayWithoutChangingLedger`. It derives the business date from the report UI, selects the preceding day through Android's native date picker, and verifies the persisted ledger snapshot remains unchanged. Focused API 37 instrumentation passed 1/1; evidence: `test-evidence/2026-11-22/ct29-historical-date-focused.xml`. The test uses the full accessible calendar date to avoid matching a neighboring month's same day number. The subsequent current-source isolated API 37 run passed 111/111; the previous 110-attempt/30-ANR result is superseded. Project-wide and six-wave completion remain outstanding.

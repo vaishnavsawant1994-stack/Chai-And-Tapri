@@ -64,6 +64,7 @@ class LiveBackendSyncE2ETest {
         val context = instrumentation.targetContext
         val phase = args.getString("syncE2ePhase") ?: "close_reopen"
         if (phase == "resume_after_process_death") {
+            System.out.println("CAT052_TEST_PROCESS_NAME=${android.app.Application.getProcessName()}")
             resumeAfterProcessDeath(endpointBase!!, context, instrumentation)
             return
         }
@@ -123,10 +124,12 @@ class LiveBackendSyncE2ETest {
             assertEquals("Sale remains the only unacknowledged local event", listOf(saleEvent!!.eventId), persistence.loadPendingSyncEvents(20).map { it.eventId })
             assertEquals("Earlier stock event should have advanced the stored cursor", 1L, persistence.loadSyncCursor())
             if (phase == "prepare_process_death") {
+                System.out.println("CAT052_TEST_PROCESS_NAME=${android.app.Application.getProcessName()}")
                 processDeathState.writeText(JSONObject()
                     .put("databaseName", databaseName)
                     .put("keyNamespace", keyNamespace)
                     .put("preparedProcessId", android.os.Process.myPid())
+                    .put("preparedProcessName", android.app.Application.getProcessName())
                     .toString(), Charsets.UTF_8)
                 // Intentionally keep the SQLCipher connection open. The host
                 // force-stops this instrumentation process before phase two.
@@ -184,6 +187,7 @@ class LiveBackendSyncE2ETest {
         val databaseName = state.getString("databaseName")
         val keyNamespace = state.getString("keyNamespace")
         val preparedProcessId = state.getInt("preparedProcessId")
+        System.out.println("CAT052_PREVIOUS_PROCESS_NAME=${state.getString("preparedProcessName")}")
         assertTrue("The app process must have been restarted between phases.", preparedProcessId != android.os.Process.myPid())
         val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
         var persistence: SqliteCounterPersistence? = null

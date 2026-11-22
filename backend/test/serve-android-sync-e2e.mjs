@@ -5,16 +5,31 @@ import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
 
 const port = Number(process.env.SYNC_E2E_PORT ?? 8793);
+const dropAckOnSyncRequest = Number(process.env.SYNC_E2E_DROP_ACK_ON_SYNC_REQUEST ?? 0);
 const pfxPath = process.env.SYNC_E2E_PFX_PATH;
 const passphrase = process.env.SYNC_E2E_PFX_PASSPHRASE;
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('SYNC_E2E_PORT is invalid');
+if (!Number.isInteger(dropAckOnSyncRequest) || dropAckOnSyncRequest < 0) throw new Error('SYNC_E2E_DROP_ACK_ON_SYNC_REQUEST is invalid');
 if (!pfxPath || !passphrase) throw new Error('A test-only PKCS#12 file and passphrase are required');
 
 const pool = createPool();
 const api = createApiServer(new SyncService(pool));
 const handler = api.listeners('request')[0];
 const pfx = await readFile(pfxPath);
-const server = createHttpsServer({ pfx, passphrase }, handler);
+let syncRequestCount = 0;
+const server = createHttpsServer({ pfx, passphrase }, (req, res) => {
+  const requestNumber = req.method === 'POST' && new URL(req.url, 'https://localhost').pathname === '/v1/sync/events'
+    ? ++syncRequestCount
+    : 0;
+  if (dropAckOnSyncRequest > 0 && requestNumber === dropAckOnSyncRequest) {
+    res.end = function (...args) {
+      console.log(`Synthetic response-loss fault after sync request ${requestNumber} committed.`);
+      res.socket?.destroy();
+      return res;
+    };
+  }
+  handler(req, res);
+});
 server.listen(port, '127.0.0.1', () => console.log(`Synthetic Android sync backend listening on 127.0.0.1:${port}`));
 
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(async () => {
