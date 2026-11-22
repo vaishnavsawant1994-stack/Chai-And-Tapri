@@ -104,6 +104,12 @@ The test is opt-in and guards existing app data, owner credentials, session/iden
 
 This qualifies retry/idempotency after an ambiguous server acknowledgment for this synthetic batch. It does **not** qualify the app process being killed during a scheduled retry, Android background limits under device/OEM conditions, production TLS/credentials, server-authoritative accounting, physical devices, or production sync. The two existing AVDs had prior synthetic records and were preserved; the isolated test ran on a newly created `CAT052_Worker_Synthetic` AVD. The Android full instrumentation suite was not rerun. Current-source Kotlin JVM passed 67/67, Node/backend passed 24/24 with isolated PostgreSQL, lint passed with 0 errors / 175 warnings, and backend helper syntax passed. All six delivery waves and hardware, independent security, deployment, and field gates remain open. See `CAT-052-WORKMANAGER-ACK-LOSS-RETRY-REPORT-2026-11-23.md`.
 
+## CAT-052 pending WorkManager job across app process restart — 23 November 2026
+
+A two-phase instrumentation drill queued the production sync worker with a short initial delay, ended the first app process, then started phase two under a different PID. The test verified the same persisted WorkManager job and Keystore-protected session resumed and completed through the encrypted outbox; the server reported one sale and two accepted events with the expected 3000-paise declared cash total. Prepare 1/1 and resume 1/1 passed. Current-source APK build, JVM tests (67/67), and lint (0 errors / 175 warnings) passed. Run log: `test-evidence/2026-11-23/cat052-worker-process-restart.log`; report: `CAT-052-WORKMANAGER-PROCESS-RESTART-REPORT-2026-11-23.md`.
+
+This proves recovery of queued work after process restart; it does not kill the app during a network request or a lost-ack retry/backoff. Process death during retry, OEM background limits, full Android regression, production backend/accounting, real hardware/field trials and release gates remain open.
+
 Superseding lint verification after the final Cloud Sync main-thread change: `:app:lintDebug` passed with 0 errors and 139 warnings. `:app:testDebugUnitTest` also passed after that change; the JVM report remains 35/35. The warning count supersedes the earlier 138-warning line in this continuation.
 
 ## 1 November 2026 continuation — OW-01 accepted-event overview

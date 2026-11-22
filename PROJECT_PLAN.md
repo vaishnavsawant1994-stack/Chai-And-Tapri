@@ -927,7 +927,13 @@ The focused test passed 1/1; the complete Kotlin JVM suite passed 63/63 (0 failu
 
 Current-source focused Android instrumentation now exercises the actual background sync worker against the isolated local HTTPS/PostgreSQL backend. A committed sync response is deliberately dropped; WorkManager retries, the local outbox/cursor reconciles, and the owner view retains one order and the correct ₹25 cash total. Focused result: 1/1 passed; `assembleDebug` and `assembleDebugAndroidTest` passed. See `specs/CAT-052-WORKMANAGER-ACK-LOSS-RETRY-REPORT-2026-11-23.md`.
 
-This does not qualify process death during a retry, full-suite regressions for this slice, production synchronization/accounting, physical hardware, independent security review, or release readiness. Continue CAT-052 with process-boundary/background-restriction recovery and server-authoritative financial projection requirements while keeping shopkeeper-screen implementation, real Bluetooth, field trials, and all six waves open.
+This does not qualify process death during a retry, full-suite regressions for this slice, production synchronization/accounting, physical hardware, independent security review, or release readiness. Continue CAT-052 with process-death during a lost-ack retry and server-authoritative financial projection requirements while keeping shopkeeper-screen implementation, real Bluetooth, field trials, and all six waves open.
+
+## CAT-052 queued WorkManager process-restart slice - 23 November 2026
+
+On the fresh synthetic API 37 AVD, a two-phase test queued the production sync worker with a delayed start, ended the first app process, and resumed the exact persisted WorkManager job from a new app PID. The worker then synchronized the synthetic order through the encrypted local outbox. Prepare and resume each passed 1/1; local order/stock/cursor and remote accepted-event totals reconciled. Run log: `test-evidence/2026-11-23/cat052-worker-process-restart.log`; details: `specs/CAT-052-WORKMANAGER-PROCESS-RESTART-REPORT-2026-11-23.md`.
+
+This covers process death while work is queued, not process death during an in-flight retry or HTTP request. Full Android regression, production synchronization/accounting, physical hardware, field trials, independent security review and release readiness remain open.
 
 ## CT-29 historical date selection - 22 November 2026
 
