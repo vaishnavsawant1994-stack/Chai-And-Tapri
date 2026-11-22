@@ -4409,6 +4409,17 @@ class SqliteCounterPersistenceTest {
             views = descendants(activity.window.decorView)
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("No unique active product matches this code") })
             assertTrue("An unknown scan must not discard the existing draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+
+            instrumentation.runOnMainSync {
+                activity.handleCameraScanResult(
+                    android.app.Activity.RESULT_CANCELED,
+                    CameraBarcodeScannerActivity.resultIntent(message = "Camera permission was denied. Type a product code or use a paired scanner; no order changed.")
+                )
+            }
+            instrumentation.waitForIdleSync()
+            views = descendants(activity.window.decorView)
+            assertTrue("A denied/cancelled camera result explains the typed fallback", views.filterIsInstance<TextView>().any { it.text.toString().contains("Camera permission was denied") })
+            assertTrue("A denied/cancelled camera result must preserve the draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
             val verification = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             assertTrue("Scanning stages a draft; normal checkout is still required", verification.allOrders().isEmpty())
             assertEquals(2, verification.stockLevels()[productId])
