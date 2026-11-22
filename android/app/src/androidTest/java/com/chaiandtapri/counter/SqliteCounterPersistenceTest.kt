@@ -2044,6 +2044,110 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun procurementPurchaseOrderDraftAndTwoPartialReceiptsUseTheNativeScreen() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("ct18_ui_tea", "CT18 UI Tea", "Pantry", 1000, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct18_ui_tea", 5, "synthetic procurement UI baseline", "ct18-ui-stock").contains("5 units"))
+            assertTrue(model.saveSupplier("ct18_ui_dealer", "CT18 UI Dealer", "ct18-ui-supplier").startsWith("Supplier saved"))
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, ProcurementActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun findNode(prefix: String? = null, hintPart: String? = null): AccessibilityNodeInfo {
+                var labels = ""
+                repeat(120) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    var found: AccessibilityNodeInfo? = null
+                    val observed = mutableListOf<String>()
+                    fun visit(node: AccessibilityNodeInfo) {
+                        val text = node.text?.toString()
+                        val hint = node.hintText?.toString()
+                        if (text != null) observed += text
+                        if (hint != null) observed += "hint:$hint"
+                        val matches = when {
+                            prefix != null -> text?.startsWith(prefix, ignoreCase = true) == true
+                            hintPart != null -> hint?.contains(hintPart, ignoreCase = true) == true
+                            else -> false
+                        }
+                        if (found == null && matches) found = node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::visit)
+                    }
+                    if (root != null) visit(root)
+                    labels = observed.joinToString(" | ")
+                    found?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Procurement UI node not found: prefix=$prefix hint=$hintPart; UI=$labels")
+            }
+            fun click(prefix: String) {
+                assertTrue("Could not click procurement control '$prefix'", findNode(prefix = prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            fun clickNodeOrClickableParent(node: AccessibilityNodeInfo) {
+                var candidate: AccessibilityNodeInfo? = node
+                while (candidate != null) {
+                    if (candidate.isClickable && candidate.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
+                    candidate = candidate.parent
+                }
+                throw AssertionError("No clickable node or parent for ${node.text}")
+            }
+            fun setField(hint: String, value: String) {
+                val field = findNode(hintPart = hint)
+                assertTrue("Could not fill '$hint'", field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+                }))
+                assertEquals("Field '$hint' did not retain the entered value", value, field.refresh().let { field.text?.toString() })
+            }
+            fun assertStockAndPayable(stock: Int, payablePaise: Long) {
+                CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                    assertEquals(stock, model.stockLevels()["ct18_ui_tea"])
+                    assertEquals(payablePaise, model.supplierPayablePaise("ct18_ui_dealer"))
+                }
+            }
+
+            click("Create purchase order draft")
+            clickNodeOrClickableParent(findNode(prefix = "Coffee"))
+            click("CT18 UI Tea")
+            setField("Ordered quantity", "4")
+            setField("Estimated unit cost in rupees", "5")
+            click("Save draft")
+            assertStockAndPayable(stock = 5, payablePaise = 0)
+
+            click("Mark ")
+            click("Mark sent")
+            assertStockAndPayable(stock = 5, payablePaise = 0)
+
+            click("Receive delivery for ")
+            setField("Supplier invoice reference", "CT18-INV-1")
+            setField("remaining 4", "2")
+            click("Post received stock")
+            assertStockAndPayable(stock = 7, payablePaise = 1000)
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals("PARTIALLY RECEIVED", model.purchaseOrderState(model.purchaseOrderDrafts().single()))
+            }
+
+            click("Receive delivery for ")
+            setField("remaining 2", "2")
+            click("Post received stock")
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(2000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                val order = model.purchaseOrderDrafts().single()
+                assertEquals(PurchaseOrderStatus.SENT, order.status)
+                assertEquals("RECEIVED", model.purchaseOrderState(order))
+                assertEquals(4, model.purchaseOrderReceivedQuantities(order.purchaseOrderId)["ct18_ui_tea"])
+                assertEquals(2, model.purchaseHistory().count { it.purchaseOrderId == order.purchaseOrderId })
+                assertEquals("CT18-INV-1", model.purchaseHistory().first { it.supplierInvoiceReference != null }.supplierInvoiceReference)
+                assertEquals(2, model.stockMovements().count { it.reason == "purchase_receipt" })
+                assertTrue(model.auditEvents().any { it.contains("purchase.received") && it.contains("purchase_order=") })
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun procurementPaymentDialogRecordsUpiAsStaffDeclaredWithoutChangingCashDrawer() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

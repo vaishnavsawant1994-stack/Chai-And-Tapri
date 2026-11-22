@@ -71,3 +71,7 @@ The CT-28 closing review acknowledgement is now exercised through the Android UI
 ## Superseding CT-06 repeat-sale update - 22 November 2026
 
 The native Quick Sale repeat action now stages an eligible prior completed sale into an editable draft, applying current catalogue prices and checking stock; it does not create another transaction until explicit checkout. Focused test 1/1; the current full isolated API 37 suite passed 108/108 with no failures/errors/skips, after an earlier run's Sales History activity launch timed out and passed in isolation. Node 52/52, Kotlin JVM 63/63, APK builds passed, lint 0 errors / 172 warnings. CT-06 remains partial and all six waves remain incomplete.
+
+## CT-17/18 purchase-order UI continuation - 22 November 2026
+
+A new synthetic purchase-order screen test passed 1/1 on isolated API 37. It covers draft creation, sent confirmation, and two partial receipts through the actual Android UI. Stock and payable remain unchanged until receipt posting and then reconcile to the expected balances; order receipt state, supplier invoice reference, stock movements, and audit history are checked. Node 52/52, Kotlin JVM 63/63, APK builds pass, lint 0 errors / 172 warnings. The complete connected suite attempt did not emit a JUnit report and was stopped while the instrumentation runner remained active; no new broad pass is claimed. The prior 108/108 result remains the latest completed broad run. CAT-17/18 and all six waves remain partial.
