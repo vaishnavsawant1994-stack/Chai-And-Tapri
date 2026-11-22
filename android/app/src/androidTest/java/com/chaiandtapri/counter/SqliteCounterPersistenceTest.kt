@@ -2741,6 +2741,74 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun inventoryMovementHistoryIsSearchableAndReadOnly() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("movement_filter_tea", "Movement Filter Tea", "Tea", 1000, true, false, true)).startsWith("Product saved"))
+            assertTrue(model.saveProduct(TapriProduct("movement_filter_sugar", "Movement Filter Sugar", "Grocery", 500, true, false, true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("movement_filter_tea", 5, "movement history fixture", "movement-filter-tea-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.confirmOpeningStock("movement_filter_sugar", 3, "movement history fixture", "movement-filter-sugar-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.quickSale(listOf("movement_filter_tea" to 1), "cash", commandId = "movement-filter-sale").startsWith("Quick sale"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Synthetic inventory ledger missing") }
+        LocalSessionState.establish("Synthetic Owner")
+        val monitor = instrumentation.addMonitor(StockMovementHistoryActivity::class.java.name, null, false)
+        val inventory = instrumentation.startActivitySync(Intent(context, InventoryOverviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var history: StockMovementHistoryActivity? = null
+        try {
+            fun findNode(textPrefix: String? = null, hintPart: String? = null): AccessibilityNodeInfo {
+                var labels = ""
+                repeat(100) {
+                    var found: AccessibilityNodeInfo? = null
+                    val observed = mutableListOf<String>()
+                    fun walk(node: AccessibilityNodeInfo) {
+                        val text = node.text?.toString().orEmpty()
+                        val hint = node.hintText?.toString().orEmpty()
+                        if (text.isNotEmpty()) observed += text
+                        if (hint.isNotEmpty()) observed += "hint:$hint"
+                        if (found == null && ((textPrefix != null && text.startsWith(textPrefix, true)) ||
+                                (hintPart != null && hint.contains(hintPart, true)))) found = node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::walk)
+                    }
+                    instrumentation.uiAutomation.rootInActiveWindow?.let(::walk)
+                    labels = observed.joinToString(" | ")
+                    found?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Inventory movement UI node not found: text=$textPrefix hint=$hintPart; UI=$labels")
+            }
+            assertTrue(findNode(textPrefix = "Search full movement history").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            history = instrumentation.waitForMonitorWithTimeout(monitor, 5_000) as? StockMovementHistoryActivity
+            assertNotNull("Inventory should open the movement history", history)
+            val search = findNode(hintPart = "Search product, reason, order or movement ID")
+            assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "quick_sale")
+            }))
+            Thread.sleep(300)
+            val visible = mutableListOf<String>()
+            instrumentation.runOnMainSync {
+                fun collect(view: View) {
+                    if (view is TextView) visible += view.text.toString()
+                    if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                }
+                collect(requireNotNull(history).findViewById(android.R.id.content))
+            }
+            assertTrue(visible.any { it == "Showing 1 of 3 recorded movements" })
+            assertTrue(visible.any { it.contains("Movement Filter Tea") })
+            assertTrue(visible.any { it.contains("quick_sale") })
+            assertFalse(visible.any { it.contains("Movement Filter Sugar") })
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Inventory history removed the ledger") }
+            assertEquals("Movement history and filters are read-only", before, after)
+        } finally {
+            instrumentation.removeMonitor(monitor)
+            instrumentation.runOnMainSync { history?.finish(); inventory.finish() }
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun inventoryRouteSavesMultiProductPhysicalCountAsOnePersistentSession() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

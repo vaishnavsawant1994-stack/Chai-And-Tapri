@@ -22,6 +22,7 @@
         <activity android:name=".ShopSetupActivity" android:exported="false" />
         <activity android:name=".ProductCatalogueActivity" android:exported="false" />
         <activity android:name=".InventoryOverviewActivity" android:exported="false" />
+        <activity android:name=".StockMovementHistoryActivity" android:exported="false" />
         <activity android:name=".StockCountActivity" android:exported="false" />
         <activity android:name=".QuickSaleActivity" android:exported="false" />
         <activity android:name=".CameraBarcodeScannerActivity" android:exported="false" />

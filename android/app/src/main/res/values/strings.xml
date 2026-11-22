@@ -1,0 +1,3 @@
+<resources>
+    <string name="stock_movement_results">Showing %1$d of %2$d recorded movements</string>
+</resources>

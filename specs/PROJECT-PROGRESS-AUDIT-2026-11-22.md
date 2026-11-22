@@ -9,14 +9,14 @@
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 63/63 passed |
-| API 37 instrumentation | 106/106 passed; 0 failures, errors, or skips |
+| API 37 instrumentation | 110/110 passed; 0 failures, errors, or skips |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
-| Android lint | 0 errors / 172 warnings |
+| Android lint | 0 errors / 173 warnings |
 
-The 106-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes CT-08 UI tests for partial item handover and queue search/status filters, CT-29 nonzero SAF export plus picker cancellation, and CT-30 low-stock alert review navigation. The endpoint-dependent live-backend Android class was excluded; backend integration tests were run separately against isolated synthetic PostgreSQL. The qualified run has zero failures, errors, or skips.
+The latest 110-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes the CT-15 read-only movement-history search, CT-08 partial item handover and queue filters, CT-29 nonzero SAF export/cancellation, and CT-30 alert routes. Only the endpoint-dependent live-backend Android class was excluded; backend integration passed separately against synthetic isolated PostgreSQL. Full-run XML is archived at `test-evidence/2026-11-22/ct15-movement-history-full-instrumentation.xml`. The run had zero failures, errors, or skips.
 
 ## Wave status
 
@@ -75,3 +75,14 @@ The native Quick Sale repeat action now stages an eligible prior completed sale 
 ## CT-17/18 purchase-order UI continuation - 22 November 2026
 
 A new synthetic purchase-order screen test passed 1/1 on isolated API 37. It covers draft creation, sent confirmation, and two partial receipts through the actual Android UI. Stock and payable remain unchanged until receipt posting and then reconcile to the expected balances; order receipt state, supplier invoice reference, stock movements, and audit history are checked. Node 52/52, Kotlin JVM 63/63, APK builds pass, lint 0 errors / 172 warnings. The complete connected suite attempt did not emit a JUnit report and was stopped while the instrumentation runner remained active; no new broad pass is claimed. The prior 108/108 result remains the latest completed broad run. CAT-17/18 and all six waves remain partial.
+
+## Superseding CT-17/18 and full isolated API 37 verification - 22 November 2026
+
+The current-source full instrumentation run completed on `Tapri_Recovery_Isolated` in 23m 35s: 109/109 passed, 0 failures, 0 errors, 0 skipped. The runner excluded only `LiveBackendSyncE2ETest`, which requires the separate isolated backend endpoint. The suite includes the actual UI journey for purchase-order draft, sent confirmation, and two partial receipts, and the CT-30 multi-destination alert-route test. JUnit evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`.
+
+Current host checks: Node 52/52; Kotlin JVM 63/63; debug and instrumentation APK assembly passed; lint 0 errors / 172 warnings. The earlier broad run was manually stopped without a report; it is superseded by this completed run. The new procurement UI path is emulator-qualified only for this synthetic workflow; the complete procurement module and all six delivery waves remain partial. Physical device/shop, independent security, and production release gates remain open.
+## CT-15 full stock movement history - 22 November 2026
+
+Inventory Overview now links to a manager-gated, read-only stock movement history screen. It lists the available append-only movement ledger newest first and supports filtering by product and event type, plus local search by product name/ID, reason, order number, or movement ID. The screen states that event timestamps are unavailable in this prototype and does not edit stock. The focused API 37 UI test navigates from Inventory Overview, searches for `quick_sale`, verifies the matching product/reason and one-of-three result count, and compares the full encrypted persisted snapshot before/after to prove the view is read-only. The full isolated API 37 suite passed 110/110, zero failures/errors/skips, including this test. Final-source focused rerun passed 1/1 after moving the dynamic result count into a string resource and applying the AndroidX KTX emptiness helper. Node 52/52; Kotlin JVM 63/63; debug/instrumentation APK builds passed; lint 0 errors / 173 warnings. Full-suite XML: `test-evidence/2026-11-22/ct15-movement-history-full-instrumentation.xml`. The current focused-test XML is `test-evidence/2026-11-22/ct15-movement-history-focused.xml`.
+
+This qualifies only the synthetic history search/navigation path. The history has no event timestamp, export, pagination, or manual usability qualification. CT-15 and the overall product remain partial; hardware, independent security, deployment and shop-trial gates remain open.
