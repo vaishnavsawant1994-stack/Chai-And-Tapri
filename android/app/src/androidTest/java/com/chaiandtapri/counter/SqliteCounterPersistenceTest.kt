@@ -2142,6 +2142,25 @@ class SqliteCounterPersistenceTest {
                 assertEquals(2, model.stockMovements().count { it.reason == "purchase_receipt" })
                 assertTrue(model.auditEvents().any { it.contains("purchase.received") && it.contains("purchase_order=") })
             }
+
+            click("Record supplier payment")
+            setField("Existing supplier ID", "ct18_ui_dealer")
+            setField("Cash amount in rupees", "5")
+            click("Record payment")
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(1500L, model.supplierPayablePaise("ct18_ui_dealer"))
+                val payment = model.supplierPaymentHistory().single()
+                assertEquals(500, payment.amountPaise)
+                assertEquals("cash", payment.method)
+                assertEquals("staff_declared", payment.status)
+                assertEquals(0, model.expenseHistory().size)
+                assertEquals(2, model.stockMovements().count { it.reason == "purchase_receipt" })
+                assertTrue(model.auditEvents().any { it.contains("supplier.payment_recorded") && it.contains("status=staff_declared") })
+            }
+            click("View supplier details")
+            assertTrue(findNode(prefix = "Current payable: ₹15.00").text.contains("₹15.00"))
+            assertTrue(findNode(prefix = "₹5.00 · Staff-declared cash").text.contains("Staff-declared cash"))
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
