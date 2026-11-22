@@ -4371,6 +4371,55 @@ class SqliteCounterPersistenceTest {
         assertEquals(setOf(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE), result.extras?.keySet())
     }
 
+    @Test fun cameraScannerResultUsesQuickSaleCatalogueValidationWithoutPostingSale() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val token = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
+        val productId = "camera_scan_$token"
+        val productName = "Camera Scan Tea $token"
+        val code = "QR-TEA-$token"
+        val setup = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(setup.saveProduct(TapriProduct(productId, productName, "Scanner Test", 1_250, priceConfirmed = true, scanCode = code)).startsWith("Product saved"))
+        assertTrue(setup.confirmOpeningStock(productId, 2, "camera scan result fixture").startsWith("Opening stock confirmed"))
+        setup.close()
+
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(context, QuickSaleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as QuickSaleActivity
+        try {
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                activity.handleCameraScanResult(
+                    android.app.Activity.RESULT_OK,
+                    CameraBarcodeScannerActivity.resultIntent(code = code)
+                )
+            }
+            instrumentation.waitForIdleSync()
+            fun descendants(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
+            var views = descendants(activity.window.decorView)
+            assertTrue("The camera result must resolve through the configured catalogue", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("Scanned $productName") })
+
+            instrumentation.runOnMainSync {
+                activity.handleCameraScanResult(
+                    android.app.Activity.RESULT_OK,
+                    CameraBarcodeScannerActivity.resultIntent(code = "UNKNOWN-$token")
+                )
+            }
+            instrumentation.waitForIdleSync()
+            views = descendants(activity.window.decorView)
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("No unique active product matches this code") })
+            assertTrue("An unknown scan must not discard the existing draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+            val verification = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            assertTrue("Scanning stages a draft; normal checkout is still required", verification.allOrders().isEmpty())
+            assertEquals(2, verification.stockLevels()[productId])
+            verification.close()
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.waitForIdleSync()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun schemaV26ToV27AddsScannerCodeWithoutChangingOrdersOrStock() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

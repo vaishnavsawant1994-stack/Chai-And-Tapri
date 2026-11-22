@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — Wave 5 Mode C camera-to-cart path — 23 November 2026
+
+The Quick Sale camera-result callback now has current-source API 37 instrumentation that feeds a known decoded code through the configured catalogue resolver and stages the matched product. An unknown code preserves the current draft. Neither result posts a sale or changes stock before checkout. Focused instrumentation passed 1/1; Kotlin JVM passed 68/68; debug and instrumentation APKs built; lint completed with 0 errors / 175 warnings. This verifies the result-to-cart contract, not camera frame decoding or real-device scanning. Mode C remains partial. See `specs/CT-06-NATIVE-QUICK-SALE-REPORT.md` and the current progress audit.
+
 ## Latest continuation - CAT-052 outbox recovery after process termination - 22 November 2026
 
 The live sync test now runs in two instrumentation invocations. The first leaves the SQLCipher model open with a sale pending after a server-committed lost acknowledgment; the next process reopens the encrypted session and database, retries idempotently, and verifies the order is not duplicated. Both phases passed 1/1 on API 37 after debug and test APK builds. Evidence logs are local under `test-evidence/2026-11-22/android-sync-e2e-refresh/`. This verifies app-scoped SQLCipher recovery across instrumentation-process termination, not production app/WorkManager/background-request recovery. See [CAT-052 process-restart report](specs/CAT-052-INSTRUMENTATION-PROCESS-RESTART-REPORT.md).

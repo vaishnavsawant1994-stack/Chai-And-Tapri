@@ -298,6 +298,10 @@ class QuickSaleActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != CAMERA_SCAN_REQUEST) return
+        handleCameraScanResult(resultCode, data)
+    }
+
+    internal fun handleCameraScanResult(resultCode: Int, data: android.content.Intent?) {
         if (resultCode == RESULT_OK) {
             val code = data?.getStringExtra(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE).orEmpty()
             scanInput.setText(code)
@@ -336,5 +340,5 @@ class QuickSaleActivity : Activity() {
 
     override fun onDestroy() { if (::model.isInitialized) model.close(); super.onDestroy() }
 
-    companion object { private const val CAMERA_SCAN_REQUEST = 6406 }
+    companion object { internal const val CAMERA_SCAN_REQUEST = 6406 }
 }
