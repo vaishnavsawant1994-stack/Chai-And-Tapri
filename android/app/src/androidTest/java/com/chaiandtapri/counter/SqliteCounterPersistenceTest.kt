@@ -1853,6 +1853,110 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun dailyReportDatePickerSelectsPreviousLocalDayWithoutChangingLedger() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("ct29_date_tea", "Date Test Tea", "Chai", 1500, true, true, true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct29_date_tea", 4, "synthetic date-picker fixture", "ct29-date-stock").startsWith("Opening stock confirmed"))
+            assertTrue(model.quickSale(listOf("ct29_date_tea" to 1), "cash", commandId = "ct29-date-sale").startsWith("Quick sale"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Seeded synthetic report ledger missing") }
+        val zone = java.time.ZoneId.systemDefault()
+        val activity = instrumentation.startActivitySync(Intent(context, DailyReportActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            var initialScreenTexts = emptyList<String>()
+            val selectedDatePattern = Regex("\\d{4}-\\d{2}-\\d{2}")
+            repeat(300) {
+                val screenTexts = mutableListOf<String>()
+                instrumentation.runOnMainSync {
+                    fun collect(view: View) {
+                        if (view is TextView) screenTexts += view.text.toString()
+                        if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                    }
+                    collect(activity.findViewById(android.R.id.content))
+                }
+                initialScreenTexts = screenTexts.toList()
+                if (screenTexts.any { it.startsWith("Selected business date:") }) return@repeat
+                Thread.sleep(100)
+            }
+            val appTodayText = initialScreenTexts.firstOrNull { it.startsWith("Selected business date:") }
+                ?: error("Daily report did not render its initial business date: ${initialScreenTexts.distinct().take(30).joinToString(" | ")}")
+            val today = java.time.LocalDate.parse(selectedDatePattern.find(appTodayText)?.value
+                ?: error("Could not parse business date from app: $appTodayText"))
+            val previousDay = today.minusDays(1)
+            fun findNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if (predicate(node)) return node
+                    for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
+                    return null
+                }
+                return visit(root)
+            }
+            fun awaitNode(predicate: (AccessibilityNodeInfo) -> Boolean, description: String): AccessibilityNodeInfo {
+                repeat(300) {
+                    findNode(predicate)?.let { return it }
+                    Thread.sleep(100)
+                }
+                val visible = mutableListOf<String>()
+                fun collect(node: AccessibilityNodeInfo?) {
+                    if (node == null) return
+                    node.text?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                    node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                    for (index in 0 until node.childCount) collect(node.getChild(index))
+                }
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                collect(root)
+                throw AssertionError("CT-29 date picker node not found: $description; activePackage=${root?.packageName}; visible=${visible.distinct().take(160).joinToString(" | ")}")
+            }
+            fun click(node: AccessibilityNodeInfo, label: String) {
+                assertTrue("Could not click CT-29 $label", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+
+            click(awaitNode({ it.text?.toString()?.equals("Choose report date", ignoreCase = true) == true }, "Choose report date"), "date selector")
+            if (previousDay.month != today.month || previousDay.year != today.year) {
+                click(awaitNode({ (it.contentDescription?.toString() ?: it.text?.toString()).orEmpty().contains("Previous month", ignoreCase = true) }, "previous month"), "previous month")
+            }
+            val fullDate = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL, java.util.Locale.getDefault())
+                .format(java.util.Date.from(previousDay.atStartOfDay(zone).toInstant()))
+            val targetCalendarDate = previousDay.format(java.time.format.DateTimeFormatter.ofPattern("dd MMMM yyyy", java.util.Locale.getDefault()))
+            val dayNode = awaitNode({ node ->
+                val description = node.contentDescription?.toString().orEmpty()
+                val text = node.text?.toString().orEmpty()
+                description.contains(targetCalendarDate, ignoreCase = true) || text.contains(targetCalendarDate, ignoreCase = true)
+            }, "calendar day $fullDate")
+            click(dayNode, "previous business date")
+            click(awaitNode({ it.text?.toString().equals("OK", ignoreCase = true) }, "date picker OK"), "confirm date")
+
+            var selectedDateIsRendered = false
+            var lastScreenTexts = emptyList<String>()
+            for (attempt in 0 until 300) {
+                val screenTexts = mutableListOf<String>()
+                instrumentation.runOnMainSync {
+                    fun collect(view: View) {
+                        if (view is TextView) screenTexts += view.text.toString()
+                        if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                    }
+                    collect(activity.findViewById(android.R.id.content))
+                }
+                lastScreenTexts = screenTexts.toList()
+                selectedDateIsRendered = screenTexts.any { it.contains("Selected business date:") && it.contains(previousDay.toString()) } ||
+                    screenTexts.any { it == "Activity for $previousDay" }
+                if (selectedDateIsRendered) break
+                Thread.sleep(100)
+            }
+            assertTrue("Report should display the selected previous local date $previousDay; visible=${lastScreenTexts.distinct().take(30).joinToString(" | ")}", selectedDateIsRendered)
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Report date selection removed the ledger") }
+            assertEquals("Browsing a report date must be read-only", before, after)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun dailyReportExportsNonzeroSyntheticLedgerThroughSafSaveDialog() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
