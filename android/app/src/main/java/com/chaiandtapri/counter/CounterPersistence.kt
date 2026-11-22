@@ -32,7 +32,9 @@ data class CustomerCredit(
     val orderNumber: Int,
     val amountPaise: Int,
     val repaidPaise: Int,
-    val reversedPaise: Int = 0
+    val reversedPaise: Int = 0,
+    /** Random cross-device record identity; local command IDs never leave encrypted storage. */
+    val syncId: String = java.util.UUID.randomUUID().toString()
 ) {
     val outstandingPaise: Int get() = amountPaise - repaidPaise - reversedPaise
 }
@@ -50,7 +52,8 @@ data class CustomerProfile(
 data class CreditRepayment(
     val repaymentId: String,
     val customerId: String,
-    val amountPaise: Int
+    val amountPaise: Int,
+    val syncId: String = java.util.UUID.randomUUID().toString()
 )
 
 data class PaymentEntry(
@@ -64,7 +67,9 @@ data class PaymentEntry(
     val relatedEntryId: String? = null,
     val drawerSessionId: String? = null,
     /** Local persistence time; zero denotes a legacy or unavailable timestamp. */
-    val createdAtEpochMs: Long = 0L
+    val createdAtEpochMs: Long = 0L,
+    /** Random cross-device event identity; the local command/ledger ID stays encrypted on-device. */
+    val syncId: String = java.util.UUID.randomUUID().toString()
 )
 
 data class SupplierRecord(
@@ -200,7 +205,9 @@ data class CounterSnapshot(
     val cashDrawerSessions: List<CashDrawerSession> = emptyList(),
     val cashDrawerMovements: List<CashDrawerMovement> = emptyList(),
     val cashClosingReviews: List<CashClosingReview> = emptyList(),
-    val purchaseOrderDrafts: List<PurchaseOrderDraft> = emptyList()
+    val purchaseOrderDrafts: List<PurchaseOrderDraft> = emptyList(),
+    /** Encrypted local-key to opaque UUID mapping used for privacy-minimized cloud ledger sync. */
+    val customerSyncIdentities: Map<String, String> = emptyMap()
 )
 
 /** Commits one validated command and its complete resulting state atomically. */

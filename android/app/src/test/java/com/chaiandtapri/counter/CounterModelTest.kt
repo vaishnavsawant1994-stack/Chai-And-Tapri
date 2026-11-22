@@ -307,10 +307,19 @@ class CounterModelTest {
         val customerCredit = CustomerCredit("credit-1", "9876543210", 12, 500, 0)
         val identityBefore = before.copy(orders = listOf(CounterOrderRecord(12, emptyList(), Fulfillment.GIVEN, Payment.CREDIT, 0, true, null, 1, creditPaise = 500)))
         val identityAfter = identityBefore.copy(customerCredits = listOf(customerCredit), paymentEntries = listOf(PaymentEntry("credit-entry", 12, "9876543210", 500, "udhar", "receivable", "credit_sale")))
-        val identityPayload = SyncOutboxPayloadEncoder.between(identityBefore, identityAfter)
-        assertFalse(identityPayload.sendable)
-        assertEquals("customer_identity_contract_pending", identityPayload.blockedReason)
-        assertNull(identityPayload.json)
+        val missingOpaqueIdentity = SyncOutboxPayloadEncoder.between(identityBefore, identityAfter)
+        assertFalse(missingOpaqueIdentity.sendable)
+        assertEquals("opaque_customer_sync_identity_required", missingOpaqueIdentity.blockedReason)
+        assertNull(missingOpaqueIdentity.json)
+        val identityPayload = SyncOutboxPayloadEncoder.between(identityBefore, identityAfter.copy(
+            customerSyncIdentities = mapOf("9876543210" to "55555555-5555-4555-8555-555555555555")
+        ))
+        assertTrue(identityPayload.sendable)
+        val customerJson = identityPayload.json!!
+        assertTrue(customerJson.contains("\"customerId\":\"55555555-5555-4555-8555-555555555555\""))
+        assertFalse(customerJson.contains("9876543210"))
+        assertFalse(customerJson.contains("credit-1"))
+        assertFalse(customerJson.contains("credit-entry"))
 
         val costedOrder = CounterOrderRecord(13,
             listOf(CounterLine("tea", "Tea", 1, 1000, deliveredQuantity = 1, estimatedUnitCostPaise = 425)),
@@ -684,7 +693,8 @@ class CounterModelTest {
         val order = model.allOrders().single()
         assertEquals(Fulfillment.GIVEN, order.fulfillment)
         assertEquals(Payment.STAFF_DECLARED, order.payment)
-        assertEquals(PaymentEntry("cash-12", 12, null, 2000, "cash", "staff_declared", "order_collection"), model.paymentHistory().single())
+        val cashEntry = model.paymentHistory().single()
+        assertEquals(PaymentEntry("cash-12", 12, null, 2000, "cash", "staff_declared", "order_collection").copy(syncId = cashEntry.syncId), cashEntry)
     }
 
     @Test fun unknownOrderDoesNotMutateBusinessState() {
@@ -853,7 +863,8 @@ class CounterModelTest {
         assertEquals(setOf("payment-split-1-cash", "payment-split-1-udhar"), model.paymentHistory().map { it.entryId }.toSet())
         assertEquals("Duplicate command ignored.", model.recordCashUdharSplit(12, 500, "ramesh", "payment-split-1", order.revision))
         assertEquals(2, model.paymentHistory().size)
-        assertEquals("customer_identity_contract_pending", storage.lastSyncPayload?.blockedReason)
+        assertTrue(storage.lastSyncPayload?.sendable == true)
+        assertTrue(storage.lastSyncPayload?.json?.contains("ramesh") == false)
     }
 
     @Test fun cashUpiPendingSplitSeparatesCollectedCashFromPendingAndIsIdempotent() {

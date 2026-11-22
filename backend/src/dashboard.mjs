@@ -52,6 +52,34 @@ export function buildSupplierBalances({ shopId, shopName, serverRevision, events
   };
 }
 
+/** Owner receivables from accepted projections. Customer identity is intentionally opaque. */
+export function buildCustomerBalances({ shopId, shopName, serverRevision, events }) {
+  const credits = new Map(); const repayments = new Map();
+  for (const row of events) {
+    const payload = row.envelope?.payload;
+    if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const credit of payload.customerCredits ?? []) credits.set(credit.creditId, credit);
+    for (const repayment of payload.repayments ?? []) repayments.set(repayment.repaymentId, repayment);
+  }
+  const customers = new Map();
+  const totalsFor = (id) => { if (!customers.has(id)) customers.set(id, { customerId: id, creditCount: 0, extendedPaise: 0, repaidPaise: 0, reversedPaise: 0, repaymentCount: 0, repaymentsPaise: 0 }); return customers.get(id); };
+  for (const credit of credits.values()) { const row = totalsFor(credit.customerId); row.creditCount += 1; row.extendedPaise = safeTotal([row.extendedPaise, credit.amountPaise]); row.repaidPaise = safeTotal([row.repaidPaise, credit.repaidPaise]); row.reversedPaise = safeTotal([row.reversedPaise, credit.reversedPaise]); }
+  for (const repayment of repayments.values()) { const row = totalsFor(repayment.customerId); row.repaymentCount += 1; row.repaymentsPaise = safeTotal([row.repaymentsPaise, repayment.amountPaise]); }
+  const rows = [...customers.values()].map((row) => ({ ...row, outstandingPaise: row.extendedPaise - row.repaidPaise - row.reversedPaise }))
+    .sort((a, b) => b.outstandingPaise - a.outstandingPaise || a.customerId.localeCompare(b.customerId));
+  return {
+    shopId, shopName, serverRevision, customerCount: rows.length,
+    totalExtendedPaise: safeTotal(rows.map((row) => row.extendedPaise)), totalRepaymentsPaise: safeTotal(rows.map((row) => row.repaymentsPaise)),
+    totalReversedPaise: safeTotal(rows.map((row) => row.reversedPaise)), netReceivablePaise: safeTotal(rows.map((row) => row.outstandingPaise)), customers: rows,
+    evidence: {
+      scope: 'Accepted server events only; offline, blocked and unsynchronized activity is excluded.',
+      identity: 'Customers are represented only by opaque device-generated identifiers. Names, phone numbers, order details and local customer IDs are not uploaded or displayed.',
+      accounting: 'Outstanding balances use the latest accepted credit state per credit record, less its settled and reversed amounts. Repayment events are shown as activity and are not subtracted a second time. This is an operational receivable view, not a reconciled accounting statement.',
+      verification: 'Repayments are recorded events and are not independently payment-provider verified.'
+    }
+  };
+}
+
 /** Build owner-facing numbers only from accepted, validated server journal entries. */
 export function buildShopOverview({ shopId, shopName, serverRevision, events }) {
   const orders = new Map();

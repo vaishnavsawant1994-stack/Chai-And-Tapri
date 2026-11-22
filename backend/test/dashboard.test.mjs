@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
@@ -318,6 +318,7 @@ test('sync service refuses dashboard access to non-owner roles before reading th
   await assert.rejects(service.shopProductPerformance({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopInventorySnapshot({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopSupplierBalances({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopCustomerBalances({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopDailySalesActivity({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopRecordedMoneyMovements({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopProfitReadiness({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
@@ -340,6 +341,25 @@ test('supplier balances aggregate only opaque accepted financial identifiers and
   assert.equal(JSON.stringify(result).includes('phone'), false);
 });
 
+test('customer balances reduce latest opaque credit states and unique repayments without identity details', () => {
+  const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const creditId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const repaymentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const credit = { creditId, customerId, amountPaise: 1000, repaidPaise: 200, reversedPaise: 100 };
+  const repayment = { repaymentId, customerId, amountPaise: 200 };
+  const result = buildCustomerBalances({ shopId:'shop-1', shopName:'Tapri', serverRevision:3, events:[
+    row(1, { ...empty, customerCredits:[{ ...credit, repaidPaise:0 }], repayments:[repayment] }),
+    row(2, { ...empty, customerCredits:[credit], repayments:[repayment] })
+  ] });
+  assert.equal(result.customerCount, 1);
+  assert.equal(result.customers[0].outstandingPaise, 700);
+  assert.equal(result.customers[0].creditCount, 1);
+  assert.equal(result.customers[0].repaymentCount, 1);
+  assert.equal(result.totalRepaymentsPaise, 200);
+  assert.equal(JSON.stringify(result).includes('Ramesh'), false);
+  assert.equal(JSON.stringify(result).includes('+919876543210'), false);
+});
+
 test('owner overview route requires authentication and serves only owner static assets', async (t) => {
   const calls = [];
   const fixture = { shopId: 'shop-1', shopName: 'Synthetic Tapri', serverRevision: 0, acceptedEventCount: 0 };
@@ -353,6 +373,7 @@ test('owner overview route requires authentication and serves only owner static 
     async shopProductPerformance(actor) { return { ...fixture, shopId: actor.shop_id, products: [] }; },
     async shopInventorySnapshot(actor) { return { ...fixture, shopId: actor.shop_id, products: [], recentMovements: [] }; },
     async shopSupplierBalances(actor) { return { ...fixture, shopId: actor.shop_id, suppliers: [] }; },
+    async shopCustomerBalances(actor) { return { ...fixture, shopId: actor.shop_id, customers: [] }; },
     async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; },
     async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
     async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; },
@@ -377,6 +398,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="inventory-rows"/);
   assert.match(pageText, /Supplier balances/);
   assert.match(pageText, /id="supplier-rows"/);
+  assert.match(pageText, /Customer balances/);
+  assert.match(pageText, /id="customer-rows"/);
   assert.match(pageText, /Sales activity/);
   assert.match(pageText, /id="activity-rows"/);
   assert.match(pageText, /Recorded money movements/);
@@ -394,6 +417,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/products/);
   assert.match(scriptText, /\/v1\/dashboard\/inventory/);
   assert.match(scriptText, /\/v1\/dashboard\/suppliers/);
+  assert.match(scriptText, /\/v1\/dashboard\/customers/);
   assert.match(scriptText, /\/v1\/dashboard\/activity/);
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
   assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
@@ -422,6 +446,11 @@ test('owner overview route requires authentication and serves only owner static 
   const suppliers = await fetch(`${base}/v1/dashboard/suppliers?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(suppliers.status, 200);
   assert.deepEqual((await suppliers.json()).suppliers, []);
+  const customersDenied = await fetch(`${base}/v1/dashboard/customers?shopId=shop-1`);
+  assert.equal(customersDenied.status, 401);
+  const customers = await fetch(`${base}/v1/dashboard/customers?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(customers.status, 200);
+  assert.deepEqual((await customers.json()).customers, []);
   const activity = await fetch(`${base}/v1/dashboard/activity?shopId=shop-1&days=7`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(activity.status, 200);
   assert.equal((await activity.json()).days, 7);
@@ -449,6 +478,6 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal((await audit.json()).limit, 5);
   const invalidAuditLimit = await fetch(`${base}/v1/dashboard/audit?shopId=shop-1&limit=101`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(invalidAuditLimit.status, 400);
-  assert.equal(calls.length, 14);
+  assert.equal(calls.length, 16);
   assert.ok(calls.every((call) => call.shopId === 'shop-1'));
 });

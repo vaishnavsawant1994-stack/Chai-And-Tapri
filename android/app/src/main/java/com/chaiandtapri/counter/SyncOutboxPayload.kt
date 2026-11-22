@@ -1,6 +1,6 @@
 package com.chaiandtapri.counter
 
-/** Small allow-listed projection delta. Customer-linked credit/repayments remain local until identity is reviewed. */
+/** Small allow-listed projection delta. Customer financial records use opaque IDs only. */
 data class SyncOutboxPayload(val version: Int?, val json: String?, val blockedReason: String?) {
     val sendable: Boolean get() = version != null && json != null && blockedReason == null
 }
@@ -24,6 +24,7 @@ object SyncOutboxPayloadEncoder {
         val receipts = after.purchaseReceipts.drop(before.purchaseReceipts.size)
         val supplierPayments = after.supplierPayments.drop(before.supplierPayments.size)
         val purchaseReturns = after.purchaseReturns.drop(before.purchaseReturns.size)
+        val customerSyncIds = after.customerSyncIdentities
         if ((receipts.map { it.supplierId } + supplierPayments.map { it.supplierId } + purchaseReturns.map { it.supplierId })
                 .any { supplierId -> supplierSyncIds[supplierId]?.isOpaqueUuid() != true } ||
             receipts.any { !it.syncId.isOpaqueUuid() } || supplierPayments.any { !it.syncId.isOpaqueUuid() } || purchaseReturns.any { !it.syncId.isOpaqueUuid() }) {
@@ -35,10 +36,10 @@ object SyncOutboxPayloadEncoder {
             previous == null || previous.category != expense.category || previous.amountPaise != expense.amountPaise ||
                 previous.method != expense.method || previous.status != expense.status
         }
-        // Customer IDs are currently operator-defined strings and may be names or phone numbers.
-        // Keep customer-linked financial mutations local until the sync identity/consent contract is defined.
-        if (credits.isNotEmpty() || repayments.isNotEmpty() || payments.any { it.customerId != null }) {
-            return SyncOutboxPayload(null, null, "customer_identity_contract_pending")
+        val changedCustomerIds = (credits.map { it.customerId } + repayments.map { it.customerId } + payments.mapNotNull { it.customerId }).toSet()
+        if (changedCustomerIds.any { localId -> customerSyncIds[localId]?.isOpaqueUuid() != true } ||
+            credits.any { !it.syncId.isOpaqueUuid() } || repayments.any { !it.syncId.isOpaqueUuid() } || payments.any { !it.syncId.isOpaqueUuid() }) {
+            return SyncOutboxPayload(null, null, "opaque_customer_sync_identity_required")
         }
         if (orders.isEmpty() && stock.isEmpty() && movements.isEmpty() && credits.isEmpty() && repayments.isEmpty() && payments.isEmpty() && expenses.isEmpty() && receipts.isEmpty() && supplierPayments.isEmpty() && purchaseReturns.isEmpty()) {
             return SyncOutboxPayload(null, null, "empty_delta")
@@ -70,19 +71,19 @@ object SyncOutboxPayloadEncoder {
                 number("quantityDelta", movement.quantityDelta); append(','); nullableNumber("orderNumber", movement.orderNumber); append('}')
             }
             append(','); append("\"customerCredits\":"); array(credits) { credit ->
-                append('{'); field("creditId", credit.creditId); append(','); field("customerId", credit.customerId); append(',')
-                number("orderNumber", credit.orderNumber); append(','); number("amountPaise", credit.amountPaise); append(',')
+                append('{'); field("creditId", credit.syncId); append(','); field("customerId", customerSyncIds.getValue(credit.customerId)); append(',')
+                number("amountPaise", credit.amountPaise); append(',')
                 number("repaidPaise", credit.repaidPaise); append(','); number("reversedPaise", credit.reversedPaise); append('}')
             }
             append(','); append("\"repayments\":"); array(repayments) { repayment ->
-                append('{'); field("repaymentId", repayment.repaymentId); append(','); field("customerId", repayment.customerId); append(',')
+                append('{'); field("repaymentId", repayment.syncId); append(','); field("customerId", customerSyncIds.getValue(repayment.customerId)); append(',')
                 number("amountPaise", repayment.amountPaise); append('}')
             }
             append(','); append("\"paymentEntries\":"); array(payments) { payment ->
-                append('{'); field("entryId", payment.entryId); append(','); nullableNumber("orderNumber", payment.orderNumber); append(',')
-                nullableField("customerId", payment.customerId); append(','); number("amountPaise", payment.amountPaise); append(',')
+                append('{'); field("entryId", payment.syncId); append(','); nullableNumber("orderNumber", payment.orderNumber); append(',')
+                nullableField("customerId", payment.customerId?.let(customerSyncIds::get)); append(','); number("amountPaise", payment.amountPaise); append(',')
                 field("method", payment.method); append(','); field("status", payment.status); append(','); field("kind", payment.kind); append(',')
-                nullableField("relatedEntryId", payment.relatedEntryId); append('}')
+                nullableField("relatedEntryId", payment.relatedEntryId?.let { localId -> after.paymentEntries.firstOrNull { it.entryId == localId }?.syncId }); append('}')
             }
             append(','); append("\"expenses\":"); array(expenses) { expense ->
                 append('{'); field("expenseId", expense.expenseId); append(','); field("category", expense.category); append(',')

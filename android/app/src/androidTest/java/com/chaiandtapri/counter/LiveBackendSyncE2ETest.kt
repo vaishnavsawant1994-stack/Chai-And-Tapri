@@ -180,7 +180,7 @@ class LiveBackendSyncE2ETest {
         }
     }
 
-    @Test fun androidSupplierFinanceOutboxReachesOwnerBalanceProjection() {
+    @Test fun androidSupplierExpenseAndCustomerFinanceOutboxesReachOwnerProjections() {
         val endpointBase = InstrumentationRegistry.getArguments().getString("syncE2eEndpoint")
         assumeTrue("Provide syncE2eEndpoint for the isolated supplier-finance backend drill.", !endpointBase.isNullOrBlank())
         val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
@@ -220,22 +220,29 @@ class LiveBackendSyncE2ETest {
             assertTrue(model!!.returnPurchase(supplierId, receiptId, mapOf(productId to 1), "synthetic sealed pack return", returnCommand).contains("return recorded", ignoreCase = true))
             val expenseCommand = "supplier-sync-expense-${UUID.randomUUID()}"
             assertTrue(model!!.recordExpense("transport", 7_500, "cash", "PRIVATE-EXPENSE-NOTE", expenseCommand).startsWith("Expense recorded"))
+            val localCustomerId = "local_customer_${UUID.randomUUID().toString().replace("-", "").take(24)}"
+            assertTrue(model!!.saveCustomerProfile(CustomerProfile(localCustomerId, "Private Customer Name", "+919812345678", true)).contains("profile saved"))
+            val creditCommand = "customer-split-${UUID.randomUUID()}"
+            assertTrue(model!!.quickSaleSplit(listOf(productId to 1), 500, localCustomerId, creditCommand).startsWith("Quick sale"))
+            val repaymentCommand = "customer-repayment-${UUID.randomUUID()}"
+            assertTrue(model!!.repayCredit(localCustomerId, 200, repaymentCommand).contains("allocated"))
 
-            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand, expenseCommand)
+            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand, expenseCommand, creditCommand, repaymentCommand)
             val pending = persistence!!.loadPendingSyncEvents(20)
-            assertEquals("Opening stock, receipt, settlement, return, and expense should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
+            assertEquals("Opening stock, receipt, settlement, return, expense, credit sale, and repayment should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
             val sync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(session!!.endpointBase, session!!.identity, session!!.bearerToken)
-            assertEquals(5, sync.acknowledged)
-            assertEquals(5L, sync.serverRevision)
+            assertEquals(7, sync.acknowledged)
+            assertEquals(7L, sync.serverRevision)
             assertTrue(persistence!!.loadPendingSyncEvents(20).isEmpty())
             assertEquals(300L, model!!.supplierPayablePaise(supplierId))
-            assertEquals(4, model!!.stockLevels()[productId])
+            assertEquals(3, model!!.stockLevels()[productId])
             assertEquals(7_500L, model!!.totalExpensesPaise())
+            assertEquals(300, model!!.creditBalance(localCustomerId))
             model!!.close(); model = null
             persistence!!.close(); persistence = null
 
             val balances = getJson("${session!!.endpointBase}/v1/dashboard/suppliers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
-            assertEquals(5L, balances.getLong("serverRevision"))
+            assertEquals(7L, balances.getLong("serverRevision"))
             assertEquals(1, balances.getInt("supplierCount"))
             assertEquals(1_000L, balances.getLong("totalReceiptsPaise"))
             assertEquals(200L, balances.getLong("totalPaymentsPaise"))
@@ -246,13 +253,21 @@ class LiveBackendSyncE2ETest {
             assertTrue("Owner projection must not expose supplier or product details", !balances.toString().contains("Private Supplier Name") && !balances.toString().contains("PRIVATE-INVOICE-DETAIL") && !balances.toString().contains("Private Tea Detail") && !balances.toString().contains("+919876543210"))
             assertTrue(balances.getJSONObject("evidence").getString("verification").contains("not bank-verified"))
             val activity = getJson("${session!!.endpointBase}/v1/dashboard/activity?shopId=${session!!.identity.shopId}&days=7", session!!.bearerToken)
-            assertEquals(5L, activity.getLong("serverRevision"))
+            assertEquals(7L, activity.getLong("serverRevision"))
             assertEquals(7_500L, activity.getJSONObject("totals").getLong("staffDeclaredExpensesPaise"))
             val category = activity.getJSONArray("expenseCategories").getJSONObject(0)
             assertEquals("transport", category.getString("category"))
             assertEquals(7_500L, category.getLong("amountPaise"))
             assertEquals(1, category.getInt("count"))
             assertFalse("Owner activity projection must not expose private expense notes", activity.toString().contains("PRIVATE-EXPENSE-NOTE"))
+            val customers = getJson("${session!!.endpointBase}/v1/dashboard/customers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
+            assertEquals(7L, customers.getLong("serverRevision"))
+            assertEquals(1, customers.getInt("customerCount"))
+            assertEquals(500L, customers.getLong("totalExtendedPaise"))
+            assertEquals(200L, customers.getLong("totalRepaymentsPaise"))
+            assertEquals(300L, customers.getLong("netReceivablePaise"))
+            assertEquals(200L, customers.getJSONArray("customers").getJSONObject(0).getLong("repaidPaise"))
+            assertTrue("Customer projection must omit local identity and contact details", !customers.toString().contains(localCustomerId) && !customers.toString().contains("Private Customer Name") && !customers.toString().contains("+919812345678"))
             SyncAccountClient(transport).logout(session!!)
         } finally {
             model?.close()

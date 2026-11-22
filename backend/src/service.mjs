@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -28,9 +28,7 @@ export function validateProjectionDelta(payload) {
   const supplierPayments = payload.supplierPayments ?? [];
   const purchaseReturns = payload.purchaseReturns ?? [];
   if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
-  if (payload.customerCredits.length !== 0 || payload.repayments.length !== 0) throw new ApiError(400, 'customer_identity_contract_pending');
-  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length === 0) throw new ApiError(400, 'empty_projection_delta');
-  if (payload.paymentEntries.some((entry) => object(entry) && Object.hasOwn(entry, 'customerId') && entry.customerId !== null)) throw new ApiError(400, 'customer_identity_contract_pending');
+  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.customerCredits.length + payload.repayments.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length === 0) throw new ApiError(400, 'empty_projection_delta');
 
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
   const legacyLineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
@@ -56,13 +54,24 @@ export function validateProjectionDelta(payload) {
       !isText(item.productId, 120) || !isInt(item.quantityDelta) || item.quantityDelta === 0 ||
       (item.orderNumber !== null && !isInt(item.orderNumber, { min: 1 }))) throw new ApiError(400, 'invalid_projection_delta');
   }
+  const customerRecordIds = new Set();
+  for (const credit of payload.customerCredits) {
+    if (!hasExactKeys(credit, ['creditId','customerId','amountPaise','repaidPaise','reversedPaise']) || !UUID.test(credit.creditId ?? '') || !UUID.test(credit.customerId ?? '') ||
+      customerRecordIds.has(credit.creditId) || !isInt(credit.amountPaise, { min: 1, max: 100_000_000 }) || !isInt(credit.repaidPaise, { min: 0, max: credit.amountPaise }) || !isInt(credit.reversedPaise, { min: 0, max: credit.amountPaise - credit.repaidPaise })) throw new ApiError(400, 'invalid_projection_delta');
+    customerRecordIds.add(credit.creditId);
+  }
+  for (const repayment of payload.repayments) {
+    if (!hasExactKeys(repayment, ['repaymentId','customerId','amountPaise']) || !UUID.test(repayment.repaymentId ?? '') || !UUID.test(repayment.customerId ?? '') ||
+      customerRecordIds.has(repayment.repaymentId) || !isInt(repayment.amountPaise, { min: 1, max: 100_000_000 })) throw new ApiError(400, 'invalid_projection_delta');
+    customerRecordIds.add(repayment.repaymentId);
+  }
   const paymentKeys = ['entryId','orderNumber','customerId','amountPaise','method','status','kind','relatedEntryId'];
   const methods = ['cash','upi','udhar'];
   const statuses = ['staff_declared','pending','cancelled','staff_declared_refund','receivable','reversed'];
-  const kinds = ['order_collection','payment_attempt','payment_attempt_cancelled','cash_refund','credit_reversal','credit_sale'];
+  const kinds = ['order_collection','payment_attempt','payment_attempt_cancelled','cash_refund','credit_reversal','credit_sale','customer_repayment'];
   for (const entry of payload.paymentEntries) {
     if (!hasExactKeys(entry, paymentKeys) || !isText(entry.entryId, 160) ||
-      (entry.orderNumber !== null && !isInt(entry.orderNumber, { min: 1 })) || entry.customerId !== null || !isInt(entry.amountPaise) ||
+      (entry.orderNumber !== null && !isInt(entry.orderNumber, { min: 1 })) || (entry.customerId !== null && !UUID.test(entry.customerId)) || !isInt(entry.amountPaise) ||
       !enumIs(entry.method, methods) || !enumIs(entry.status, statuses) || !enumIs(entry.kind, kinds) ||
       (entry.relatedEntryId !== null && !isText(entry.relatedEntryId, 160))) throw new ApiError(400, 'invalid_projection_delta');
   }
@@ -111,6 +120,30 @@ export function applySupplierLedgerDelta(ledger, payload) {
     total.returns = checkedAdd(total.returns, returned.amountPaise); ledger.totals.set(returned.supplierId, total);
   }
   ids.forEach((id) => ledger.eventIds.add(id));
+}
+
+export function emptyCustomerLedger() { return { credits: new Map(), repayments: new Map() }; }
+
+/** Prevent an opaque credit identity from changing customer/face value or moving backwards. */
+export function applyCustomerLedgerDelta(ledger, payload) {
+  for (const credit of payload.customerCredits ?? []) {
+    if (ledger.repayments.has(credit.creditId)) throw new ApiError(409, 'customer_finance_identity_conflict');
+    const previous = ledger.credits.get(credit.creditId);
+    if (previous && (previous.customerId !== credit.customerId || previous.amountPaise !== credit.amountPaise ||
+      credit.repaidPaise < previous.repaidPaise || credit.reversedPaise < previous.reversedPaise)) throw new ApiError(409, 'customer_credit_identity_conflict');
+    ledger.credits.set(credit.creditId, credit);
+  }
+  for (const repayment of payload.repayments ?? []) {
+    if (ledger.credits.has(repayment.repaymentId)) throw new ApiError(409, 'customer_finance_identity_conflict');
+    const previous = ledger.repayments.get(repayment.repaymentId);
+    if (previous && JSON.stringify(previous) !== JSON.stringify(repayment)) throw new ApiError(409, 'customer_repayment_identity_conflict');
+    ledger.repayments.set(repayment.repaymentId, repayment);
+  }
+  const settledByCustomer = new Map();
+  for (const repayment of ledger.repayments.values()) settledByCustomer.set(repayment.customerId, checkedAdd(settledByCustomer.get(repayment.customerId) ?? 0, repayment.amountPaise));
+  const creditStateByCustomer = new Map();
+  for (const credit of ledger.credits.values()) creditStateByCustomer.set(credit.customerId, checkedAdd(creditStateByCustomer.get(credit.customerId) ?? 0, credit.repaidPaise));
+  for (const [customerId, amount] of settledByCustomer) if (amount > (creditStateByCustomer.get(customerId) ?? 0)) throw new ApiError(409, 'customer_repayments_exceed_settled_credit');
 }
 
 function checkedAdd(left, right) {
@@ -255,6 +288,17 @@ export class SyncService {
     });
   }
 
+  async shopCustomerBalances(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildCustomerBalances({ shopId: actor.shop_id, shopName: shop.rows[0].display_name, serverRevision: Number(shop.rows[0].server_revision), events: journal.rows });
+    });
+  }
+
   async shopDailySalesActivity(actor, days = 30) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     return withTransaction(this.pool, async (c) => {
@@ -306,7 +350,11 @@ export class SyncService {
       if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
       const journal = await c.query('SELECT envelope FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
       const supplierLedger = emptySupplierLedger();
-      for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
+      const customerLedger = emptyCustomerLedger();
+      for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') {
+        applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
+        applyCustomerLedgerDelta(customerLedger, row.envelope.payload);
+      }
       const results = [];
       for (const e of events) {
         if (!e || e.type !== 'business.command.v1' || e.schemaVersion !== 1 || !UUID.test(e.eventId ?? '') || typeof e.commandId !== 'string' || e.commandId.length < 1 || e.commandId.length > 160 || !UUID.test(e.deviceId ?? '') || e.shopId !== actor.shop_id || e.businessId !== actor.business_id || !Number.isSafeInteger(e.baseRevision) || e.baseRevision < 0 || !e.payload || typeof e.payload !== 'object' || Array.isArray(e.payload)) throw new ApiError(400, 'invalid_event_envelope');
@@ -327,6 +375,7 @@ export class SyncService {
           results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
         }
         applySupplierLedgerDelta(supplierLedger, e.payload);
+        applyCustomerLedgerDelta(customerLedger, e.payload);
         const next = revision + 1;
         await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,event_type,schema_version,base_revision,payload_hash,envelope)
           VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,e.type,e.baseRevision,payloadHash,e]);

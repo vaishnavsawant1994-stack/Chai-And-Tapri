@@ -45,15 +45,17 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     const products = view === 'products';
     const inventory = view === 'inventory';
     const suppliers = view === 'suppliers';
+    const customers = view === 'customers';
     const activity = view === 'activity';
     const cashflow = view === 'cashflow';
     const profit = view === 'profit';
     const audit = view === 'audit';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
     $('suppliers-view').classList.toggle('hidden', !suppliers);
+    $('customers-view').classList.toggle('hidden', !customers);
     $('activity-view').classList.toggle('hidden', !activity);
     $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('profit-view').classList.toggle('hidden', !profit);
@@ -66,6 +68,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('inventory-tab').setAttribute('aria-current', inventory ? 'page' : 'false');
     $('suppliers-tab').classList.toggle('active', suppliers);
     $('suppliers-tab').setAttribute('aria-current', suppliers ? 'page' : 'false');
+    $('customers-tab').classList.toggle('active', customers);
+    $('customers-tab').setAttribute('aria-current', customers ? 'page' : 'false');
     $('activity-tab').classList.toggle('active', activity);
     $('activity-tab').setAttribute('aria-current', activity ? 'page' : 'false');
     $('cashflow-tab').classList.toggle('active', cashflow);
@@ -291,6 +295,38 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     } finally { $('refresh-button').disabled = false; }
   }
 
+  async function loadCustomers() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    invalidateReport('customers');
+    setStatus($('customers-status'), 'Loading accepted customer credit events…');
+    try {
+      const data = await request(`/v1/dashboard/customers?shopId=${encodeURIComponent(activeShopId)}`, { headers: { authorization: `Bearer ${session.token}` } });
+      $('customers-scope').textContent = `Server revision ${data.serverRevision}. ${data.evidence.scope}`;
+      $('customer-metrics').replaceChildren(
+        metric('Customers with recorded activity', String(data.customerCount), 'Opaque IDs only'),
+        metric('Credit extended', money(data.totalExtendedPaise), 'Latest accepted credit states'),
+        metric('Repayments recorded', money(data.totalRepaymentsPaise), 'Not independently provider-verified'),
+        metric('Recorded net receivable', money(data.netReceivablePaise), 'Accepted credit less repayments and reversals')
+      );
+      const rows = data.customers.map((customer) => {
+        const row = document.createElement('tr');
+        for (const value of [customer.customerId, String(customer.creditCount), money(customer.extendedPaise), money(customer.repaidPaise), money(customer.repaymentsPaise), money(customer.reversedPaise), money(customer.outstandingPaise)]) {
+          const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+        }
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 7; cell.className = 'empty-row'; cell.textContent = 'No accepted customer credit records are available.'; row.append(cell); rows.push(row); }
+      $('customer-rows').replaceChildren(...rows);
+      $('customer-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+      setStatus($('customers-status'), `${data.customerCount} customer balances loaded through server revision ${data.serverRevision}.`, 'success');
+      captureReport('customers', 'Customer balances', 'customers-scope', 'customer-metrics', ['customer-evidence-list']);
+    } catch (error) {
+      setStatus($('customers-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   async function loadActivity() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
@@ -500,6 +536,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     if (!$('products-view').classList.contains('hidden')) loadProducts();
     else if (!$('inventory-view').classList.contains('hidden')) loadInventory();
     else if (!$('suppliers-view').classList.contains('hidden')) loadSuppliers();
+    else if (!$('customers-view').classList.contains('hidden')) loadCustomers();
     else if (!$('activity-view').classList.contains('hidden')) loadActivity();
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
@@ -523,6 +560,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
   $('products-tab').addEventListener('click', () => { setView('products'); loadProducts(); });
   $('inventory-tab').addEventListener('click', () => { setView('inventory'); loadInventory(); });
   $('suppliers-tab').addEventListener('click', () => { setView('suppliers'); loadSuppliers(); });
+  $('customers-tab').addEventListener('click', () => { setView('customers'); loadCustomers(); });
   $('activity-tab').addEventListener('click', () => { setView('activity'); loadActivity(); });
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });

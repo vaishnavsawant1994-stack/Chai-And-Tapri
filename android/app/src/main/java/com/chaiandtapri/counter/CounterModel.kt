@@ -53,6 +53,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     private val credits = mutableListOf<CustomerCredit>()
     private val repayments = mutableListOf<CreditRepayment>()
     private val paymentEntries = mutableListOf<PaymentEntry>()
+    private val customerSyncIdentities = mutableMapOf<String, String>()
     private val supplierRecords = mutableListOf<SupplierRecord>()
     private val purchaseReceipts = mutableListOf<PurchaseReceipt>()
     private val purchaseOrderRecords = mutableListOf<PurchaseOrderDraft>()
@@ -984,6 +985,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val newRepayments = repayments.drop(before.creditRepayments.size)
         val newPaymentEntries = paymentEntries.drop(before.paymentEntries.size)
         return try {
+            ensureCustomerSyncIdentities(before)
             val after = snapshot()
             val syncPayload = SyncOutboxPayloadEncoder.between(before, after)
             if (persistence != null && !persistence.commit(after, commandId, result, audit, LocalSessionState.actorId, newMovements, newRepayments, newPaymentEntries, syncPayload)) {
@@ -1003,8 +1005,18 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         nextNumber,
         orders.values.map { CounterOrderRecord(it.number, it.lines.toList(), it.fulfillment, it.payment, it.paidPaise, it.salePosted, it.cancelReason, it.revision, it.creditPaise, it.refundedPaise, it.voided, it.cashRefundedPaise, it.creditReversedPaise, it.createdAtEpochMs) },
         stock.toMap(), appliedCommandIds.toSet(), events.toList(), movements.toList(), credits.toList(), repayments.toList(), paymentEntries.toList(), stockConfirmedProductIds.toSet(),
-        supplierRecords.toList(), purchaseReceipts.toList(), supplierPayments.toList(), purchaseReturns.toList(), expenseRecords.toList(), cashDrawerSessions.toList(), cashDrawerMovements.toList(), cashClosingReviews.toList(), purchaseOrderRecords.toList()
+        supplierRecords.toList(), purchaseReceipts.toList(), supplierPayments.toList(), purchaseReturns.toList(), expenseRecords.toList(), cashDrawerSessions.toList(), cashDrawerMovements.toList(), cashClosingReviews.toList(), purchaseOrderRecords.toList(), customerSyncIdentities.toMap()
     )
+
+    private fun ensureCustomerSyncIdentities(before: CounterSnapshot) {
+        val previousCredits = before.customerCredits.associateBy(CustomerCredit::creditId)
+        val changedCredits = credits.filter { previousCredits[it.creditId] != it }
+        val changedRepayments = repayments.drop(before.creditRepayments.size)
+        val changedPayments = paymentEntries.drop(before.paymentEntries.size)
+        val ids = (changedCredits.map { it.customerId } + changedRepayments.map { it.customerId } + changedPayments.mapNotNull { it.customerId })
+            .filter(String::isNotBlank).toSet()
+        ids.forEach { customerId -> customerSyncIdentities.getOrPut(customerId) { java.util.UUID.randomUUID().toString() } }
+    }
 
     private fun restore(state: CounterSnapshot) {
         orders.clear()
@@ -1016,6 +1028,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         movements.clear(); movements.addAll(state.stockMovements)
         credits.clear(); credits.addAll(state.customerCredits)
         repayments.clear(); repayments.addAll(state.creditRepayments)
+        customerSyncIdentities.clear(); customerSyncIdentities.putAll(state.customerSyncIdentities)
         paymentEntries.clear(); paymentEntries.addAll(state.paymentEntries)
         supplierRecords.clear(); supplierRecords.addAll(state.suppliers)
         purchaseReceipts.clear(); purchaseReceipts.addAll(state.purchaseReceipts)

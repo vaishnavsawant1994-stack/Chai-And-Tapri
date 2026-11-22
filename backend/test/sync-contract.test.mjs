@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, applySupplierLedgerDelta, emptySupplierLedger, validateProjectionDelta } from '../src/service.mjs';
+import { ApiError, applyCustomerLedgerDelta, applySupplierLedgerDelta, emptyCustomerLedger, emptySupplierLedger, validateProjectionDelta } from '../src/service.mjs';
 
 const emptyDelta = () => ({
   kind:'projection_delta.v1',orders:[],stock:[],stockMovements:[],customerCredits:[],repayments:[],paymentEntries:[]
@@ -41,16 +41,25 @@ test('projection contract requires exact order, line and integer paise fields', 
   invalid(payload);
 });
 
-test('projection contract blocks customer-linked identifiers and ledgers', () => {
+test('projection contract accepts opaque customer ledgers and rejects local identifiers', () => {
+  const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const creditId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const repaymentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const payment = emptyDelta();
   payment.paymentEntries.push({entryId:'repayment-1',orderNumber:null,customerId:'9876543210',amountPaise:500,method:'cash',status:'staff_declared',kind:'customer_repayment',relatedEntryId:null});
-  invalid(payment, 'customer_identity_contract_pending');
+  invalid(payment);
+  payment.paymentEntries[0].customerId = customerId;
+  assert.equal(validateProjectionDelta(payment), true);
   const credit = emptyDelta();
-  credit.customerCredits.push({ creditId:'credit-1',customerId:'account-a',orderNumber:12,amountPaise:500,repaidPaise:0,reversedPaise:0 });
-  invalid(credit, 'customer_identity_contract_pending');
+  credit.customerCredits.push({ creditId,customerId,amountPaise:500,repaidPaise:100,reversedPaise:50 });
+  assert.equal(validateProjectionDelta(credit), true);
+  credit.customerCredits[0].orderNumber = 12;
+  invalid(credit);
   const repayment = emptyDelta();
-  repayment.repayments.push({ repaymentId:'repayment-1',customerId:'account-a',amountPaise:500 });
-  invalid(repayment, 'customer_identity_contract_pending');
+  repayment.repayments.push({ repaymentId,customerId,amountPaise:500 });
+  assert.equal(validateProjectionDelta(repayment), true);
+  repayment.repayments[0].customerId = 'account-a';
+  invalid(repayment);
 });
 
 test('projection contract rejects oversized arrays, invalid enums and negative stock', () => {
@@ -102,4 +111,20 @@ test('supplier ledger rejects replayed identities, mismatched returns and return
   assert.throws(() => applySupplierLedgerDelta(ledger, { ...emptyDelta(), purchaseReturns:[{ returnId:'44444444-4444-4444-8444-444444444444', supplierId:'55555555-5555-4555-8555-555555555555', receiptId, amountPaise:100 }] }), (error) => error.code === 'supplier_return_exceeds_receipt');
   applySupplierLedgerDelta(ledger, { ...emptyDelta(), purchaseReturns:[{ returnId:'66666666-6666-4666-8666-666666666666', supplierId, receiptId, amountPaise:5000 }] });
   assert.equal(ledger.totals.get(supplierId).returns, 5000);
+});
+
+test('customer ledger enforces stable credit identity, monotonic settlement and immutable repayment IDs', () => {
+  const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const creditId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const repaymentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const ledger = emptyCustomerLedger();
+  const credit = { creditId, customerId, amountPaise:1000, repaidPaise:0, reversedPaise:0 };
+  applyCustomerLedgerDelta(ledger, { customerCredits:[credit], repayments:[] });
+  applyCustomerLedgerDelta(ledger, { customerCredits:[{ ...credit, repaidPaise:250 }], repayments:[] });
+  assert.throws(() => applyCustomerLedgerDelta(ledger, { customerCredits:[{ ...credit, repaidPaise:100 }], repayments:[] }), (error) => error.code === 'customer_credit_identity_conflict');
+  assert.throws(() => applyCustomerLedgerDelta(ledger, { customerCredits:[{ ...credit, amountPaise:1200 }], repayments:[] }), (error) => error.code === 'customer_credit_identity_conflict');
+  const repayment = { repaymentId, customerId, amountPaise:100 };
+  applyCustomerLedgerDelta(ledger, { customerCredits:[], repayments:[repayment] });
+  applyCustomerLedgerDelta(ledger, { customerCredits:[], repayments:[repayment] });
+  assert.throws(() => applyCustomerLedgerDelta(ledger, { customerCredits:[], repayments:[{ ...repayment, amountPaise:200 }] }), (error) => error.code === 'customer_repayment_identity_conflict');
 });

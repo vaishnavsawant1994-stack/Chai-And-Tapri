@@ -73,8 +73,9 @@ class SqliteCounterPersistence internal constructor(
         db.execSQL("CREATE TABLE command_receipts(command_id TEXT PRIMARY KEY, result TEXT NOT NULL, committed_at INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE audit_events(event_id TEXT PRIMARY KEY, command_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL, actor_id TEXT)")
         db.execSQL("CREATE TABLE stock_movements(movement_id TEXT PRIMARY KEY, command_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity_delta INTEGER NOT NULL, reason TEXT NOT NULL, order_no INTEGER, created_at INTEGER NOT NULL)")
-        db.execSQL("CREATE TABLE customer_credit(credit_id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, order_no INTEGER NOT NULL, amount_paise INTEGER NOT NULL, repaid_paise INTEGER NOT NULL, reversed_paise INTEGER NOT NULL DEFAULT 0)")
-        db.execSQL("CREATE TABLE credit_repayments(repayment_id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, amount_paise INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE customer_credit(credit_id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, order_no INTEGER NOT NULL, amount_paise INTEGER NOT NULL, repaid_paise INTEGER NOT NULL, reversed_paise INTEGER NOT NULL DEFAULT 0, sync_id TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE credit_repayments(repayment_id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, amount_paise INTEGER NOT NULL, sync_id TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE customer_sync_identities(local_customer_id TEXT PRIMARY KEY, sync_id TEXT NOT NULL UNIQUE)")
         createPaymentEntries(db)
         createSyncOutboxTable(db)
         createProductCatalog(db)
@@ -92,6 +93,7 @@ class SqliteCounterPersistence internal constructor(
         createLocalOwnerTable(db)
         createStaffCredentialsTable(db)
         createCustomerProfilesTable(db)
+        migrateOpaqueCustomerSyncIds(db)
         migrateOpaqueProcurementSyncIds(db)
     }
 
@@ -168,7 +170,8 @@ class SqliteCounterPersistence internal constructor(
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS product_catalog_scan_code_unique ON product_catalog(scan_code COLLATE NOCASE) WHERE scan_code IS NOT NULL AND scan_code <> ''")
         }
         if (oldVersion < 28) migrateOpaqueProcurementSyncIds(db)
-        if (newVersion > DATABASE_VERSION || oldVersion > 27) {
+        if (oldVersion < 29) migrateOpaqueCustomerSyncIds(db)
+        if (newVersion > DATABASE_VERSION || oldVersion > 28) {
             throw IllegalStateException("No migration is defined from database version $oldVersion to $newVersion")
         }
     }
@@ -187,6 +190,32 @@ class SqliteCounterPersistence internal constructor(
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ${table}_sync_id_unique ON $table(sync_id)")
         }
     }
+
+    private fun migrateOpaqueCustomerSyncIds(db: CipherDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS customer_sync_identities(local_customer_id TEXT PRIMARY KEY, sync_id TEXT NOT NULL UNIQUE)")
+        if (!hasColumn(db, "customer_credit", "sync_id")) db.execSQL("ALTER TABLE customer_credit ADD COLUMN sync_id TEXT NOT NULL DEFAULT ''")
+        if (!hasColumn(db, "credit_repayments", "sync_id")) db.execSQL("ALTER TABLE credit_repayments ADD COLUMN sync_id TEXT NOT NULL DEFAULT ''")
+        val localIds = linkedSetOf<String>()
+        listOf("customer_profiles" to "customer_id", "customer_credit" to "customer_id", "credit_repayments" to "customer_id", "payment_entries" to "customer_id").forEach { (table, column) ->
+            if (tableExists(db, table) && hasColumn(db, table, column)) db.rawQuery("SELECT DISTINCT $column FROM $table WHERE $column IS NOT NULL AND $column<>''", null).use { c -> while (c.moveToNext()) localIds += c.getString(0) }
+        }
+        localIds.forEach { localId ->
+            db.insertWithOnConflict("customer_sync_identities", null, ContentValues().apply { put("local_customer_id", localId); put("sync_id", UUID.randomUUID().toString()) }, CipherDatabase.CONFLICT_IGNORE)
+        }
+        listOf("customer_credit" to "credit_id", "credit_repayments" to "repayment_id").forEach { (table, idColumn) ->
+            val ids = mutableListOf<String>()
+            db.rawQuery("SELECT $idColumn FROM $table WHERE sync_id='' OR sync_id IS NULL", null).use { c -> while (c.moveToNext()) ids += c.getString(0) }
+            ids.forEach { id -> db.update(table, ContentValues().apply { put("sync_id", UUID.randomUUID().toString()) }, "$idColumn=? AND (sync_id='' OR sync_id IS NULL)", arrayOf(id)) }
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS ${table}_sync_id_unique ON $table(sync_id)")
+        }
+        if (!hasColumn(db, "payment_entries", "sync_id")) db.execSQL("ALTER TABLE payment_entries ADD COLUMN sync_id TEXT NOT NULL DEFAULT ''")
+        val paymentIds = mutableListOf<String>()
+        db.rawQuery("SELECT entry_id FROM payment_entries WHERE sync_id='' OR sync_id IS NULL", null).use { c -> while (c.moveToNext()) paymentIds += c.getString(0) }
+        paymentIds.forEach { id -> db.update("payment_entries", ContentValues().apply { put("sync_id", UUID.randomUUID().toString()) }, "entry_id=? AND (sync_id='' OR sync_id IS NULL)", arrayOf(id)) }
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS payment_entries_sync_id_unique ON payment_entries(sync_id)")
+    }
+
+    private fun tableExists(db: CipherDatabase, table: String): Boolean = db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)).use { it.moveToFirst() }
 
     private fun migrateLegacyIfNeeded() {
         recoverInterruptedMigration()
@@ -368,7 +397,7 @@ class SqliteCounterPersistence internal constructor(
     }
 
     private fun createPaymentEntries(db: CipherDatabase) {
-        db.execSQL("CREATE TABLE payment_entries(entry_id TEXT PRIMARY KEY, order_no INTEGER, customer_id TEXT, amount_paise INTEGER NOT NULL, method TEXT NOT NULL, status TEXT NOT NULL, kind TEXT NOT NULL, related_entry_id TEXT, created_at INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE payment_entries(entry_id TEXT PRIMARY KEY, order_no INTEGER, customer_id TEXT, amount_paise INTEGER NOT NULL, method TEXT NOT NULL, status TEXT NOT NULL, kind TEXT NOT NULL, related_entry_id TEXT, created_at INTEGER NOT NULL, sync_id TEXT NOT NULL)")
     }
 
     private fun createSyncOutboxTable(db: CipherDatabase) {
@@ -854,7 +883,7 @@ class SqliteCounterPersistence internal constructor(
     internal fun hasBusinessActivity(): Boolean {
         val db = readableDatabase
         assertCipherActive(db)
-        return listOf("orders", "command_receipts", "audit_events", "stock_movements", "customer_credit", "customer_profiles", "credit_repayments", "payment_entries", "suppliers", "purchase_receipts", "supplier_payments", "purchase_returns", "expenses", "cash_drawer_sessions", "cash_drawer_movements", "cash_closing_reviews")
+        return listOf("orders", "command_receipts", "audit_events", "stock_movements", "customer_credit", "customer_profiles", "credit_repayments", "customer_sync_identities", "payment_entries", "suppliers", "purchase_receipts", "supplier_payments", "purchase_returns", "expenses", "cash_drawer_sessions", "cash_drawer_movements", "cash_closing_reviews")
             .any { table -> cipherLong(db, "SELECT COUNT(*) FROM $table") > 0L }
     }
 
@@ -887,16 +916,18 @@ class SqliteCounterPersistence internal constructor(
             while (c.moveToNext()) movements += StockMovement(c.getString(0), c.getString(1), c.getInt(2), c.getString(3), if (c.isNull(4)) null else c.getInt(4))
         }
         val credits = mutableListOf<CustomerCredit>()
-        db.rawQuery("SELECT credit_id, customer_id, order_no, amount_paise, repaid_paise, reversed_paise FROM customer_credit ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) credits += CustomerCredit(c.getString(0),c.getString(1),c.getInt(2),c.getInt(3),c.getInt(4),c.getInt(5))
+        db.rawQuery("SELECT credit_id, customer_id, order_no, amount_paise, repaid_paise, reversed_paise, sync_id FROM customer_credit ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) credits += CustomerCredit(c.getString(0),c.getString(1),c.getInt(2),c.getInt(3),c.getInt(4),c.getInt(5),c.getString(6))
         }
         val repayments = mutableListOf<CreditRepayment>()
-        db.rawQuery("SELECT repayment_id, customer_id, amount_paise FROM credit_repayments ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) repayments += CreditRepayment(c.getString(0),c.getString(1),c.getInt(2))
+        db.rawQuery("SELECT repayment_id, customer_id, amount_paise, sync_id FROM credit_repayments ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) repayments += CreditRepayment(c.getString(0),c.getString(1),c.getInt(2),c.getString(3))
         }
+        val customerSyncIdentities = mutableMapOf<String, String>()
+        db.rawQuery("SELECT local_customer_id,sync_id FROM customer_sync_identities", null).use { c -> while (c.moveToNext()) customerSyncIdentities[c.getString(0)] = c.getString(1) }
         val paymentEntries = mutableListOf<PaymentEntry>()
-        db.rawQuery("SELECT entry_id, order_no, customer_id, amount_paise, method, status, kind, related_entry_id, drawer_session_id, created_at FROM payment_entries ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) paymentEntries += PaymentEntry(c.getString(0), if (c.isNull(1)) null else c.getInt(1), if (c.isNull(2)) null else c.getString(2), c.getInt(3), c.getString(4), c.getString(5), c.getString(6), if (c.isNull(7)) null else c.getString(7), if (c.isNull(8)) null else c.getString(8), c.getLong(9))
+        db.rawQuery("SELECT entry_id, order_no, customer_id, amount_paise, method, status, kind, related_entry_id, drawer_session_id, created_at, sync_id FROM payment_entries ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) paymentEntries += PaymentEntry(c.getString(0), if (c.isNull(1)) null else c.getInt(1), if (c.isNull(2)) null else c.getString(2), c.getInt(3), c.getString(4), c.getString(5), c.getString(6), if (c.isNull(7)) null else c.getString(7), if (c.isNull(8)) null else c.getString(8), c.getLong(9), c.getString(10))
         }
         val confirmedStock = mutableSetOf<String>()
         db.rawQuery("SELECT product_id FROM stock_baseline_confirmations", null).use { c -> while (c.moveToNext()) confirmedStock += c.getString(0) }
@@ -952,7 +983,7 @@ class SqliteCounterPersistence internal constructor(
         db.rawQuery("SELECT review_id,session_id,reviewed_at,note FROM cash_closing_reviews ORDER BY reviewed_at,review_id", null).use { c ->
             while (c.moveToNext()) closeReviews += CashClosingReview(c.getString(0), c.getString(1), c.getLong(2), c.getString(3))
         }
-        return CounterSnapshot(next, orders, stock, commandIds, events, movements, credits, repayments, paymentEntries, confirmedStock, suppliers, linkedReceiptList, supplierPayments, purchaseReturns, expenses, drawerSessions, drawerMovements, closeReviews, purchaseOrderDrafts)
+        return CounterSnapshot(next, orders, stock, commandIds, events, movements, credits, repayments, paymentEntries, confirmedStock, suppliers, linkedReceiptList, supplierPayments, purchaseReturns, expenses, drawerSessions, drawerMovements, closeReviews, purchaseOrderDrafts, customerSyncIdentities)
     }
 
     override fun commit(snapshot: CounterSnapshot, commandId: String, result: String, event: String, actorId: String?, movements: List<StockMovement>, repayments: List<CreditRepayment>, paymentEntries: List<PaymentEntry>, syncPayload: SyncOutboxPayload): Boolean {
@@ -1001,8 +1032,9 @@ class SqliteCounterPersistence internal constructor(
             }) }
             snapshot.customerCredits.forEach { credit -> db.insertOrThrow("customer_credit", null, ContentValues().apply {
                 put("credit_id",credit.creditId); put("customer_id",credit.customerId); put("order_no",credit.orderNumber)
-                put("amount_paise",credit.amountPaise); put("repaid_paise",credit.repaidPaise); put("reversed_paise",credit.reversedPaise)
+                put("amount_paise",credit.amountPaise); put("repaid_paise",credit.repaidPaise); put("reversed_paise",credit.reversedPaise); put("sync_id",credit.syncId)
             }) }
+            snapshot.customerSyncIdentities.forEach { (localId, syncId) -> db.insertWithOnConflict("customer_sync_identities", null, ContentValues().apply { put("local_customer_id", localId); put("sync_id", syncId) }, CipherDatabase.CONFLICT_REPLACE) }
             snapshot.suppliers.forEach { supplier -> db.insertWithOnConflict("suppliers", null, ContentValues().apply {
                 put("supplier_id", supplier.supplierId); put("name", supplier.name); put("active", 1); put("phone", supplier.phone); put("sync_id", supplier.syncId)
             }, CipherDatabase.CONFLICT_REPLACE) }
@@ -1064,11 +1096,11 @@ class SqliteCounterPersistence internal constructor(
                 put("review_id", review.reviewId); put("session_id", review.sessionId); put("reviewed_at", review.reviewedAt); put("note", review.note)
             }, CipherDatabase.CONFLICT_IGNORE) }
             repayments.forEach { repayment -> db.insertOrThrow("credit_repayments", null, ContentValues().apply {
-                put("repayment_id",repayment.repaymentId); put("customer_id",repayment.customerId); put("amount_paise",repayment.amountPaise)
+                put("repayment_id",repayment.repaymentId); put("customer_id",repayment.customerId); put("amount_paise",repayment.amountPaise); put("sync_id", repayment.syncId)
             }) }
             paymentEntries.forEach { entry -> db.insertOrThrow("payment_entries", null, ContentValues().apply {
                 put("entry_id", entry.entryId); put("order_no", entry.orderNumber); put("customer_id", entry.customerId)
-                put("amount_paise", entry.amountPaise); put("method", entry.method); put("status", entry.status); put("kind", entry.kind); put("related_entry_id", entry.relatedEntryId); put("drawer_session_id", entry.drawerSessionId); put("created_at", entry.createdAtEpochMs.takeIf { it > 0L } ?: now)
+                put("amount_paise", entry.amountPaise); put("method", entry.method); put("status", entry.status); put("kind", entry.kind); put("related_entry_id", entry.relatedEntryId); put("drawer_session_id", entry.drawerSessionId); put("created_at", entry.createdAtEpochMs.takeIf { it > 0L } ?: now); put("sync_id", entry.syncId)
             }) }
             insertSyncOutbox(db, commandId, now, syncPayload)
             db.setTransactionSuccessful()
@@ -1081,7 +1113,7 @@ class SqliteCounterPersistence internal constructor(
 
     companion object {
         internal const val DATABASE_NAME = "chai_tapri_counter.db"
-        internal const val DATABASE_VERSION = 28
+        internal const val DATABASE_VERSION = 29
         internal const val STORE_IDENTITY_KEY = "shop_identity"
 
         internal fun locallyBoundShopIdentity(context: Context, databaseName: String, keyNamespace: String): String? =

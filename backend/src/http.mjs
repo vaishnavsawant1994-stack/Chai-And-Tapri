@@ -64,6 +64,11 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopSupplierBalances(actor));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/customers') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopCustomerBalances(actor));
+      }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/activity') {
         const shopId=url.searchParams.get('shopId');
         const rawDays=url.searchParams.get('days')??'30';

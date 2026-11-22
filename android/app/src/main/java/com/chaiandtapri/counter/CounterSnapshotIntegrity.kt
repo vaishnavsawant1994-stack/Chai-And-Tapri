@@ -16,7 +16,12 @@ internal object CounterSnapshotIntegrity {
         snapshot.customerCredits.forEach { credit ->
             if (credit.orderNumber !in byNumber) problems += "credit references missing order ${credit.orderNumber}"
             if (credit.amountPaise < 0 || credit.repaidPaise < 0 || credit.reversedPaise < 0 || credit.outstandingPaise < 0) problems += "invalid receivable for order ${credit.orderNumber}"
+            if (!isUuid(credit.syncId)) problems += "credit ${credit.creditId} has invalid opaque sync ID"
         }
+        if (snapshot.creditRepayments.any { !isUuid(it.syncId) || it.amountPaise <= 0 }) problems += "repayment has invalid opaque sync ID or amount"
+        if (snapshot.paymentEntries.any { !isUuid(it.syncId) }) problems += "payment event has invalid opaque sync ID"
+        val mappedCustomerIds = snapshot.customerSyncIdentities.values
+        if (snapshot.customerSyncIdentities.any { (local, opaque) -> local.isBlank() || !isUuid(opaque) } || mappedCustomerIds.toSet().size != mappedCustomerIds.size) problems += "customer opaque sync identity mapping is invalid"
         snapshot.orders.forEach { order ->
             val deliveredValue = order.lines.sumOf { line -> line.deliveredQuantity.toLong() * line.unitPricePaise }
             if (order.lines.any { it.quantity <= 0 || it.deliveredQuantity !in 0..it.quantity || it.refundedQuantity !in 0..it.deliveredQuantity || it.unitPricePaise < 0 }) {
@@ -146,4 +151,6 @@ internal object CounterSnapshotIntegrity {
         }
         check(problems.isEmpty()) { "Business reconciliation failed: ${problems.joinToString("; ")}" }
     }
+
+    private fun isUuid(value: String): Boolean = runCatching { java.util.UUID.fromString(value).toString() == value }.getOrDefault(false)
 }
