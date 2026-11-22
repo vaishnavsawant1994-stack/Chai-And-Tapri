@@ -1927,12 +1927,12 @@ class SqliteCounterPersistenceTest {
                         if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
                     }
                     collect(activity.findViewById(android.R.id.content))
-                    completion = values.firstOrNull { it.startsWith("Report exported") || it.startsWith("Report export failed") }.orEmpty()
+                    completion = values.firstOrNull { it.startsWith("Report for ") || it.startsWith("Report export failed") }.orEmpty()
                 }
                 if (completion.isNotBlank()) break
                 Thread.sleep(100)
             }
-            assertTrue("The real SAF export should finish; status=$completion", completion.startsWith("Report exported"))
+            assertTrue("The real SAF export should finish; status=$completion", completion.startsWith("Report for ") && completion.contains(" exported."))
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

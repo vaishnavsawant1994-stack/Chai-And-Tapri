@@ -4,7 +4,7 @@
 
 Daily Reports now includes a date picker and a date-scoped projection based on local device-recorded timestamps. Sales and delivered units are grouped by order creation date; current refund allocations reduce net sales on that original order date. Cash collection/refund entries and expenses use their own recorded dates. Current UPI due and customer receivables are presented as current balances for orders created on the selected date, while supplier payables remain current across all dates. Legacy undated orders, payment entries and expenses are excluded and counted. The screen and CSV state that device dates are not server-verified; profit, settlement, tax and close claims remain unavailable.
 
-New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/instrumentation APK builds pass; lint has **0 errors / 173 warnings**. The updated date-scoped report rendered in a focused API 37 UI test (**1/1 passed**). A focused nonzero SAF export retry failed before reaching the export control because the isolated emulator presented Pixel Launcher and subsequently System UI "isn't responding" system dialogs. The prior full API 37 instrumentation result of 110/110 predates this CT-29 update. The date picker and selected-day SAF export remain runtime-unqualified; no broad instrumentation pass is claimed. Other project qualification gates remain as recorded below; the complete product, independent security, physical device, field and production gates remain open. Details: [CT-29 report](CT-29-CSV-EXPORT-REPORT.md).
+New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/instrumentation APK builds pass; lint has **0 errors / 173 warnings**. Focused API 37 tests for updated report rendering, nonzero SAF CSV export, and cancellation each passed **1/1**. Pulled synthetic CSV evidence confirms the date-scoped values; its path is recorded in the CT-29 report. In the latest broad serial-pinned API 37 run, **110 tests were attempted: 80 passed and 30 failed**. The updated CT-29 report-render test passed, but its export and cancellation tests failed in that broad run amid repeated System UI ANR dialogs; multiple unrelated UI tests were also obstructed. This broad run is not qualified. Its XML is archived at `../test-evidence/2026-11-22/ct29-current-full-instrumentation.xml`. The focused CT-29 runs remain evidence for those individual paths, not a substitute for a healthy full suite. The operator-selected historical-date interaction remains untested. Other project qualification gates remain open. Details: [CT-29 report](CT-29-CSV-EXPORT-REPORT.md).
 
 **Date:** 22 November 2026  
 **Authority:** Current local source, current test outputs, and synthetic emulator recovery evidence.
@@ -14,15 +14,15 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 | Suite / check | Result |
 |---|---:|
 | Prototype Node tests | 52/52 passed |
-| Kotlin JVM tests | 63/63 passed |
-| API 37 instrumentation | 110/110 passed; 0 failures, errors, or skips |
+| Kotlin JVM tests | 64/64 passed |
+| API 37 instrumentation | Latest broad run: 110 attempted, 80 passed, 30 failed; repeated System UI ANRs blocked UI automation. Earlier 110/110 applies only to earlier source. |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
 | Debug and instrumentation APK builds | Passed |
 | Android lint | 0 errors / 173 warnings |
 
-The latest 110-test Android run used only `Tapri_Recovery_Isolated`; the primary AVD was excluded. It includes the CT-15 read-only movement-history search, CT-08 partial item handover and queue filters, CT-29 nonzero SAF export/cancellation, and CT-30 alert routes. Only the endpoint-dependent live-backend Android class was excluded; backend integration passed separately against synthetic isolated PostgreSQL. Full-run XML is archived at `test-evidence/2026-11-22/ct15-movement-history-full-instrumentation.xml`. The run had zero failures, errors, or skips.
+The earlier qualified 110/110 Android run used only `Tapri_Recovery_Isolated`; its XML is `test-evidence/2026-11-22/ct15-movement-history-full-instrumentation.xml`. A new current-source broad run on the same isolated AVD attempted 110 tests and recorded 30 UI failures, with repeated `System UI isn't responding` dialogs visibly replacing the app under test. The CT-29 report render passed in that run, while export/cancellation and multiple unrelated UI tests failed under the same obstruction. This source is not broadly emulator-qualified until a clean run completes. Focused current-source tests for CT-29 report rendering, export, and cancellation each passed before the broad run.
 
 ## Wave status
 
