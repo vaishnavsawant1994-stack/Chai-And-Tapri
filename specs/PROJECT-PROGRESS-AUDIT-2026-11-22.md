@@ -2,7 +2,7 @@
 
 ## Latest continuation - CT-17 confirmed supplier return - 22 November 2026
 
-CT-17 now presents receipt-scoped return choices bounded by unreturned receipt quantity and current stock, requires a reason, and adds explicit confirmation. A focused API 37 journey passed 1/1 and verified the return movement, stock reduction, payable allocation, retained supplier payment, audit reason and snapshot integrity. The first broad 111-case run had 110 pass and one read-after-tap test race; the corrected focused case passed. A second broad rerun was interrupted after 37 tests when Android activity/package services disappeared during a later staff-access test; JUnit: `test-evidence/2026-11-22/ct17-broad-rerun-emulator-service-loss.xml`. Current host checks: prototype Node **52/52**, Kotlin JVM **67/67**, APK builds passed, lint **0 errors / 175 warnings**; backend without PostgreSQL **19 passed / 4 skipped** (prior isolated PostgreSQL run 23/23, backend unchanged). Focused XML: `test-evidence/2026-11-22/ct17-supplier-return-confirmed-ui-focused.xml`. The full Android suite remains unqualified. See [CT-17–20 report](CT-17-20-PROCUREMENT-REPORT.md). CT-17 and the overall product remain partial.
+CT-17 now presents receipt-scoped return choices bounded by unreturned receipt quantity and current stock, requires a reason, and adds explicit confirmation. A focused API 37 journey passed 1/1 and verified the return movement, stock reduction, payable allocation, retained supplier payment, audit reason and snapshot integrity. After a cold restart with the isolated AVD limited to 2 GB guest memory, the current API 37 suite passed **111/111**, zero failures/errors/skips, including CT-17. The successful rerun supersedes the earlier 110/111 read-after-tap test-race run and the later 37-case Android service-loss run. JUnit and run note: `test-evidence/2026-11-22/ct17-low-memory-full-instrumentation.xml` and `.md`. Current host checks: prototype Node **52/52**, Kotlin JVM **67/67**, APK builds passed, lint **0 errors / 175 warnings**; backend without PostgreSQL **19 passed / 4 skipped** (prior isolated PostgreSQL run 23/23, backend unchanged). See [CT-17–20 report](CT-17-20-PROCUREMENT-REPORT.md). This qualifies the tested synthetic Android flows, not all six waves or production use.
 
 ## Latest continuation - CT-29 current-source emulator regression - 22 November 2026
 
@@ -27,7 +27,7 @@ New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/
 |---|---:|
 | Prototype Node tests | 52/52 passed |
 | Kotlin JVM tests | 67/67 passed |
-| API 37 instrumentation | CT-17 focused test passed 1/1 after the synchronization fix. Broad attempt 1: 110/111, one pre-fix assertion race. Broad attempt 2: runner stopped after 37 cases when emulator activity/package services disappeared. Full suite after correction is not qualified. |
+| API 37 instrumentation | Current isolated API 37 source: 111/111 passed after cold start at 2 GB guest memory; 0 failures/errors/skips. Endpoint-dependent `LiveBackendSyncE2ETest` excluded. Earlier race and service-loss attempts are superseded. |
 | CAT-051B focused real-UI export | 1/1 passed on an isolated fresh API 37 AVD |
 | CAT-051B focused uninstall/reinstall restore | 1/1 passed on the same isolated AVD |
 | CAT-052 backend + PostgreSQL 17 | 23/23 passed on a separate temporary cluster with a restricted runtime role; cluster stopped after testing |
