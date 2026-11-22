@@ -2145,6 +2145,19 @@ class SqliteCounterPersistenceTest {
 
             click("Record supplier payment")
             setField("Existing supplier ID", "ct18_ui_dealer")
+            setField("Cash amount in rupees", "21")
+            click("Record payment")
+            assertTrue(findNode(prefix = "Payment must be positive").text.contains("No change made"))
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(2000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                assertTrue(model.supplierPaymentHistory().isEmpty())
+                assertEquals(0, model.expenseHistory().size)
+                assertFalse(model.auditEvents().any { it.contains("supplier.payment_recorded") })
+            }
+
+            click("Record supplier payment")
+            setField("Existing supplier ID", "ct18_ui_dealer")
             setField("Cash amount in rupees", "5")
             click("Record payment")
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
