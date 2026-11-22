@@ -478,7 +478,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     link.href = blobUrl;
     link.download = `chai-and-tapri-${activeView}-${new Date(report.loadedAt).toISOString().replaceAll(':', '-')}.csv`;
     link.click();
-    URL.revokeObjectURL(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
     const statusId = activeView === 'overview' ? 'dashboard-status' : `${activeView}-status`;
     setStatus($(statusId), 'Exported the currently displayed accepted-server report as CSV.', 'success');
   });
