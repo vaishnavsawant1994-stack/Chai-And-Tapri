@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## OW-12 accepted event history - 22 November 2026
+
+Added a bounded, owner-only server event-history API and dashboard view with privacy-limited metadata/counts and explicit limits. PostgreSQL backend tests passed 24/24, zero skipped; JavaScript syntax checks passed. This is not a complete staff audit trail and remains subject to authorized browser visual review. See [OW-12 report](OW-12-AUDIT-HISTORY-REPORT.md).
+
 ## CAT-052 live encrypted-outbox retry - 22 November 2026
 
 Current-source API 37 live backend test passed 1/1 against a fresh isolated PostgreSQL 17 cluster; backend integration tests passed 23/23 with no skips. The Android SQLCipher outbox survived database close/reopen after a server-committed lost acknowledgment, then retried idempotently. PostgreSQL showed 1 synthetic shop, 2 accepted events and 0 conflicts. JUnit and qualification notes: `../test-evidence/2026-11-22/android-sync-e2e-refresh/`. This is not process-death or production sync qualification. See [CAT-052 report](CAT-052-ANDROID-HTTPS-TRANSPORT-QUALIFICATION.md).

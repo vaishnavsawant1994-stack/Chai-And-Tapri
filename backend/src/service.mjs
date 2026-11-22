@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from './dashboard.mjs';
+import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -221,6 +221,22 @@ export class SyncService {
   async shopProfitReadiness(actor, days = 30) {
     const activity = await this.shopDailySalesActivity(actor, days);
     return buildProfitReadiness(activity);
+  }
+
+  async shopAuditHistory(actor, limit = 100) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'invalid_audit_limit');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const result = await c.query(`SELECT server_revision,event_id,event_type,base_revision,envelope,received_at
+        FROM sync_events WHERE shop_id=$1 ORDER BY server_revision DESC LIMIT $2`, [actor.shop_id, limit]);
+      return buildAuditHistory({
+        shopId: actor.shop_id, shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision), events: result.rows.reverse(), limit
+      });
+    });
   }
 
   async submitEvents(actor, events) {

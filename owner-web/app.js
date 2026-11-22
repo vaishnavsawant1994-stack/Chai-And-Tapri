@@ -41,13 +41,15 @@
     const activity = view === 'activity';
     const cashflow = view === 'cashflow';
     const profit = view === 'profit';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : 'Refresh profit readiness';
+    const audit = view === 'audit';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
     $('activity-view').classList.toggle('hidden', !activity);
     $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('profit-view').classList.toggle('hidden', !profit);
+    $('audit-view').classList.toggle('hidden', !audit);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
@@ -60,6 +62,8 @@
     $('cashflow-tab').setAttribute('aria-current', cashflow ? 'page' : 'false');
     $('profit-tab').classList.toggle('active', profit);
     $('profit-tab').setAttribute('aria-current', profit ? 'page' : 'false');
+    $('audit-tab').classList.toggle('active', audit);
+    $('audit-tab').setAttribute('aria-current', audit ? 'page' : 'false');
   }
 
   async function loadOverview() {
@@ -326,6 +330,33 @@
     }
   }
 
+  async function loadAuditHistory() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    setStatus($('audit-status'), 'Loading accepted event metadata…');
+    try {
+      const limit = $('audit-limit').value;
+      const data = await request(`/v1/dashboard/audit?shopId=${encodeURIComponent(activeShopId)}&limit=${encodeURIComponent(limit)}`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      $('audit-scope').textContent = `${data.evidence.scope} ${data.evidence.source}`;
+      const rows = data.events.map((event) => {
+        const row = document.createElement('tr');
+        const other = event.changeCounts.customerCredits + event.changeCounts.repayments + event.changeCounts.expenses;
+        const values = [String(event.serverRevision), event.receivedAt ? new Date(event.receivedAt).toLocaleString() : 'Timestamp unavailable', event.eventId, String(event.changeCounts.orders), String(event.changeCounts.stockMovements + event.changeCounts.stock), String(event.changeCounts.paymentEntries), String(other)];
+        for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 7; cell.className = 'empty-row'; cell.textContent = 'No server-accepted events are available yet.'; row.append(cell); rows.push(row); }
+      $('audit-rows').replaceChildren(...rows);
+      $('audit-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+      setStatus($('audit-status'), `${data.returnedEventCount} accepted events loaded through server revision ${data.serverRevision}.`, 'success');
+    } catch (error) {
+      setStatus($('audit-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
@@ -374,6 +405,7 @@
     else if (!$('activity-view').classList.contains('hidden')) loadActivity();
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
+    else if (!$('audit-view').classList.contains('hidden')) loadAuditHistory();
     else loadOverview();
   });
   $('overview-tab').addEventListener('click', () => setView('overview'));
@@ -382,9 +414,11 @@
   $('activity-tab').addEventListener('click', () => { setView('activity'); loadActivity(); });
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
+  $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
   $('activity-range').addEventListener('change', () => { if (!$('activity-view').classList.contains('hidden')) loadActivity(); });
   $('cashflow-range').addEventListener('change', () => { if (!$('cashflow-view').classList.contains('hidden')) loadCashflow(); });
   $('profit-range').addEventListener('change', () => { if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness(); });
+  $('audit-limit').addEventListener('change', () => { if (!$('audit-view').classList.contains('hidden')) loadAuditHistory(); });
   $('logout-button').addEventListener('click', async () => {
     const current = session;
     signOutLocally();

@@ -436,3 +436,33 @@ export function buildProfitReadiness(activity) {
     }
   };
 }
+
+/** Return a privacy-limited summary of accepted event metadata for an owner. */
+export function buildAuditHistory({ shopId, shopName, serverRevision, events, limit = 100 }) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('invalid_audit_limit');
+  const fields = ['orders', 'stock', 'stockMovements', 'customerCredits', 'repayments', 'paymentEntries', 'expenses'];
+  const rows = events.slice(-limit).reverse().map((row) => {
+    const envelope = row.envelope && typeof row.envelope === 'object' ? row.envelope : {};
+    const payload = envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
+    const changeCounts = Object.fromEntries(fields.map((field) => [field, Array.isArray(payload[field]) ? payload[field].length : 0]));
+    const receivedAt = row.received_at instanceof Date ? row.received_at : new Date(row.received_at);
+    return {
+      serverRevision: Number(row.server_revision),
+      eventId: row.event_id,
+      eventType: row.event_type,
+      baseRevision: Number(row.base_revision),
+      receivedAt: Number.isNaN(receivedAt.valueOf()) ? null : receivedAt.toISOString(),
+      changeCounts
+    };
+  });
+  return {
+    shopId, shopName, serverRevision, returnedEventCount: rows.length,
+    events: rows,
+    evidence: {
+      scope: 'Latest events accepted by the server for this authenticated shop, newest first.',
+      source: 'Server revision, event envelope metadata, and counts of allow-listed record arrays.',
+      exclusions: 'Raw payloads, product/customer identifiers, transaction amounts, device identifiers, and employee identity are not included. The current event contract does not identify the staff member who created an event.',
+      limitation: 'This is an accepted sync-event history, not a complete employee audit trail or proof of the underlying business activity.'
+    }
+  };
+}

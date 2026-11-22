@@ -34,6 +34,12 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
     const event={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`sale-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:0,payload:projectionDelta([{productId:'chai',quantity:4}])};
     assert.deepEqual((await service.submitEvents(actor,[event])).results.map(x=>x.status),['accepted']);
     assert.deepEqual((await service.submitEvents(actor,[event])).results.map(x=>x.status),['duplicate']);
+    const audit=await service.shopAuditHistory(actor,10);
+    assert.equal(audit.returnedEventCount,1);
+    assert.equal(audit.events[0].serverRevision,1);
+    assert.equal(audit.events[0].changeCounts.stock,1);
+    assert.equal(Object.hasOwn(audit.events[0],'envelope'),false);
+    assert.equal(JSON.stringify(audit).includes('chai'),false,'audit summary must not expose product identifiers');
     const altered={...event,payload:projectionDelta([{productId:'chai',quantity:8}])};
     await assert.rejects(service.submitEvents(actor,[altered]),(e)=>e instanceof ApiError&&e.code==='event_idempotency_conflict');
     const stale={...event,eventId:randomUUID(),commandId:`refund-${randomUUID()}`};

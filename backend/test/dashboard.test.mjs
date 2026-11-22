@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from '../src/dashboard.mjs';
+import { buildAuditHistory, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
@@ -11,6 +11,24 @@ const row = (serverRevision, payload, receivedAt = new Date(`2026-11-01T10:00:${
   envelope: { payload: { kind: 'projection_delta.v1', ...payload } }
 });
 const empty = { orders: [], stock: [], stockMovements: [], customerCredits: [], repayments: [], paymentEntries: [] };
+
+test('owner audit history returns newest accepted-event metadata without payload identifiers or amounts', () => {
+  const result = buildAuditHistory({
+    shopId: 'shop-1', shopName: 'Synthetic Tapri', serverRevision: 2, limit: 1,
+    events: [
+      { server_revision: 1, event_id: 'event-old', event_type: 'business.command.v1', base_revision: 0, received_at: new Date('2026-11-22T10:00:00Z'), envelope: { payload: { orders: [{ orderNumber: 1, lines: [{ productId: 'private-product', unitPricePaise: 1000 }] }] } } },
+      { server_revision: 2, event_id: 'event-new', event_type: 'business.command.v1', base_revision: 1, received_at: new Date('2026-11-22T10:01:00Z'), envelope: { payload: { paymentEntries: [{ amountPaise: 5000, customerId: 'private-customer' }], stockMovements: [{}] } } }
+    ]
+  });
+  assert.equal(result.returnedEventCount, 1);
+  assert.equal(result.events[0].eventId, 'event-new');
+  assert.equal(result.events[0].changeCounts.paymentEntries, 1);
+  assert.equal(result.events[0].changeCounts.stockMovements, 1);
+  assert.equal(JSON.stringify(result).includes('private-customer'), false);
+  assert.equal(JSON.stringify(result).includes('5000'), false);
+  assert.match(result.evidence.limitation, /not a complete employee audit trail/);
+  assert.throws(() => buildAuditHistory({ shopId: 'shop-1', shopName: 'Shop', serverRevision: 0, events: [], limit: 101 }), /invalid_audit_limit/);
+});
 
 test('owner overview derives latest delivered value and separate cash, UPI and pending totals', () => {
   const firstOrder = {
@@ -287,6 +305,7 @@ test('sync service refuses dashboard access to non-owner roles before reading th
   await assert.rejects(service.shopDailySalesActivity({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopRecordedMoneyMovements({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopProfitReadiness({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopAuditHistory({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
 });
 
 test('owner overview route requires authentication and serves only owner static assets', async (t) => {
@@ -303,7 +322,8 @@ test('owner overview route requires authentication and serves only owner static 
     async shopInventorySnapshot(actor) { return { ...fixture, shopId: actor.shop_id, products: [], recentMovements: [] }; },
     async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; },
     async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
-    async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; }
+    async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; },
+    async shopAuditHistory(actor, limit) { return { ...fixture, shopId: actor.shop_id, limit, returnedEventCount: 0, events: [], evidence: { limitation: 'not a complete employee audit trail' } }; }
   };
   const server = createApiServer(service);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -328,6 +348,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="cashflow-rows"/);
   assert.match(pageText, /Profit readiness/);
   assert.match(pageText, /id="profit-missing-list"/);
+  assert.match(pageText, /Accepted event history/);
+  assert.match(pageText, /id="audit-rows"/);
   const script = await fetch(`${base}/owner/app.js`);
   assert.equal(script.status, 200);
   const scriptText = await script.text();
@@ -337,6 +359,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/activity/);
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
   assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
+  assert.match(scriptText, /\/v1\/dashboard\/audit/);
 
   const denied = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`);
   assert.equal(denied.status, 401);
@@ -371,12 +394,21 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(readiness.figures.grossProfitPaise, null);
   const invalidProfitRange = await fetch(`${base}/v1/dashboard/profit-readiness?shopId=shop-1&days=14`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(invalidProfitRange.status, 400);
+  const auditDenied = await fetch(`${base}/v1/dashboard/audit?shopId=shop-1`);
+  assert.equal(auditDenied.status, 401);
+  const audit = await fetch(`${base}/v1/dashboard/audit?shopId=shop-1&limit=5`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(audit.status, 200);
+  assert.equal((await audit.json()).limit, 5);
+  const invalidAuditLimit = await fetch(`${base}/v1/dashboard/audit?shopId=shop-1&limit=101`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(invalidAuditLimit.status, 400);
   assert.deepEqual(calls, [
     { token: '', shopId: 'shop-1' },
     { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
+    { token: 'owner-token', shopId: 'shop-1' },
+    { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },
     { token: '', shopId: 'shop-1' },
     { token: 'owner-token', shopId: 'shop-1' },

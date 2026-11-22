@@ -59,6 +59,7 @@
           <button id="activity-tab" class="nav-tab" type="button" aria-current="false">Sales activity</button>
           <button id="cashflow-tab" class="nav-tab" type="button" aria-current="false">Recorded money movements</button>
           <button id="profit-tab" class="nav-tab" type="button" aria-current="false">Profit readiness</button>
+          <button id="audit-tab" class="nav-tab" type="button" aria-current="false">Accepted event history</button>
         </nav>
         <section id="overview-view">
         <div id="metrics" class="metrics" aria-live="polite"></div>
@@ -151,6 +152,16 @@
             <ul id="profit-evidence-list"></ul>
           </section>
           <p id="profit-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="audit-view" class="hidden" aria-labelledby="audit-heading">
+          <div class="section-heading">
+            <div><p class="eyebrow">SERVER ACCEPTED EVENT JOURNAL</p><h2 id="audit-heading">Accepted event history</h2></div>
+            <label>Recent events<select id="audit-limit"><option value="25">25</option><option value="50">50</option><option value="100" selected>100</option></select></label>
+          </div>
+          <p id="audit-scope" class="scope-note"></p>
+          <div class="table-wrap"><table><thead><tr><th scope="col">Server revision</th><th scope="col">Accepted at</th><th scope="col">Event</th><th scope="col">Order changes</th><th scope="col">Stock changes</th><th scope="col">Payment entries</th><th scope="col">Other records</th></tr></thead><tbody id="audit-rows"></tbody></table></div>
+          <section class="panel evidence-panel" aria-labelledby="audit-evidence-heading"><h3 id="audit-evidence-heading">Scope and limits</h3><ul id="audit-evidence-list"></ul></section>
+          <p id="audit-status" class="status" role="status" aria-live="polite"></p>
         </section>
       </section>
       <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>

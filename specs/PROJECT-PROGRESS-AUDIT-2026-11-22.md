@@ -47,7 +47,7 @@ An earlier current-source broad attempt on the isolated AVD recorded 80/110 pass
 | W1 — CAT-051B encrypted recovery | Same-emulator current-source UI export, app uninstall/reinstall, and UI restore now demonstrated with a synthetic multi-order dataset. Still partial: hard power loss, real filesystem exhaustion, hardware Keystore invalidation, second physical device/person, OEM transfer behavior, and independent security review remain open. |
 | W2 — Android CT-01–CT-32 | In progress; the screens and connected workflows remain partial. CT-06 cart quantity controls, CT-08 partial item handover plus local queue search/status filters, and rich recovery integrations have current emulator evidence; this is not full screen/product qualification. |
 | W3 — CAT-052 sync/backend | Local synthetic PostgreSQL suite passes 23/23. A limited Android SQLCipher-outbox to isolated PostgreSQL retry across database close/reopen is qualified. Process-death recovery during sync, full authoritative accounting, production TLS/operations, and reviewed deployment remain unqualified. |
-| W4 — Owner dashboard | Partial owner views exist; remaining OW screens and browser visual/usability qualification are open. |
+| W4 — Owner dashboard | Partial owner views exist, including the new privacy-limited OW-12 accepted event history. Remaining OW screens and browser visual/usability qualification are open. |
 | W5 — Selling modes | One-tap/cart and scan paths are partial; voice remains reviewed single-utterance. Continuous Bluetooth, physical scanning, and field use remain unqualified. |
 | W6 — Release qualification | Not complete. Independent security review, supported-device and shop trials, operational recovery, performance, privacy, deployment, and release gates remain. |
 

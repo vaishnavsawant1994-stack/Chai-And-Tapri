@@ -82,6 +82,13 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopProfitReadiness(actor,days));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/audit') {
+        const shopId=url.searchParams.get('shopId');
+        const limit=Number(url.searchParams.get('limit')??'100');
+        if(!Number.isInteger(limit)||limit<1||limit>100) throw new ApiError(400,'invalid_audit_limit');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopAuditHistory(actor,limit));
+      }
       return json(res,404,{error:'not_found'});
     } catch(error) {
       const status=error instanceof ApiError?error.status:500;
