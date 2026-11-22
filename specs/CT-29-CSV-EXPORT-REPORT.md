@@ -1,19 +1,29 @@
 # CT-29 Local Report CSV Export
 
 **Updated:** 22 November 2026
-**Status:** Formatter JVM-tested; API 37 Android SAF success and cancellation paths qualified with synthetic ledger data.
+**Status:** Date-scoped projection and CSV formatter JVM-tested; prior SAF export/cancellation remains emulator-qualified. Date-picker runtime qualification is pending.
 
 ## Delivered
 
 - Added an **Export current report as CSV** action to Daily Reports.
 - Uses Android's Storage Access Framework `CreateDocument` picker, with no broad storage permission.
 - Re-reads the encrypted local ledger when a destination is selected, then writes UTF-8 CSV on the shared background executor.
-- Exports only the report's current local snapshot: recorded sales net of refunds, staff-declared cash, pending UPI, customer receivables, recorded refunds, expenses, supplier payables and delivered quantities.
-- Labels the scope as all local records at export time. It does not claim calendar-day attribution, profit, external cash verification or successful UPI collection.
+- Exports the selected local business date: net recorded sales, staff-declared cash, current UPI due, current customer credit balances, refund entries, recorded expenses, current supplier payable balance and delivered quantities.
+- Labels device-date scope and evidence for each metric. It does not claim verified timestamps, profit, external cash verification or successful UPI collection.
 - Applies CSV quoting and protects text fields beginning with formula characters against spreadsheet formula execution. Numeric negative refund values remain numeric.
 - Cancellation and write failure report status without mutating business records.
 
-## Verification
+## Date-scoped report continuation
+
+CT-29 now provides a local date picker (not later than the device's current date) and calculates the report using the selected date and device time zone. Orders and delivered units are grouped by order creation timestamp; current refund allocations are shown against the original order date. Refunds and staff-declared cash collection entries use their own ledger-entry timestamps. The report separately labels current UPI due and customer-credit balances for orders created on the selected date, and current supplier payables across all dates. Legacy orders, payment events, and expenses without timestamps are excluded from period totals and counted explicitly.
+
+The report does not imply that device timestamps are server-verified, UPI amounts have settled, cash is independently verified, or that the values are profit, tax accounting, bank settlement, or a daily close. Refunds recorded today can appear as a dated refund event while also reducing net sales on the order's original date; the labels and CSV evidence disclose these different date bases.
+
+### Source-level verification
+
+`DailyReportProjectionTest` covers date-boundary exclusion, Asia/Kolkata local-day conversion, current refund allocation, cash collection/refund event dates, UPI due, credit balance, expense dates, supplier payable scope, delivered unit grouping, and counts for undated legacy data. `DailyReportCsvTest` covers selected-date and timezone labels, undated counts, payment evidence wording, CSV escaping, and spreadsheet-formula protection. Kotlin JVM result: **64 tests passed** after the CT-29 update. Node: **52/52 passed**. Debug APK and instrumentation APK builds passed; lint: **0 errors / 173 warnings**. A focused API 37 UI test for the updated date-scoped report rendered the selected-date report and passed **1/1**. The focused nonzero export retest did not reach the export control because the isolated emulator displayed a Pixel Launcher "isn't responding" system dialog; this attempt failed before exercising export and is recorded as an emulator blocker, not an application assertion result. The updated date-picker interaction and date-scoped SAF output are not emulator-qualified. The prior API 37 export and cancellation results above were produced by the earlier all-record report.
+
+## Earlier baseline verification
 
 Command: `cd android; .\gradlew.bat testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug --console=plain`
 
@@ -43,4 +53,4 @@ Added `dailyReportExportCancellationLeavesLedgerUnchanged`. The test seeds a syn
 
 ## Remaining CT-29 work
 
-Calendar-day filters require consistent trusted event timestamps and are not added here. Profit, tax exports, external settlement verification, backend-consistent reporting, destination write-failure qualification and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.
+Timestamps are device-recorded and can be inaccurate; legacy undated rows are excluded. A future schema should persist explicit timezone/clock provenance and robust period attribution. Profit, tax exports, external settlement verification, backend-consistent reporting, destination write-failure qualification, date-picker UI/export runtime qualification, and broader manual usability review remain unimplemented. This is a local report export, not a statutory accounting export.

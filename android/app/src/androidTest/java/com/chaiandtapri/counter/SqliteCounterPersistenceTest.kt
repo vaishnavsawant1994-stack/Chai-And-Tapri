@@ -1818,7 +1818,7 @@ class SqliteCounterPersistenceTest {
         }
     }
 
-    @Test fun dailyReportRendersOnlyPersistedLifetimeLedgerTotalsAndDisclaimsProfit() {
+    @Test fun dailyReportRendersSelectedLocalDateLedgerTotalsAndDisclaimsProfit() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.deleteDatabase("chai_tapri_counter.db")
@@ -1843,8 +1843,8 @@ class SqliteCounterPersistenceTest {
             if (strings.any { it.contains("Profit is unavailable") }) return@repeat
             Thread.sleep(100)
         }
-        assertTrue(strings.any { it.contains("Scope: all records on this device") })
-        assertTrue(strings.any { it.contains("Recorded sales, net of refunds") })
+        assertTrue(strings.any { it.contains("Selected business date:") })
+        assertTrue(strings.any { it.contains("Recorded sales, net of current refunds on these orders") })
         assertTrue(strings.any { it == "₹15.00" })
         assertTrue(strings.any { it == "₹5.00" })
         assertTrue(strings.any { it.contains("Profit is unavailable") })

@@ -1,5 +1,11 @@
 # Chai And Tapri OS — Project Progress Audit
 
+## Superseding continuation - CT-29 date-scoped report implementation - 22 November 2026
+
+Daily Reports now includes a date picker and a date-scoped projection based on local device-recorded timestamps. Sales and delivered units are grouped by order creation date; current refund allocations reduce net sales on that original order date. Cash collection/refund entries and expenses use their own recorded dates. Current UPI due and customer receivables are presented as current balances for orders created on the selected date, while supplier payables remain current across all dates. Legacy undated orders, payment entries and expenses are excluded and counted. The screen and CSV state that device dates are not server-verified; profit, settlement, tax and close claims remain unavailable.
+
+New Kotlin source tests pass: **64/64 JVM tests**; Node passes **52/52**; debug/instrumentation APK builds pass; lint has **0 errors / 173 warnings**. The updated date-scoped report rendered in a focused API 37 UI test (**1/1 passed**). A focused nonzero SAF export retry failed before reaching the export control because the isolated emulator presented a Pixel Launcher "isn't responding" system dialog. The prior full API 37 instrumentation result of 110/110 predates this CT-29 update. The date picker and selected-day SAF export remain runtime-unqualified; no broad instrumentation pass is claimed. Other project qualification gates remain as recorded below; the complete product, independent security, physical device, field and production gates remain open. Details: [CT-29 report](CT-29-CSV-EXPORT-REPORT.md).
+
 **Date:** 22 November 2026  
 **Authority:** Current local source, current test outputs, and synthetic emulator recovery evidence.
 
