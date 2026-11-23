@@ -1,5 +1,7 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
+## Current continuation - CT-06 Mode C synthetic decoder - 23 November 2026
 
+The shared production ML Kit barcode scanner decoded a generated QR bitmap to its expected product code and format on API 37 (focused instrumentation 1/1). Full regression: prototype Node 52/52; backend Node 26/26 with 4 PostgreSQL-dependent skips; Kotlin JVM 68/68; Android instrumentation 116 pass and 2 fail at explicit isolated-endpoint/phase assumption guards; APK build tasks pass; lint 0 errors/175 warnings. The two Android failures are opt-in backend sync worker restart/retry E2E tests not configured with an isolated HTTPS/PostgreSQL endpoint. Full suite is not green. Synthetic image decoding is not physical camera qualification. See CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md.
 ## Current continuation — CT-26 denomination cash count — 23 November 2026
 
 Added an optional cash drawer close form that totals physical notes/coins by denomination, compares it to expected session cash, and requires final confirmation. A focused API 37 test passed 1/1; the persisted ₹1,015 close left order, payment and stock records unchanged. Kotlin JVM 68/68; APK tasks passed; lint 0 errors / 175 warnings. This supports cash counting only; Mode D and CT-26 remain partial. See `CT-26-DENOMINATION-CASH-COUNT-REPORT-2026-11-23.md`.

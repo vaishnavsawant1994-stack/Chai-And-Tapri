@@ -18,6 +18,8 @@ import android.os.IBinder
 import android.os.Messenger
 import android.os.Message
 import android.provider.MediaStore
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
 import android.view.MotionEvent
@@ -27,6 +29,11 @@ import android.widget.EditText
 import android.text.InputType
 import android.widget.Spinner
 import android.widget.TextView
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -4610,6 +4617,28 @@ class SqliteCounterPersistenceTest {
         assertEquals(rawCode, result.getStringExtra(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE))
         assertNull(result.getStringExtra(CameraBarcodeScannerActivity.EXTRA_RESULT_MESSAGE))
         assertEquals(setOf(CameraBarcodeScannerActivity.EXTRA_PRODUCT_CODE), result.extras?.keySet())
+    }
+
+    @Test fun mlKitCameraDecoderReadsSyntheticProductQrImage() {
+        val expectedCode = "TAPRI-QR-${java.util.UUID.randomUUID().toString().take(8)}"
+        val matrix = QRCodeWriter().encode(expectedCode, BarcodeFormat.QR_CODE, 480, 480)
+        val pixels = IntArray(matrix.width * matrix.height) { index ->
+            val x = index % matrix.width
+            val y = index / matrix.width
+            if (matrix[x, y]) Color.BLACK else Color.WHITE
+        }
+        val bitmap = Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, matrix.width, 0, 0, matrix.width, matrix.height)
+        val scanner = CameraBarcodeScannerActivity.newProductBarcodeScanner()
+        try {
+            val decoded = Tasks.await(scanner.process(InputImage.fromBitmap(bitmap, 0)), 20, TimeUnit.SECONDS)
+            assertTrue("The production decoder should detect a QR code", decoded.isNotEmpty())
+            assertEquals(expectedCode, decoded.single().rawValue)
+            assertEquals(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE, decoded.single().format)
+        } finally {
+            scanner.close()
+            bitmap.recycle()
+        }
     }
 
     @Test fun cameraScannerResultUsesQuickSaleCatalogueValidationWithoutPostingSale() {

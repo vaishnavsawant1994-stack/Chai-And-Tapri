@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-06 Mode C decoder qualification — 23 November 2026
+
+Extracted the production ML Kit product-barcode scanner configuration into a shared factory and added an Android instrumentation test that generates a synthetic QR image, feeds it to that exact scanner, and verifies the decoded product code and format. Focused API 37 instrumentation passed 1/1. Regression: prototype Node 52/52; backend Node 26/26 (4 PostgreSQL tests skipped); Kotlin JVM 68/68; Android instrumentation 116 passed, 2 endpoint-gated assumptions failed because no isolated HTTPS/PostgreSQL endpoint was configured; APK tasks passed; lint 0 errors/175 warnings. This qualifies still-image QR decoding in the emulator, not camera hardware or live backend sync. See `specs/CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-26 denomination cash count — 23 November 2026
 
 Added an optional physical notes/coins count (₹2,000 through ₹1) to the cash drawer closing screen, with an expected-cash comparison and explicit confirmation. It uses the audited drawer-close operation and leaves sales, payments and stock unchanged. Focused API 37 instrumentation passed 1/1; Kotlin JVM 68/68; APK build tasks passed; lint 0 errors / 175 warnings. This is a cash-counting improvement, not full Mode D reconciliation or full CT-26 qualification. Details: `specs/CT-26-DENOMINATION-CASH-COUNT-REPORT-2026-11-23.md`.

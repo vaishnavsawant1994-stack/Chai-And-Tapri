@@ -3,6 +3,10 @@
 **Date:** 23 November 2026  
 **Scope:** Current-source CAT-051B synthetic recovery replay and latest dashboard export slice. This audit updates selected evidence; it does not replace the broader module/screen assessment in the 22 November audit.
 
+## Current continuation — CT-06 Mode C synthetic decoder — 23 November 2026
+
+The Android scanner uses a shared production ML Kit configuration. An API 37 instrumentation test generated a QR bitmap and decoded the exact synthetic product identifier and format with that scanner (focused 1/1). Regression: prototype Node 52/52; backend Node 26/26 with four PostgreSQL-dependent skips; Kotlin JVM 68/68; Android instrumentation 116 pass, 2 fail at explicit endpoint/phase assumption guards; APK tasks pass; lint 0 errors/175 warnings. The two failures are the backend sync worker restart/retry E2E tests, which were not enabled with an isolated HTTPS/PostgreSQL endpoint. They do not indicate decoder failures, but the full Android suite is not green. Synthetic image decoding is not camera hardware qualification. See [`Mode C decoder report`](CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md).
+
 ## Current continuation — CT-26 physical cash denomination count — 23 November 2026
 
 CT-26 now supports counting drawer notes/coins by denomination, comparing the total to expected session cash, and confirming closure through the existing audited operation. A synthetic API 37 test passed 1/1 and confirmed that closure changed neither orders, payment entries nor stock. Kotlin JVM 68/68; debug/instrumentation APK build tasks passed; lint 0 errors / 175 warnings. Mode D remains partial: no sales are inferred from cash variances, and provider UPI reconciliation, missed-item reconstruction, stock reconciliation and field testing remain open. See [`CT-26 denomination count report`](CT-26-DENOMINATION-CASH-COUNT-REPORT-2026-11-23.md).

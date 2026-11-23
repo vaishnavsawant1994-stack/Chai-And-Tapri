@@ -27,22 +27,7 @@ class CameraBarcodeScannerActivity : ComponentActivity() {
     private lateinit var status: TextView
     private var cameraController: LifecycleCameraController? = null
     private val scanDelivered = AtomicBoolean(false)
-    private val scanner by lazy {
-        val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(
-                Barcode.FORMAT_QR_CODE,
-                Barcode.FORMAT_EAN_13,
-                Barcode.FORMAT_EAN_8,
-                Barcode.FORMAT_UPC_A,
-                Barcode.FORMAT_UPC_E,
-                Barcode.FORMAT_CODE_128,
-                Barcode.FORMAT_CODE_39,
-                Barcode.FORMAT_CODE_93,
-                Barcode.FORMAT_CODABAR,
-                Barcode.FORMAT_ITF
-            ).build()
-        BarcodeScanning.getClient(options)
-    }
+    private val scanner by lazy { newProductBarcodeScanner() }
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startCamera() else finishWithoutScan("Camera permission was denied. Type a product code or use a paired scanner; no order changed.")
     }
@@ -143,6 +128,21 @@ class CameraBarcodeScannerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_PRODUCT_CODE = "com.chaiandtapri.counter.extra.PRODUCT_CODE"
         const val EXTRA_RESULT_MESSAGE = "com.chaiandtapri.counter.extra.RESULT_MESSAGE"
+
+        internal fun newProductBarcodeScanner() = BarcodeScanning.getClient(
+            BarcodeScannerOptions.Builder().setBarcodeFormats(
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_EAN_8,
+                Barcode.FORMAT_UPC_A,
+                Barcode.FORMAT_UPC_E,
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39,
+                Barcode.FORMAT_CODE_93,
+                Barcode.FORMAT_CODABAR,
+                Barcode.FORMAT_ITF
+            ).build()
+        )
 
         internal fun resultIntent(code: String? = null, message: String? = null): Intent = Intent().apply {
             if (code != null) putExtra(EXTRA_PRODUCT_CODE, code)

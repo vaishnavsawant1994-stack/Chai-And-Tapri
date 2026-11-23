@@ -31,4 +31,5 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.work:work-testing:2.12.0")
+    androidTestImplementation("com.google.zxing:core:3.5.4")
 }
