@@ -60,4 +60,3 @@ DROP POLICY IF EXISTS shop_staff_audit_shop_scope ON shop_staff_audit;
 CREATE POLICY shop_staff_audit_shop_scope ON shop_staff_audit
     USING (shop_id = nullif(current_setting('app.current_shop', true), '')::uuid)
     WITH CHECK (shop_id = nullif(current_setting('app.current_shop', true), '')::uuid);
-
