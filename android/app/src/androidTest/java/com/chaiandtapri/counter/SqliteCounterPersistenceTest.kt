@@ -558,6 +558,43 @@ class SqliteCounterPersistenceTest {
             assertTrue("No cash payout is due while this refund is allocated to credit", reopened.paymentHistory().none { it.orderNumber == orderNumber && it.kind == "cash_refund" })
             assertTrue(reopened.auditEvents().any { it.contains("refund") && it.contains("1200") })
             reopened.close()
+
+            click("Goodwill / amount correction")
+            val correctionAmount = awaitNode(hint = "Amount in ₹ (up to 2 decimals)")
+            assertTrue("Correction amount should accept focus", correctionAmount.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val amountArgs = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "8.00") }
+            assertTrue("Correction amount should accept text", correctionAmount.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, amountArgs))
+            val correctionReason = awaitNode(hint = "Required correction reason")
+            assertTrue("Correction reason should accept focus", correctionReason.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val correctionReasonArgs = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Approved split-tender cash correction") }
+            assertTrue("Correction reason should accept text", correctionReason.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, correctionReasonArgs))
+            instrumentation.runOnMainSync {
+                val imm = refundActivity!!.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(refundActivity!!.window.decorView.windowToken, 0)
+            }
+            instrumentation.waitForIdleSync()
+            val cashPayoutConfirmation = awaitNode(prefix = "I confirm any cash refund was handed to the customer")
+            assertTrue("Cash payout needs explicit staff confirmation", cashPayoutConfirmation.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue("Staff cash-refund confirmation should be checked", awaitNode(prefix = "I confirm any cash refund was handed to the customer").isChecked)
+            click("Review")
+            click("Record audited correction")
+
+            awaitNode(prefix = "Refund & Correction")
+            val finalBalance = awaitTextContaining("refunded ₹20.00")
+            assertTrue(finalBalance.text.toString().contains("paid ₹4.00"))
+            assertTrue(finalBalance.text.toString().contains("Udhar ₹0.00"))
+            assertTrue(finalBalance.text.toString().contains("due ₹0.00"))
+            val fullyCorrected = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            val finalOrder = fullyCorrected.allOrders().single { it.number == orderNumber }
+            assertEquals(2000, finalOrder.refundedPaise)
+            assertEquals(400, finalOrder.paidPaise)
+            assertEquals(0, finalOrder.creditPaise)
+            assertEquals(0, fullyCorrected.creditBalance("history-refund-customer"))
+            assertTrue(fullyCorrected.paymentHistory().any { it.orderNumber == orderNumber && it.kind == "credit_reversal" && it.amountPaise == -700 })
+            assertTrue(fullyCorrected.paymentHistory().any { it.orderNumber == orderNumber && it.kind == "cash_refund" && it.amountPaise == -100 })
+            assertEquals(8, fullyCorrected.stockLevels()["history_refund_tea"])
+            assertTrue(fullyCorrected.auditEvents().any { it.contains("refund") && it.contains("800") })
+            fullyCorrected.close()
         } finally {
             instrumentation.runOnMainSync {
                 refundActivity?.finish()
