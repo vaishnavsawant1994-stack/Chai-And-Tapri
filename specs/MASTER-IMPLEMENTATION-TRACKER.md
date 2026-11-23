@@ -1,4 +1,8 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
+
+## Current continuation - CAT-052 local sync end-to-end - 23 November 2026
+
+Current-source API 37 tests passed against a fresh loopback-only PostgreSQL 17/HTTPS stack: WorkManager retry after a committed lost acknowledgment 1/1; queued-work process-restart prepare/resume 1/1 each, with confirmed force-stop and PID change 6852->6909 on the same work UUID; backend PostgreSQL suite 30/30. Used restricted non-superuser/non-BYPASSRLS runtime role and generated synthetic data only. Local server/cluster were stopped and port-8794 ADB reverse removed. The earlier broad invocation without endpoint/phase still had two assumption failures; both cases passed separately with required arguments. This is scenario-specific emulator evidence, not production sync qualification. Logs: ignored `test-evidence/2026-11-23/cat052-worker-suite/`.
 ## Current continuation - CT-06 Mode C synthetic decoder - 23 November 2026
 
 The shared production ML Kit barcode scanner decoded a generated QR bitmap to its expected product code and format on API 37 (focused instrumentation 1/1). Full regression: prototype Node 52/52; backend Node 26/26 with 4 PostgreSQL-dependent skips; Kotlin JVM 68/68; Android instrumentation 116 pass and 2 fail at explicit isolated-endpoint/phase assumption guards; APK build tasks pass; lint 0 errors/175 warnings. The two Android failures are opt-in backend sync worker restart/retry E2E tests not configured with an isolated HTTPS/PostgreSQL endpoint. Full suite is not green. Synthetic image decoding is not physical camera qualification. See CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md.

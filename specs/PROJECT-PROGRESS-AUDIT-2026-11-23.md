@@ -3,6 +3,10 @@
 **Date:** 23 November 2026  
 **Scope:** Current-source CAT-051B synthetic recovery replay and latest dashboard export slice. This audit updates selected evidence; it does not replace the broader module/screen assessment in the 22 November audit.
 
+## Current continuation — CAT-052 local sync E2E — 23 November 2026
+
+Using a fresh loopback-only PostgreSQL 17/HTTPS test stack and the restricted backend role, the current WorkManager lost-ack retry test passed 1/1 and process-restart passed in prepare/resume phases (1/1 each). The app was force-stopped between phases; resume asserted a new process and completed the same persisted WorkManager UUID. Backend PostgreSQL suite passed 30/30. Synthetic-only database and test TLS were used; local server/cluster were stopped and ADB reverse was removed. This supplies focused current-source evidence for two prior endpoint-gated cases; it does not establish production sync or OEM/device reliability. See the CAT-052 E2E reports and ignored local logs under `test-evidence/2026-11-23/cat052-worker-suite/`.
+
 ## Current continuation — CT-06 Mode C synthetic decoder — 23 November 2026
 
 The Android scanner uses a shared production ML Kit configuration. An API 37 instrumentation test generated a QR bitmap and decoded the exact synthetic product identifier and format with that scanner (focused 1/1). Regression: prototype Node 52/52; backend Node 26/26 with four PostgreSQL-dependent skips; Kotlin JVM 68/68; Android instrumentation 116 pass, 2 fail at explicit endpoint/phase assumption guards; APK tasks pass; lint 0 errors/175 warnings. The two failures are the backend sync worker restart/retry E2E tests, which were not enabled with an isolated HTTPS/PostgreSQL endpoint. They do not indicate decoder failures, but the full Android suite is not green. Synthetic image decoding is not camera hardware qualification. See [`Mode C decoder report`](CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md).

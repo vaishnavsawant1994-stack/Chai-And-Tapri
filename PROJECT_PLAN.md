@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CAT-052 local sync E2E — 23 November 2026
+
+Resolved the two endpoint-gated Android sync tests from the broad run using a fresh local PostgreSQL 17 cluster, non-superuser `chai_tapri_api`, test-certificate HTTPS service bound to loopback, and `adb reverse`. WorkManager lost-ack retry passed 1/1; process-restart prepare and resume passed 1/1 each, including confirmed force-stop and PID change on the same pending work UUID. PostgreSQL backend suite passed 30/30. Temporary services were stopped and only synthetic records were used. The earlier broad invocation still records 116 pass/2 unconfigured-assumption failures; these scenarios are now separately qualified with required arguments. CAT-052 is emulator-qualified for these scenarios, not production-qualified. Details: `specs/CAT-052-WORKMANAGER-ACK-LOSS-RETRY-REPORT-2026-11-23.md` and `specs/CAT-052-WORKMANAGER-PROCESS-RESTART-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-06 Mode C decoder qualification — 23 November 2026
 
 Extracted the production ML Kit product-barcode scanner configuration into a shared factory and added an Android instrumentation test that generates a synthetic QR image, feeds it to that exact scanner, and verifies the decoded product code and format. Focused API 37 instrumentation passed 1/1. Regression: prototype Node 52/52; backend Node 26/26 (4 PostgreSQL tests skipped); Kotlin JVM 68/68; Android instrumentation 116 passed, 2 endpoint-gated assumptions failed because no isolated HTTPS/PostgreSQL endpoint was configured; APK tasks passed; lint 0 errors/175 warnings. This qualifies still-image QR decoding in the emulator, not camera hardware or live backend sync. See `specs/CT-06-MODE-C-SYNTHETIC-DECODER-REPORT-2026-11-23.md`.
