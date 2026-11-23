@@ -141,6 +141,7 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(activity.status,200); const daily=await activity.json();
     assert.equal(daily.shopId,enrollment.shopId); assert.equal(daily.serverRevision,1);
     assert.equal(daily.acceptedEventCount,1); assert.equal(daily.totals.staffDeclaredExpensesPaise,25050);
+    assert.equal(daily.totals.staffDeclaredSupplierPaymentsPaise,1000);
     assert.deepEqual(daily.expenseCategories,[{category:'utilities',count:1,amountPaise:25050}]);
     assert.equal(daily.daily.reduce((sum,day)=>sum+day.staffDeclaredExpensesPaise,0),25050);
     assert.match(daily.evidence.expenses,/not a profit calculation/);
@@ -149,7 +150,9 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(movement.shopId,enrollment.shopId); assert.equal(movement.serverRevision,1);
     assert.equal(movement.totals.declaredCashInPaise,2200); assert.equal(movement.totals.declaredUpiInPaise,0);
     assert.equal(movement.totals.recordedExpensesOutPaise,25050);
-    assert.equal(movement.totals.netRecordedMovementPaise,-22850);
+    assert.equal(movement.totals.recordedSupplierPaymentsOutPaise,1000);
+    assert.equal(movement.totals.netRecordedMovementPaise,-23850);
+    assert.match(movement.evidence.outflows,/not bank-verified/);
     assert.match(movement.evidence.net,/not profit/);
     const profit=await fetch(`${base}/v1/dashboard/profit-readiness?shopId=${enrollment.shopId}&days=7`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(profit.status,200); const readiness=await profit.json();

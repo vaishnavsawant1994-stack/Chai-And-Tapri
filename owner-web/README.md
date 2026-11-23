@@ -21,3 +21,5 @@ The owner application also includes authenticated supplier balances (OW-07), cus
 ## Owner cashflow update - 24 November 2026
 
 OW-04's recorded money movement projection now includes accepted, staff-declared supplier settlements as a separate daily outflow column and includes them in partial net recorded movement. Payment IDs are deduplicated. The UI states these are not bank-verified; they are not treated as purchase expense or cost of goods sold. PostgreSQL-backed/Android E2E for this added field and authorized visual review remain pending.
+
+OW-04 supplier-settlement branch received local synthetic PostgreSQL end-to-end qualification on 24 November 2026: the full backend suite passed 30/30 using a restricted runtime login, including accepted sync event, idempotent retry, and owner cashflow route assertions. Detailed evidence is in `../test-evidence/2026-11-24/ow04-supplier-cashflow/postgres-backend-suite.log`. This does not qualify the dashboard visually or as production accounting.
