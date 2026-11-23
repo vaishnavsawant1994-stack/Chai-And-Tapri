@@ -3,6 +3,10 @@
 **Date:** 23 November 2026  
 **Scope:** Current-source CAT-051B synthetic recovery replay and latest dashboard export slice. This audit updates selected evidence; it does not replace the broader module/screen assessment in the 22 November audit.
 
+## Latest continuation — CT-11/CT-12 split-tender refund — 23 November 2026
+
+Focused current-source API 37 instrumentation passed 1/1 for Sales History → audited partial item refund against a ₹5 cash / ₹19 credit split tender. A ₹12 refund reversed receivable first, left collected cash unchanged and credit at ₹7, with no cash payout or stock restock. Kotlin JVM suite and APK build/lint tasks passed; lint had 0 errors (warnings remain). This is one synthetic emulator path; CT-11/12 remain partial. See [report](CT-11-12-SPLIT-TENDER-REFUND-REPORT-2026-11-23.md).
+
 ## Current continuation — CAT-052 local sync E2E — 23 November 2026
 
 Using a fresh loopback-only PostgreSQL 17/HTTPS test stack and the restricted backend role, the current WorkManager lost-ack retry test passed 1/1 and process-restart passed in prepare/resume phases (1/1 each). The app was force-stopped between phases; resume asserted a new process and completed the same persisted WorkManager UUID. Backend PostgreSQL suite passed 30/30. Synthetic-only database and test TLS were used; local server/cluster were stopped and ADB reverse was removed. This supplies focused current-source evidence for two prior endpoint-gated cases; it does not establish production sync or OEM/device reliability. See the CAT-052 E2E reports and ignored local logs under `test-evidence/2026-11-23/cat052-worker-suite/`.

@@ -457,14 +457,15 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
-    @Test fun salesHistoryLaunchesAndCommitsAuditedItemRefundWithoutRestocking() {
+    @Test fun salesHistoryRefundsSplitTenderReceivableBeforeCashWithoutRestocking() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         val seed = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
         assertTrue(seed.saveProduct(TapriProduct("history_refund_tea", "History Refund Tea", "Chai", 1200, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(seed.saveCustomerProfile(CustomerProfile("history-refund-customer", "Synthetic Split Refund Customer")).contains("saved"))
         assertTrue(seed.confirmOpeningStock("history_refund_tea", 10, "synthetic CT-11/12 refund count", "history-refund-stock").contains("10 units"))
-        assertTrue(seed.quickSale(listOf("history_refund_tea" to 2), "cash", commandId = "history-refund-sale").startsWith("Quick sale"))
+        assertTrue(seed.quickSaleSplit(listOf("history_refund_tea" to 2), 500, "history-refund-customer", "history-refund-sale").startsWith("Quick sale"))
         val orderNumber = seed.allOrders().single().number
         seed.close()
 
@@ -535,7 +536,7 @@ class SqliteCounterPersistenceTest {
             }
             instrumentation.waitForIdleSync()
             val cashConfirmed = awaitNode(prefix = "I confirm any cash refund was handed to the customer")
-            if (!cashConfirmed.isChecked) assertTrue("Cash refund requires explicit staff confirmation", cashConfirmed.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertFalse("This item return is fully allocated to the open Udhar balance; no cash payout should be declared.", cashConfirmed.isChecked)
             click("Review")
             click("Record audited refund")
 
@@ -545,13 +546,16 @@ class SqliteCounterPersistenceTest {
             val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             val refunded = reopened.allOrders().single { it.number == orderNumber }
             assertEquals(1200, refunded.refundedPaise)
-            assertEquals(1200, refunded.paidPaise)
+            assertEquals(500, refunded.paidPaise)
+            assertEquals(700, refunded.creditPaise)
             assertEquals(0, refunded.duePaise)
             assertEquals(1, refunded.lines.single().refundedQuantity)
+            assertEquals(700, reopened.creditBalance("history-refund-customer"))
             assertEquals(8, reopened.stockLevels()["history_refund_tea"])
             assertEquals(-2, reopened.stockMovements().single { it.reason == "quick_sale" }.quantityDelta)
             assertTrue(reopened.stockMovements().none { it.reason == "refund_restock" })
-            assertTrue(reopened.paymentHistory().any { it.orderNumber == orderNumber && it.status == "staff_declared_refund" && it.amountPaise == -1200 })
+            assertTrue(reopened.paymentHistory().any { it.orderNumber == orderNumber && it.kind == "credit_reversal" && it.amountPaise == -1200 })
+            assertTrue("No cash payout is due while this refund is allocated to credit", reopened.paymentHistory().none { it.orderNumber == orderNumber && it.kind == "cash_refund" })
             assertTrue(reopened.auditEvents().any { it.contains("refund") && it.contains("1200") })
             reopened.close()
         } finally {

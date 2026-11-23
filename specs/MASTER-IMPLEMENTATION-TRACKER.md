@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Current continuation - CT-11/CT-12 split-tender refund - 23 November 2026
+
+Current-source API 37 UI instrumentation passed 1/1 for a synthetic ₹24 order funded by ₹5 cash and ₹19 customer credit. Returning one delivered ₹12 item via Sales History allocated the refund to receivable first; persisted assertions verified cash remains ₹5, customer credit falls to ₹7, due is zero, no cash refund or stock restock is recorded, and the credit reversal/audit event persist. Kotlin JVM suite passed (68 tests); debug and instrumentation APK builds, and lint passed (0 errors; warnings remain). This is one refund allocation path only; CT-11/12 remain partial. See [CT-11/12 report](CT-11-12-SPLIT-TENDER-REFUND-REPORT-2026-11-23.md).
+
 ## Current continuation - CAT-052 local sync end-to-end - 23 November 2026
 
 Current-source API 37 tests passed against a fresh loopback-only PostgreSQL 17/HTTPS stack: WorkManager retry after a committed lost acknowledgment 1/1; queued-work process-restart prepare/resume 1/1 each, with confirmed force-stop and PID change 6852->6909 on the same work UUID; backend PostgreSQL suite 30/30. Used restricted non-superuser/non-BYPASSRLS runtime role and generated synthetic data only. Local server/cluster were stopped and port-8794 ADB reverse removed. The earlier broad invocation without endpoint/phase still had two assumption failures; both cases passed separately with required arguments. This is scenario-specific emulator evidence, not production sync qualification. Logs: ignored `test-evidence/2026-11-23/cat052-worker-suite/`.
