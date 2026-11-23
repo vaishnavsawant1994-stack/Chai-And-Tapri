@@ -3726,6 +3726,140 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun catalogueUiCreatesConfirmedProductAndQuickSalePostsItsConfiguredPrice() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val catalogue = instrumentation.startActivitySync(
+            Intent(context, ProductCatalogueActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        try {
+            fun find(text: String? = null, hint: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun walk(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    val nodeText = node.text?.toString()
+                    if ((text != null && nodeText?.startsWith(text, ignoreCase = true) == true) ||
+                        (hint != null && node.hintText?.toString() == hint)) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { walk(it)?.let { found -> return found } }
+                    return null
+                }
+                return walk(root)
+            }
+            fun await(text: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(100) { find(text, hint)?.let { return it }; Thread.sleep(100) }
+                throw AssertionError("Catalogue UI element not found: text=$text hint=$hint")
+            }
+            fun tap(node: AccessibilityNodeInfo) {
+                assertTrue("Could not activate catalogue control ${node.text}", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            fun set(hint: String, value: String) {
+                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
+                assertTrue("Could not enter $hint", await(hint = hint).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args))
+            }
+
+            tap(await(text = "Add product"))
+            set("Stable product ID, e.g. bun_maska", "e2e_lemon_chai")
+            set("Product name", "E2E Lemon Chai")
+            set("Category", "Chai")
+            set("Actual selling price in ₹", "12.50")
+            tap(await(text = "I confirm this is the shop's actual price"))
+            tap(await(text = "Save"))
+            val productLabel = await(text = "E2E Lemon Chai · Chai")
+            var productCard: AccessibilityNodeInfo? = productLabel.parent
+            var stockAction: AccessibilityNodeInfo? = null
+            repeat(5) {
+                val parent = productCard ?: return@repeat
+                fun findAction(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if (node.text?.toString()?.startsWith("Confirm physical opening stock", ignoreCase = true) == true) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { findAction(it)?.let { found -> return found } }
+                    return null
+                }
+                if (stockAction == null) stockAction = findAction(parent)
+                if (stockAction == null) productCard = parent.parent
+            }
+            assertNotNull("Could not locate the stock-count action inside E2E Lemon Chai's product card", stockAction)
+            tap(stockAction!!)
+            set("Physical quantity counted (0 to 100000)", "5")
+            set("Count note / reason (at least 4 characters)", "synthetic UI count")
+            tap(await(text = "Save physical count"))
+            val countDeadline = android.os.SystemClock.elapsedRealtime() + 10_000
+            var countSaved = false
+            while (!countSaved && android.os.SystemClock.elapsedRealtime() < countDeadline) {
+                countSaved = SqliteCounterPersistence(context).use { store ->
+                    val current = store.load()
+                    current?.stockConfirmedProductIds?.contains("e2e_lemon_chai") == true && current.stock["e2e_lemon_chai"] == 5
+                }
+                if (!countSaved) Thread.sleep(100)
+            }
+            val currentLabels = mutableListOf<String>()
+            fun collect(node: AccessibilityNodeInfo?) {
+                if (node == null) return
+                node.text?.toString()?.takeIf(String::isNotBlank)?.let(currentLabels::add)
+                for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+            }
+            collect(instrumentation.uiAutomation.rootInActiveWindow)
+            assertTrue("Catalogue UI physical count should commit durably; UI=${currentLabels.joinToString(" | ")}", countSaved)
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { verified ->
+                assertTrue("Catalogue UI should persist the owner's confirmed product price", verified.products().single { it.productId == "e2e_lemon_chai" }.priceConfirmed)
+                assertTrue("Catalogue UI should persist the explicit opening-stock confirmation", verified.isStockConfirmed("e2e_lemon_chai"))
+                assertEquals(5, verified.stockLevels()["e2e_lemon_chai"])
+            }
+        } finally {
+            instrumentation.runOnMainSync { catalogue.finish() }
+            instrumentation.waitForIdleSync()
+            Thread.sleep(300)
+        }
+
+        val sale = instrumentation.startActivitySync(Intent(context, QuickSaleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun awaitSaleNode(prefix: String): AccessibilityNodeInfo {
+                var labels = "<no window>"
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    val foundLabels = mutableListOf<String>()
+                    fun walk(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                        if (node == null) return null
+                        node.text?.toString()?.takeIf(String::isNotBlank)?.let(foundLabels::add)
+                        if (node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) return node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let { walk(it)?.let { found -> return found } }
+                        return null
+                    }
+                    walk(root)?.let { return it }
+                    labels = foundLabels.joinToString(" | ")
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Quick Sale UI element not found: $prefix; visible labels=$labels")
+            }
+            fun tapSale(prefix: String) {
+                assertTrue("Could not activate Quick Sale control: $prefix", awaitSaleNode(prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            tapSale("E2E Lemon Chai")
+            awaitSaleNode("1 × E2E Lemon Chai")
+            tapSale("Checkout")
+            awaitSaleNode("Record payment")
+            tapSale("Cash received")
+            val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+            var saved: CounterSnapshot? = null
+            while (saved == null && android.os.SystemClock.elapsedRealtime() < deadline) {
+                val current = SqliteCounterPersistence(context).use { it.load() }
+                if (current?.orders?.any { it.lines.any { line -> line.productId == "e2e_lemon_chai" } } == true) saved = current
+                else Thread.sleep(100)
+            }
+            assertNotNull("Quick Sale should commit the catalogue product at its approved price", saved)
+            val snapshot = saved!!
+            val order = snapshot.orders.single { it.lines.any { line -> line.productId == "e2e_lemon_chai" } }
+            assertEquals(1250, order.lines.sumOf { it.quantity * it.unitPricePaise })
+            assertEquals(Payment.STAFF_DECLARED, order.payment)
+            assertEquals(4, snapshot.stock.getValue("e2e_lemon_chai"))
+            assertEquals("staff_declared", snapshot.paymentEntries.single { it.orderNumber == order.number && it.method == "cash" }.status)
+            assertTrue(snapshot.auditEvents.any { it.contains("e2e_lemon_chai") })
+            assertTrue(snapshot.stockMovements.any { it.productId == "e2e_lemon_chai" && it.reason == "quick_sale" && it.quantityDelta == -1 && it.orderNumber == order.number })
+        } finally {
+            instrumentation.runOnMainSync { sale.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun syncAcknowledgementAndConflictAreDurableAndCursorNeverSkipsConflict() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

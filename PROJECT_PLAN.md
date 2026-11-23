@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-13/14 catalogue-to-Quick Sale workflow — 23 November 2026
+
+Added an API 37 instrumentation journey through the native owner UI: create a synthetic catalogue product at ₹12.50, explicitly confirm the price, record an audited five-unit opening count, then create a cash Quick Sale. Persisted state verifies a ₹12.50 order, stock 4, one linked −1 `quick_sale` movement, and staff-declared cash. Focused test passed 1/1; Kotlin JVM 68/68; debug and instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is one connected workflow, not full product catalogue or CT-06 qualification. Details: `specs/CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
+
 ## Latest continuation — Wave 5 Mode C camera-to-cart path — 23 November 2026
 
 The Quick Sale camera-result callback now has current-source API 37 instrumentation that feeds a known decoded code through the configured catalogue resolver and stages the matched product. An unknown code preserves the current draft. Neither result posts a sale or changes stock before checkout. Focused instrumentation passed 1/1; Kotlin JVM passed 68/68; debug and instrumentation APKs built; lint completed with 0 errors / 175 warnings. This verifies the result-to-cart contract, not camera frame decoding or real-device scanning. Mode C remains partial. See `specs/CT-06-NATIVE-QUICK-SALE-REPORT.md` and the current progress audit.
