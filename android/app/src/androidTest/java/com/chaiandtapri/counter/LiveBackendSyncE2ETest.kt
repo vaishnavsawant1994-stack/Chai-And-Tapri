@@ -205,6 +205,8 @@ class LiveBackendSyncE2ETest {
             instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic supplier sync owner") }
             persistence = SqliteCounterPersistence(context, databaseName, keyNamespace)
             model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            val shiftOpenCommand = "shift-open-${UUID.randomUUID()}"
+            assertTrue(model!!.openCashDrawer(10_000, shiftOpenCommand, staffLabel = "Private E2E Staff").contains("Shift started"))
             val supplierId = "local_supplier_${UUID.randomUUID().toString().replace("-", "").take(24)}"
             val productId = "supplier_sync_tea"
             assertTrue(model!!.saveProduct(TapriProduct(productId, "Private Tea Detail", "Pantry", 1_000, true, false, true)).startsWith("Product saved"))
@@ -226,13 +228,16 @@ class LiveBackendSyncE2ETest {
             assertTrue(model!!.quickSaleSplit(listOf(productId to 1), 500, localCustomerId, creditCommand).startsWith("Quick sale"))
             val repaymentCommand = "customer-repayment-${UUID.randomUUID()}"
             assertTrue(model!!.repayCredit(localCustomerId, 200, repaymentCommand).contains("allocated"))
+            assertEquals(3_000L, model!!.expectedCashPaise(shiftOpenCommand))
+            val shiftCloseCommand = "shift-close-${UUID.randomUUID()}"
+            assertTrue(model!!.closeCashDrawer(3_000, shiftCloseCommand).contains("Shift ended"))
 
-            val expectedCommands = setOf(openingId, receiptCommand, paymentCommand, returnCommand, expenseCommand, creditCommand, repaymentCommand)
+            val expectedCommands = setOf(openingId, shiftOpenCommand, receiptCommand, paymentCommand, returnCommand, expenseCommand, creditCommand, repaymentCommand, shiftCloseCommand)
             val pending = persistence!!.loadPendingSyncEvents(20)
-            assertEquals("Opening stock, receipt, settlement, return, expense, credit sale, and repayment should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
+            assertEquals("Opening stock, drawer session, receipt, settlement, return, expense, credit sale, repayment, and shift close should be sendable", expectedCommands, pending.map { it.commandId }.toSet())
             val sync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(session!!.endpointBase, session!!.identity, session!!.bearerToken)
-            assertEquals(7, sync.acknowledged)
-            assertEquals(7L, sync.serverRevision)
+            assertEquals(9, sync.acknowledged)
+            assertEquals(9L, sync.serverRevision)
             assertTrue(persistence!!.loadPendingSyncEvents(20).isEmpty())
             assertEquals(300L, model!!.supplierPayablePaise(supplierId))
             assertEquals(3, model!!.stockLevels()[productId])
@@ -242,7 +247,7 @@ class LiveBackendSyncE2ETest {
             persistence!!.close(); persistence = null
 
             val balances = getJson("${session!!.endpointBase}/v1/dashboard/suppliers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
-            assertEquals(7L, balances.getLong("serverRevision"))
+            assertEquals(9L, balances.getLong("serverRevision"))
             assertEquals(1, balances.getInt("supplierCount"))
             assertEquals(1_000L, balances.getLong("totalReceiptsPaise"))
             assertEquals(200L, balances.getLong("totalPaymentsPaise"))
@@ -253,7 +258,7 @@ class LiveBackendSyncE2ETest {
             assertTrue("Owner projection must not expose supplier or product details", !balances.toString().contains("Private Supplier Name") && !balances.toString().contains("PRIVATE-INVOICE-DETAIL") && !balances.toString().contains("Private Tea Detail") && !balances.toString().contains("+919876543210"))
             assertTrue(balances.getJSONObject("evidence").getString("verification").contains("not bank-verified"))
             val activity = getJson("${session!!.endpointBase}/v1/dashboard/activity?shopId=${session!!.identity.shopId}&days=7", session!!.bearerToken)
-            assertEquals(7L, activity.getLong("serverRevision"))
+            assertEquals(9L, activity.getLong("serverRevision"))
             assertEquals(7_500L, activity.getJSONObject("totals").getLong("staffDeclaredExpensesPaise"))
             val category = activity.getJSONArray("expenseCategories").getJSONObject(0)
             assertEquals("transport", category.getString("category"))
@@ -261,11 +266,20 @@ class LiveBackendSyncE2ETest {
             assertEquals(1, category.getInt("count"))
             assertFalse("Owner activity projection must not expose private expense notes", activity.toString().contains("PRIVATE-EXPENSE-NOTE"))
             val cashflow = getJson("${session!!.endpointBase}/v1/dashboard/cashflow?shopId=${session!!.identity.shopId}&days=7", session!!.bearerToken)
-            assertEquals(7L, cashflow.getLong("serverRevision"))
+            assertEquals(9L, cashflow.getLong("serverRevision"))
             assertEquals(200L, cashflow.getJSONObject("totals").getLong("recordedSupplierPaymentsOutPaise"))
             assertTrue("Supplier settlements remain staff-declared rather than bank-verified", cashflow.getJSONObject("evidence").getString("outflows").contains("not bank-verified"))
+            val shifts = getJson("${session!!.endpointBase}/v1/dashboard/shifts?shopId=${session!!.identity.shopId}", session!!.bearerToken)
+            assertEquals(9L, shifts.getLong("serverRevision"))
+            assertEquals(1, shifts.getInt("shiftCount"))
+            val shift = shifts.getJSONArray("shifts").getJSONObject(0)
+            assertEquals("staff_shift", shift.getString("sessionType"))
+            assertEquals(3_000L, shift.getLong("expectedCashPaise"))
+            assertEquals(3_000L, shift.getLong("closingCashPaise"))
+            assertFalse("Owner shift projection must omit operator labels", shifts.toString().contains("Private E2E Staff"))
+            assertTrue(shifts.getJSONObject("evidence").getString("limitation").contains("not attendance"))
             val customers = getJson("${session!!.endpointBase}/v1/dashboard/customers?shopId=${session!!.identity.shopId}", session!!.bearerToken)
-            assertEquals(7L, customers.getLong("serverRevision"))
+            assertEquals(9L, customers.getLong("serverRevision"))
             assertEquals(1, customers.getInt("customerCount"))
             assertEquals(500L, customers.getLong("totalExtendedPaise"))
             assertEquals(200L, customers.getLong("totalRepaymentsPaise"))
