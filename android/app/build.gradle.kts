@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
 }
+val includeLiveSyncE2e = providers.gradleProperty("cat052LiveSyncE2e").orNull == "true"
 android {
     namespace = "com.chaiandtapri.counter"
     compileSdk = 37
@@ -10,7 +11,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.chaiandtapri.counter.OfflineQualificationRunner"
+        testInstrumentationRunnerArguments["cat052LiveSyncE2e"] = includeLiveSyncE2e.toString()
     }
     sourceSets.getByName("test").resources.directories.add("$projectDir/../../specs/fixtures")
 }

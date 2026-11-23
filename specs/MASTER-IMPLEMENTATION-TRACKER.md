@@ -623,3 +623,9 @@ Added a connected Android UI test for Quick Sale → split cash/Udhar → Custom
 ## Android regression runner correction — 23 November 2026
 
 A broad run against the recovered API 37 AVD reported 93 tests and 37 failures; several UI failures showed SAF/launcher unresponsiveness, two live sync classes were not excluded although their endpoint prerequisites were absent, and Package Manager became unavailable during test teardown. A cold-restart focused rerun of the split-sale/repayment UI test passed 1/1. Updated `android/scripts/run-isolated-connected-tests.cmd` and README to exclude all three opt-in live-backend test classes from the general offline emulator suite. The updated wrapper has not been rerun as a full suite; do not treat this broad regression as qualified. See the CT-06 / CT-24 report.
+
+## Default Android suite runner fix — 23 November 2026
+
+Android Gradle's runner-argument map retained only the first class from the comma-separated exclusions. Added a custom `OfflineQualificationRunner` that injects all three CAT-052 endpoint-dependent test classes before AndroidX discovery, with `-Pcat052LiveSyncE2e=true` as an explicit opt-in. Instrumentation configuration test covers default and opt-in argument policy. Current default wrapper passed 117/117 API 37 tests (no failures/errors/skips), including Quick Sale split Udhar → repayment. Kotlin JVM 69/69; build/APK/lint tasks pass; lint 0 errors/176 warnings. See `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`. CAT-052 live E2E remains separately gated on its isolated endpoint; full product and hardware/security/release gates remain open.
+
+The configuration assertion was refined to verify both modes. Its focused opt-in run (`-Pcat052LiveSyncE2e=true`) passed 1/1; no backend test was run in that invocation because it supplied no endpoint. This verifies only the opt-in filter behavior; CAT-052 E2E still requires the dedicated HTTPS/PostgreSQL endpoint and phase.

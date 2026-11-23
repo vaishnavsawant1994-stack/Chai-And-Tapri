@@ -22,5 +22,6 @@ if not defined TARGET_FOUND (
   exit /b 4
 )
 echo Running Android instrumentation only on "%ANDROID_SERIAL%". Other connected devices are excluded via ANDROID_SERIAL.
-"%~dp0..\gradlew.bat" connectedDebugAndroidTest --console=plain -Pandroid.testInstrumentationRunnerArguments.notClass=com.chaiandtapri.counter.LiveBackendSyncE2ETest,com.chaiandtapri.counter.LiveBackgroundSyncRetryE2ETest,com.chaiandtapri.counter.LiveBackgroundSyncProcessRestartE2ETest
+echo Opt-in live sync E2E classes remain excluded unless -Pcat052LiveSyncE2e=true is explicitly set.
+"%~dp0..\gradlew.bat" connectedDebugAndroidTest --console=plain
 exit /b %ERRORLEVEL%

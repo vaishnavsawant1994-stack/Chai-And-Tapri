@@ -1002,3 +1002,9 @@ The native Android test harness now covers a saved customer selected at checkout
 ## 23 November 2026 — Emulator suite recovery and runner scope
 
 The broad isolated Android suite ended with 93 tests / 37 failures after the API 37 AVD became unresponsive (SAF picker/launcher stalls, missing Package Manager at cleanup); the new repayment journey failed to locate its catalogue item in that stressed run. Cold-restart focused rerun passed 1/1. The runner now excludes all three endpoint-dependent live sync E2E classes, correcting an incomplete exclusion list. The updated wrapper still needs a broad rerun; full Android regression is not qualified. See `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.
+
+## 23 November 2026 — Default Android suite qualification
+
+Corrected the instrumentation runner after evidence showed only one comma-separated `notClass` exclusion reached AndroidX. `OfflineQualificationRunner` now adds all three endpoint-dependent CAT-052 E2E exclusions by default; `-Pcat052LiveSyncE2e=true` opts in to backend tests when the required endpoint/phase arguments are provided. A runner-argument instrumentation guard was added. The corrected API 37 suite passed 117/117 with zero failures/errors/skips and included the Quick Sale split Udhar/repaid journey. Kotlin JVM 69/69, APK builds passed, lint 0 errors/176 warnings. Report: `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.
+
+The runner-argument guard was verified in explicit opt-in mode with the configuration-only instrumentation test, 1/1 passed. It did not run any endpoint-backed test. The three live sync E2Es remain separate qualification commands.
