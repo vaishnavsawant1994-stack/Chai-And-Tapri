@@ -2677,6 +2677,25 @@ class SqliteCounterPersistenceTest {
             assertEquals(before.stock, closed.stock)
             assertEquals(before.stockMovements, closed.stockMovements)
             assertTrue(closed.auditEvents.any { it.contains("cash_drawer.closed") && it.contains("counted=101500p") })
+
+            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.waitForIdleSync()
+            val closing = instrumentation.startActivitySync(
+                Intent(context, DailyClosingActivity::class.java)
+                    .putExtra(DailyClosingActivity.EXTRA_SESSION_ID, "denom-drawer-open")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            try {
+                await(text = "Physical count: ₹1015.00")
+                await(text = "Cash difference: ₹0.00 · matched")
+                val reviewed = SqliteCounterPersistence(context).use { it.load()!! }
+                assertEquals(closed.cashDrawerSessions, reviewed.cashDrawerSessions)
+                assertEquals(closed.orders, reviewed.orders)
+                assertEquals(closed.paymentEntries, reviewed.paymentEntries)
+                assertEquals(closed.stockMovements, reviewed.stockMovements)
+            } finally {
+                instrumentation.runOnMainSync { closing.finish() }
+            }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

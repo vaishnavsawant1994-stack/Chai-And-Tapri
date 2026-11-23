@@ -22,6 +22,10 @@ Instrumentation test `denominationCashCountClosesDrawerWithoutChangingSalesOrSto
 - Full Android instrumentation suite was not run for this slice.
 - XML: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` (subsequent Gradle connected-test runs overwrite this artifact).
 
+## CT-26 to CT-28 connected review
+
+The focused test now continues from drawer closure into CT-28 Daily Closing for the same session. It confirms the saved physical count and zero cash difference render in the review, and compares the persisted session, order, payment and stock movement records before and after opening CT-28. The refreshed focused API 37 run passed 1/1 after this addition.
+
 ## Limits
 
 This improves cash counting for one drawer session; it does not implement a full Mode D reconciliation system. Cash differences remain unresolved evidence, not inferred sales. UPI soundbox/provider totals, missed-item reconstruction, stock reconciliation in the same workflow, staff authentication, multi-register close and field usability are not included. The overall six-wave product and production qualification remain incomplete.
