@@ -1359,14 +1359,15 @@ class SqliteCounterPersistenceTest {
             assertNotNull("Owner counter should load before starting its backup UI", status)
 
             val automation = instrumentation.uiAutomation
-            fun findNode(textPrefix: String? = null, hintPrefix: String? = null, descriptionPrefix: String? = null): AccessibilityNodeInfo {
+            fun findNode(textPrefix: String? = null, hintPrefix: String? = null, descriptionPrefix: String? = null, className: String? = null, exactText: Boolean = false): AccessibilityNodeInfo {
                 repeat(160) {
                     var found: AccessibilityNodeInfo? = null
                     fun walk(node: AccessibilityNodeInfo) {
                         val text = node.text?.toString().orEmpty()
                         val hint = node.hintText?.toString().orEmpty()
                         val description = node.contentDescription?.toString().orEmpty()
-                        if (found == null && ((textPrefix != null && text.startsWith(textPrefix, ignoreCase = true)) ||
+                        if (found == null && ((className != null && node.className?.toString() == className) ||
+                                (textPrefix != null && (if (exactText) text.equals(textPrefix, ignoreCase = true) else text.startsWith(textPrefix, ignoreCase = true))) ||
                                 (hintPrefix != null && hint.startsWith(hintPrefix, ignoreCase = true)) ||
                                 (descriptionPrefix != null && description.startsWith(descriptionPrefix, ignoreCase = true)))) found = node
                         for (index in 0 until node.childCount) node.getChild(index)?.let(::walk)
@@ -1396,9 +1397,37 @@ class SqliteCounterPersistenceTest {
                 return names.toList()
             }
             fun clickText(text: String) {
-                val textNode = findNode(textPrefix = text)
+                // Prefer an exact label so "Save" cannot accidentally activate the
+                // DocumentsUI heading "Save to Downloads" through a clickable ancestor.
+                val textNode = runCatching { findNode(textPrefix = text, exactText = true) }.getOrElse { findNode(textPrefix = text) }
                 var target: AccessibilityNodeInfo? = textNode
                 var clicked = false
+                if (text.equals("Save", ignoreCase = true)) {
+                    // DocumentsUI exposes its final SAVE action as a small text-backed
+                    // control; a physical center tap avoids ACTION_CLICK succeeding on
+                    // an accessibility wrapper without committing the document.
+                    val bounds = android.graphics.Rect()
+                    textNode.getBoundsInScreen(bounds)
+                    if (!bounds.isEmpty) {
+                        clicked = textNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        val downTime = android.os.SystemClock.uptimeMillis()
+                        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+                        try {
+                            if (!clicked) {
+                                automation.injectInputEvent(down, true)
+                                Thread.sleep(80)
+                                val upTime = android.os.SystemClock.uptimeMillis()
+                                val up = MotionEvent.obtain(downTime, upTime, MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+                                try { clicked = automation.injectInputEvent(up, true) } finally { up.recycle() }
+                            }
+                        } finally {
+                            down.recycle()
+                        }
+                        if (automation.rootInActiveWindow?.packageName?.toString() == "com.google.android.documentsui") {
+                            automation.executeShellCommand("input tap ${bounds.exactCenterX().toInt()} ${bounds.exactCenterY().toInt()}").close()
+                        }
+                    }
+                }
                 while (target != null && !clicked) {
                     if (target.isClickable) clicked = target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     target = target.parent
@@ -1422,6 +1451,15 @@ class SqliteCounterPersistenceTest {
                     }
                 }
                 assertTrue("Could not click $text; picker text=${visibleNames().joinToString(" | ")}", clicked)
+                if (text.equals("Save", ignoreCase = true)) {
+                    var pickerStillActive = true
+                    repeat(50) {
+                        pickerStillActive = automation.rootInActiveWindow?.packageName?.toString() == "com.google.android.documentsui"
+                        if (!pickerStillActive) return@repeat
+                        Thread.sleep(100)
+                    }
+                    assertFalse("The SAF Save action must return to the app; visible=${visibleNames().joinToString(" | ")}", pickerStillActive)
+                }
             }
             fun setText(hint: String, value: String) {
                 val field = findNode(hintPrefix = hint)
@@ -1448,6 +1486,7 @@ class SqliteCounterPersistenceTest {
             }
             assertTrue("CreateDocument must open in Downloads before export: $pickerText", pickerText.contains("Downloads", ignoreCase = true) && pickerText.contains("Save", ignoreCase = true))
             val filenameField = runCatching { findNode(hintPrefix = "File name") }.getOrNull()
+                ?: runCatching { findNode(className = EditText::class.java.name) }.getOrNull()
             filenameField?.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "cat051b-saf-roundtrip-${System.currentTimeMillis()}.ctbackup")
             })
