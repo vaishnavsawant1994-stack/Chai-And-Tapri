@@ -62,7 +62,7 @@ class LiveSyncMaintenanceBarrierE2ETest {
                 endpoint!!,
                 SyncRegistration("barrier-${UUID.randomUUID()}@example.test", "Synthetic-Only-Password-2026!",
                     "Synthetic Barrier Owner", "Synthetic Barrier Business", "Synthetic Barrier Shop", deviceId, "API 37 isolated emulator")
-            )
+            ).copy(localActorId = "local-owner")
             SyncSessionVault(context).save(session!!)
             context.getSharedPreferences("chai_tapri_sync_work_status_v1", Context.MODE_PRIVATE).edit().clear().commit()
             instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic CAT-051B sync owner") }

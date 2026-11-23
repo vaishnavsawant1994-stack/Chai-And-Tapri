@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CAT-052 local operator outbox scoping — 24 November 2026
+
+Manual and background sync now submit only contiguous outbox events whose local audit actor matches the local operator bound to the encrypted sync session. A mismatched or unattributed head stays queued rather than being sent under the owner token. The API 37 attribution test passed 1/1; the encrypted session vault suite passed 6/6; Kotlin JVM 78/78; APK builds passed; lint 0 errors / 179 warnings. Staff identity linking is still missing, so staff-created events remain queued and may block later events. This is not production-sync qualification. See `specs/CAT-052-LOCAL-OPERATOR-OUTBOX-SCOPING-REPORT-2026-11-24.md`.
+
 ## Latest continuation — CT-11 sales-history export — 24 November 2026
 
 Sales History can now export the currently filtered local orders as CSV through Android's SAF picker. The CSV includes order/payment states and evidence limitations, excludes customer identifiers, escapes formula-leading cells, and does not mutate the ledger. Kotlin JVM passed 75/75; focused API 37 UI export passed 1/1; debug and instrumentation APK builds plus lint passed (0 errors / 176 warnings). This is one synthetic emulator path only; CT-11, browser visual review, and the six-wave product remain partial. See `specs/CT-11-SALES-HISTORY-CSV-EXPORT-REPORT-2026-11-24.md`.

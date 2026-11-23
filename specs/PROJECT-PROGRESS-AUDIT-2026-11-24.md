@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
 
+## Latest continuation — local operator-scoped sync outbox
+
+The Android outbox now carries the local audit actor into sync selection. Owner sessions can send only a contiguous queue head for their bound local actor; another or unattributed actor is left pending and cannot be mislabeled as the owner by the server's bearer-session attribution. API 37 attribution instrumentation passed 1/1; encrypted-session vault instrumentation passed 6/6; Kotlin JVM passed 78/78; APK builds passed; lint 0 errors / 179 warnings. Staff cloud identity linking is not implemented, so staff events remain queued. See [implementation report](CAT-052-LOCAL-OPERATOR-OUTBOX-SCOPING-REPORT-2026-11-24.md).
+
 ## Latest continuation — CT-11 filtered sales-history CSV export
 
 The Android Sales History screen exports the current search/date-filter result through SAF, with payment-evidence labels, customer-ID exclusion, CSV formula protection, and no ledger mutation. Kotlin JVM passed 75/75; focused API 37 UI test passed 1/1; APK build tasks passed; lint reports 0 errors / 176 warnings. See [CT-11 export report](CT-11-SALES-HISTORY-CSV-EXPORT-REPORT-2026-11-24.md). No full Android regression or browser visual review was run for this slice.

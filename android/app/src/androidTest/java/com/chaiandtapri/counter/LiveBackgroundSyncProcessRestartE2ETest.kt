@@ -74,7 +74,7 @@ class LiveBackgroundSyncProcessRestartE2ETest {
                     "Synthetic Restart Owner", "Synthetic Restart Business", "Synthetic Restart Shop",
                     deviceId, "API 37 isolated emulator"
                 )
-            )
+            ).copy(localActorId = "local-owner")
             SyncSessionVault(context).save(session!!)
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 LocalSessionState.establish("Synthetic CAT-052 restart owner")

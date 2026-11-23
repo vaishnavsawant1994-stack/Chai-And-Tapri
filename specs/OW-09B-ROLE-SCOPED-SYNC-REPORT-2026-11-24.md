@@ -29,4 +29,8 @@
 - Managers can submit all current business projection types. Finer permissions and manager approval policies remain to be defined and tested.
 - No Android app end-to-end with a staff cloud login, browser visual qualification, independent security review, or production deployment was performed.
 
+## Follow-up — local operator outbox scoping
+
+The Android owner sync path now obtains local actor IDs from the audit journal and submits only contiguous outbox events belonging to the locally bound operator. A different or unattributed queue head is left untouched and reported; events are never skipped or uploaded under the owner's token. Owner login/registration binds the encrypted session to `local-owner`; legacy sessions without a binding require owner sign-in again. This closes the immediate owner-token/cashier-event misattribution path, but is not staff cloud identity linking. Staff invitation acceptance and per-staff sessions are still absent, so those queued events remain blocked. See [CAT-052 local operator outbox scoping](CAT-052-LOCAL-OPERATOR-OUTBOX-SCOPING-REPORT-2026-11-24.md).
+
 OW-09B is a server-side authorization improvement, not a complete employee identity, business-command, or attendance system. Continue by linking cloud staff accounts to local operator sessions with a reviewed offline authorization policy, then enforce per-command permissions at the point of local mutation and preserve actor attribution across sync.

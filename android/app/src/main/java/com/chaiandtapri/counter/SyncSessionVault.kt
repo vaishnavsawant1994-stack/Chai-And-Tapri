@@ -15,7 +15,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class SyncSession(val endpointBase: String, val identity: SyncEnvelopeIdentity, val bearerToken: String)
+data class SyncSession(val endpointBase: String, val identity: SyncEnvelopeIdentity, val bearerToken: String, val localActorId: String? = null)
 
 /** Stores only a server-issued bearer session, encrypted with an app/device-bound Android Keystore key. */
 class SyncSessionVault(context: Context, private val keyNamespace: String = "default") {
@@ -34,6 +34,7 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
             .put("businessId", session.identity.businessId)
             .put("shopId", session.identity.shopId)
             .put("deviceId", session.identity.deviceId)
+            .put("localActorId", session.localActorId)
             .put("bearerToken", session.bearerToken)
             .toString().toByteArray(Charsets.UTF_8)
         try {
@@ -72,7 +73,8 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
             SyncSession(
                 endpointBase = json.getString("endpointBase"),
                 identity = SyncEnvelopeIdentity(json.getString("businessId"), json.getString("shopId"), json.getString("deviceId")),
-                bearerToken = json.getString("bearerToken")
+                bearerToken = json.getString("bearerToken"),
+                localActorId = if (json.has("localActorId") && !json.isNull("localActorId")) json.getString("localActorId") else null
             ).also(::validate)
         } catch (error: Exception) {
             throw SyncSessionUnavailableException("Stored sync-session data is malformed; encrypted data was preserved.", error)
@@ -100,6 +102,9 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
         }
         require(session.bearerToken.isNotBlank() && session.bearerToken.length <= 4096 && session.bearerToken.none { it.isWhitespace() }) {
             "Sync session token is invalid."
+        }
+        require(session.localActorId == null || session.localActorId.matches(Regex("[A-Za-z0-9][A-Za-z0-9._ -]{1,59}"))) {
+            "Sync session local-operator binding is invalid."
         }
     }
 

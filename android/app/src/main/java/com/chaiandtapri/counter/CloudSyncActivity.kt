@@ -103,8 +103,9 @@ class CloudSyncActivity : Activity() {
                     SyncAccountClient(HttpsSyncHttpTransport()).register(base, SyncRegistration(
                         emailValue, passwordValue, displayValue, businessValue, shopValue, deviceId, Build.MODEL.take(80).ifBlank { "Android device" }
                     )).also { session ->
-                        SyncSessionVault(this).save(session)
-                        SyncDeviceIdentityStore(this).save(session)
+                        val bound = session.copy(localActorId = LocalSessionState.actorId)
+                        SyncSessionVault(this).save(bound)
+                        SyncDeviceIdentityStore(this).save(bound)
                     }
                 }
             }
@@ -142,8 +143,9 @@ class CloudSyncActivity : Activity() {
                         SyncLogin(emailValue, passwordValue, identity.identity.shopId, identity.identity.deviceId)
                     ).also { session ->
                         require(session.identity.businessId == identity.identity.businessId) { "The returned business identity changed." }
-                        SyncSessionVault(this).save(session)
-                        SyncDeviceIdentityStore(this).save(session)
+                        val bound = session.copy(localActorId = LocalSessionState.actorId)
+                        SyncSessionVault(this).save(bound)
+                        SyncDeviceIdentityStore(this).save(bound)
                     }
                 }
             }
@@ -168,17 +170,24 @@ class CloudSyncActivity : Activity() {
             val outcome = runCatching {
                 SyncOperationLock.withLock {
                     val session = SyncSessionVault(this).load() ?: error("No saved session. Create an account first.")
+                    val actorId = session.localActorId ?: error("This saved session has no local operator binding. Sign in again while authenticated as the local owner before syncing.")
                     SqliteCounterPersistence(this).use { persistence ->
-                        SyncRunner(PersistenceSyncJournal(persistence), HttpsSyncHttpTransport()).push(
+                        val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)
+                        val result = SyncRunner(journal, HttpsSyncHttpTransport()).push(
                             session.endpointBase, session.identity, session.bearerToken
                         )
+                        if (journal.pending(1).isEmpty() && journal.blockedByActor) result.copy(blockedByActor = true) else result
                     }
                 }
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 outcome.fold(
-                    { result -> status.text = (if (result.conflictEventId == null) "Sync finished. ${result.acknowledged} event(s) acknowledged. Server revision ${result.serverRevision}." else "Sync stopped at a revision conflict for event ${result.conflictEventId}. Later events remain queued.") + backgroundStatusSuffix() },
+                    { result -> status.text = (when {
+                        result.conflictEventId != null -> "Sync stopped at a revision conflict for event ${result.conflictEventId}. Later events remain queued."
+                        result.blockedByActor -> "Sync paused: the next queued action belongs to another or unlinked local operator. It was not uploaded under this account."
+                        else -> "Sync finished. ${result.acknowledged} event(s) acknowledged. Server revision ${result.serverRevision}."
+                    }) + backgroundStatusSuffix() },
                     { error -> status.text = safeMessage(error) }
                 )
                 setBusy(false)

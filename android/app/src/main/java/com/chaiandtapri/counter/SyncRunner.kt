@@ -76,7 +76,27 @@ class PersistenceSyncJournal(private val persistence: CounterPersistence) : Sync
         persistence.recordSyncOutcome(eventId, outcome, serverRevision)
 }
 
-data class SyncRunResult(val acknowledged: Int, val conflictEventId: String? = null, val serverRevision: Long)
+/** Prevents a bearer session from submitting an event created under a different local operator. */
+class ActorScopedSyncJournal(private val delegate: SyncJournal, private val actorId: String) : SyncJournal {
+    @Volatile var blockedByActor: Boolean = false
+        private set
+
+    init { require(actorId.isNotBlank()) }
+
+    override fun pending(limit: Int): List<SyncOutboxEvent> {
+        require(limit in 1..100)
+        val events = delegate.pending(limit)
+        val head = events.firstOrNull()
+        blockedByActor = head != null && head.actorId != actorId
+        if (blockedByActor || head == null) return emptyList()
+        return events.takeWhile { it.actorId == actorId }
+    }
+
+    override fun cursor() = delegate.cursor()
+    override fun record(eventId: String, outcome: String, serverRevision: Long) = delegate.record(eventId, outcome, serverRevision)
+}
+
+data class SyncRunResult(val acknowledged: Int, val conflictEventId: String? = null, val serverRevision: Long, val blockedByActor: Boolean = false)
 
 class SyncProtocolException(message: String) : IllegalStateException(message)
 class SyncRequestException(val statusCode: Int) : IllegalStateException("Sync endpoint returned HTTP $statusCode.")
@@ -90,7 +110,8 @@ class SyncRunner(private val journal: SyncJournal, private val transport: SyncHt
         var acknowledged = 0
         var cursor = journal.cursor().also { require(it >= 0L) { "Stored sync cursor is invalid." } }
         repeat(maxEvents) {
-            val event = journal.pending(1).firstOrNull() ?: return SyncRunResult(acknowledged, serverRevision = cursor)
+            val event = journal.pending(1).firstOrNull() ?: return SyncRunResult(acknowledged, serverRevision = cursor,
+                blockedByActor = (journal as? ActorScopedSyncJournal)?.blockedByActor == true)
             val request = SyncEnvelopeMapper.batch(identity, cursor, listOf(event))
                 ?: throw SyncProtocolException("Pending outbox event is not valid for the configured sync contract.")
             val response = transport.post(endpoint, bearerToken, request)

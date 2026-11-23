@@ -92,7 +92,7 @@ internal object SyncBackgroundStatus {
     private const val UPDATED_AT = "updated_at"
 
     fun record(context: Context, state: String, acknowledged: Int = 0, revision: Long = 0L) {
-        require(state in setOf("synced", "idle", "conflict", "session_required", "session_unavailable", "server_rejected", "retrying", "attention_required"))
+        require(state in setOf("synced", "idle", "conflict", "session_required", "session_unavailable", "server_rejected", "retrying", "attention_required", "actor_binding_required", "actor_mismatch"))
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(STATE, state)
             .putInt(ACKNOWLEDGED, acknowledged.coerceAtLeast(0))
@@ -111,6 +111,8 @@ internal object SyncBackgroundStatus {
             "conflict" -> "Background sync paused at a server revision conflict. Open Cloud Sync to review."
             "session_required" -> "Background sync needs an owner session. Sign in to resume."
             "session_unavailable" -> "Saved sync session is unavailable. Encrypted session data was preserved."
+            "actor_binding_required" -> "Background sync paused because the session needs a trusted local-operator binding. Sign in again as the owner."
+            "actor_mismatch" -> "Background sync paused. The next queued action belongs to another or unlinked local operator; it was not uploaded under this account."
             "server_rejected" -> "Server rejected the sync session or request. Review account access."
             "retrying" -> "Background sync will retry when its network and backoff conditions allow."
             else -> "Background sync needs attention. Local records remain on this device."
@@ -150,26 +152,35 @@ class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : Corouti
             SyncBackgroundStatus.record(applicationContext, "session_required")
             return Result.failure(output("session_required"))
         }
+        if (availableSession.localActorId == null) {
+            SyncBackgroundStatus.record(applicationContext, "actor_binding_required")
+            return Result.failure(output("actor_binding_required"))
+        }
 
         return try {
             val result = withContext(Dispatchers.IO) {
                 SyncOperationLock.withLock {
                     if (isStopped || BusinessWriteBarrier.currentMaintenance() != null) throw BusinessMaintenanceException()
                     val session = SyncSessionVault(applicationContext).load() ?: throw SyncSessionUnavailableException("No session.")
+                    val actorId = session.localActorId ?: throw SyncSessionUnavailableException("Sync session has no local operator binding.")
                     SqliteCounterPersistence(applicationContext).use { persistence ->
-                        val journal = PersistenceSyncJournal(persistence)
+                        val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)
                         val run = SyncRunner(journal, HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 7_000))
                             .push(session.endpointBase, session.identity, session.bearerToken, maxEvents = MAX_EVENTS_PER_RUN)
                         val more = journal.pending(1).isNotEmpty()
-                        Triple(run, more, session)
+                        Triple(run, more, journal.blockedByActor)
                     }
                 }
             }
-            val (run, more, _) = result
+            val (run, more, blockedByActor) = result
             when {
                 run.conflictEventId != null -> {
                     SyncBackgroundStatus.record(applicationContext, "conflict", run.acknowledged, run.serverRevision)
                     Result.success(output("conflict", run.acknowledged, run.serverRevision))
+                }
+                run.blockedByActor || blockedByActor -> {
+                    SyncBackgroundStatus.record(applicationContext, "actor_mismatch", run.acknowledged, run.serverRevision)
+                    Result.success(output("actor_mismatch", run.acknowledged, run.serverRevision))
                 }
                 run.acknowledged == 0 -> {
                     SyncBackgroundStatus.record(applicationContext, "idle", 0, run.serverRevision)

@@ -53,7 +53,7 @@ class LiveBackgroundSyncRetryE2ETest {
                     "Synthetic Worker Owner", "Synthetic Worker Business", "Synthetic Worker Shop",
                     deviceId, "API 37 isolated emulator"
                 )
-            )
+            ).copy(localActorId = "local-owner")
             SyncSessionVault(context).save(session!!)
             context.getSharedPreferences("chai_tapri_sync_work_status_v1", Context.MODE_PRIVATE).edit().clear().commit()
             InstrumentationRegistry.getInstrumentation().runOnMainSync {

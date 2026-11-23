@@ -5,7 +5,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 data class SyncEnvelopeIdentity(val businessId: String, val shopId: String, val deviceId: String)
-data class SyncOutboxEvent(val eventId: String, val commandId: String, val payloadVersion: Int?, val payloadJson: String?)
+data class SyncOutboxEvent(val eventId: String, val commandId: String, val payloadVersion: Int?, val payloadJson: String?, val actorId: String? = null)
 
 /** Converts only validated local v1 payloads to the authenticated backend request contract. */
 object SyncEnvelopeMapper {

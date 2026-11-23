@@ -444,11 +444,11 @@ class SqliteCounterPersistence internal constructor(
         val permit = BusinessWriteBarrier.tryBeginCommit() ?: throw BusinessMaintenanceException()
         try {
             return readableDatabase.rawQuery(
-                "SELECT event_id,command_id,payload_version,payload_json FROM sync_outbox WHERE status='pending' AND payload_version IS NOT NULL AND payload_json IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sync_outbox conflict WHERE conflict.status='conflict' AND (conflict.created_at<sync_outbox.created_at OR (conflict.created_at=sync_outbox.created_at AND conflict.event_id<sync_outbox.event_id))) ORDER BY created_at,event_id LIMIT ?",
+                "SELECT event_id,command_id,payload_version,payload_json,(SELECT actor_id FROM audit_events WHERE command_id=sync_outbox.command_id ORDER BY created_at DESC,rowid DESC LIMIT 1) FROM sync_outbox WHERE status='pending' AND payload_version IS NOT NULL AND payload_json IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sync_outbox conflict WHERE conflict.status='conflict' AND (conflict.created_at<sync_outbox.created_at OR (conflict.created_at=sync_outbox.created_at AND conflict.event_id<sync_outbox.event_id))) ORDER BY created_at,event_id LIMIT ?",
                 arrayOf(limit.toString())
             ).use { cursor ->
                 buildList {
-                    while (cursor.moveToNext()) add(SyncOutboxEvent(cursor.getString(0), cursor.getString(1), cursor.getInt(2), cursor.getString(3)))
+                    while (cursor.moveToNext()) add(SyncOutboxEvent(cursor.getString(0), cursor.getString(1), cursor.getInt(2), cursor.getString(3), cursor.getString(4)))
                 }
             }
         } finally { permit.close() }

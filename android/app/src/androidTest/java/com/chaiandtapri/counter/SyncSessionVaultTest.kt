@@ -62,6 +62,19 @@ class SyncSessionVaultTest {
         assertEquals(before, SyncSessionVault.encryptedEnvelopeForTests(context))
     }
 
+    @Test fun localOperatorBindingSurvivesEncryptedVaultReopen() {
+        SyncSessionVault.resetForTests(context)
+        val bound = session.copy(localActorId = "cashier-sync-01")
+        SyncSessionVault(context).save(bound)
+        assertEquals(bound.copy(endpointBase = bound.endpointBase.trimEnd('/')), SyncSessionVault(context).load())
+    }
+
+    @Test fun malformedLocalOperatorBindingIsRejected() {
+        SyncSessionVault.resetForTests(context)
+        assertTrue(runCatching { SyncSessionVault(context).save(session.copy(localActorId = "  ")) }.isFailure)
+        assertTrue(SyncSessionVault.encryptedEnvelopeForTests(context).values.all { it == null })
+    }
+
     @Test fun namespacedVaultIsIsolatedFromTheDefaultOwnerSession() {
         SyncSessionVault.resetForTests(context)
         val namespace = "test_${java.util.UUID.randomUUID().toString().replace("-", "")}"
