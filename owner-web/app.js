@@ -51,7 +51,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     const profit = view === 'profit';
     const audit = view === 'audit';
     const shifts = view === 'shifts';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : 'Refresh shifts';
+    const staff = view === 'staff';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : shifts ? 'Refresh shifts' : 'Refresh staff access';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
@@ -62,6 +63,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('profit-view').classList.toggle('hidden', !profit);
     $('audit-view').classList.toggle('hidden', !audit);
     $('shifts-view').classList.toggle('hidden', !shifts);
+    $('staff-view').classList.toggle('hidden', !staff);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
@@ -82,6 +84,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('audit-tab').setAttribute('aria-current', audit ? 'page' : 'false');
     $('shifts-tab').classList.toggle('active', shifts);
     $('shifts-tab').setAttribute('aria-current', shifts ? 'page' : 'false');
+    $('staff-tab').classList.toggle('active', staff);
+    $('staff-tab').setAttribute('aria-current', staff ? 'page' : 'false');
   }
 
   function captureReport(view, title, scopeId, metricsId, evidenceIds) {
@@ -519,10 +523,94 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     } finally { $('refresh-button').disabled = false; }
   }
 
+  const appendCell = (row, value) => {
+    const item = document.createElement('td'); item.textContent = value ?? '—'; row.append(item); return item;
+  };
+  const actionButton = (text, action, danger = false) => {
+    const button = document.createElement('button'); button.type = 'button';
+    button.className = danger ? 'quiet table-action' : 'secondary table-action';
+    button.textContent = text; button.addEventListener('click', action); return button;
+  };
+
+  async function loadStaff() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    const auth = { headers: { authorization: `Bearer ${session.token}` } };
+    for (const id of ['staff-members-status', 'staff-invitations-status', 'staff-audit-status']) setStatus($(id), 'Loading…');
+    try {
+      const query = `?shopId=${encodeURIComponent(activeShopId)}`;
+      const [members, invitations, audit] = await Promise.all([
+        request(`/v1/staff/members${query}`, auth), request(`/v1/staff/invitations${query}`, auth), request(`/v1/staff/audit${query}`, auth)
+      ]);
+      const memberRows = members.members.map((member) => {
+        const row = document.createElement('tr');
+        appendCell(row, member.displayName); appendCell(row, member.email); appendCell(row, member.role); appendCell(row, new Date(member.joinedAt).toLocaleString());
+        const actions = document.createElement('td');
+        if (member.role === 'owner') actions.textContent = 'Owner access is protected.';
+        else {
+          const select = document.createElement('select'); select.setAttribute('aria-label', `Role for ${member.displayName}`);
+          for (const role of ['cashier', 'manager']) {
+            const option = document.createElement('option'); option.value = role; option.textContent = role; option.selected = role === member.role; select.append(option);
+          }
+          actions.append(select, actionButton('Save role', async () => {
+            try {
+              await request(`/v1/staff/members/${encodeURIComponent(member.userId)}`, { method: 'PATCH', headers: auth.headers, body: JSON.stringify({ shopId: activeShopId, role: select.value }) });
+              await loadStaff();
+            } catch (error) { setStatus($('staff-members-status'), showError(error), 'error'); }
+          }), actionButton('Remove', async () => {
+            if (!confirm(`Remove ${member.displayName} from this shop and revoke their current sessions?`)) return;
+            try {
+              await request(`/v1/staff/members/${encodeURIComponent(member.userId)}${query}`, { method: 'DELETE', headers: auth.headers });
+              await loadStaff();
+            } catch (error) { setStatus($('staff-members-status'), showError(error), 'error'); }
+          }, true));
+        }
+        row.append(actions); return row;
+      });
+      if (!memberRows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No shop members found.'); empty.colSpan = 5; empty.className = 'empty-row'; memberRows.push(row); }
+      $('staff-member-rows').replaceChildren(...memberRows);
+
+      const invitationRows = invitations.invitations.map((invitation) => {
+        const row = document.createElement('tr');
+        appendCell(row, invitation.email); appendCell(row, invitation.role); appendCell(row, invitation.state); appendCell(row, new Date(invitation.expiresAt).toLocaleString());
+        const actions = document.createElement('td');
+        if (invitation.state === 'pending') actions.append(actionButton('Revoke', async () => {
+          if (!confirm(`Revoke the pending invitation for ${invitation.email}?`)) return;
+          try {
+            await request(`/v1/staff/invitations/${encodeURIComponent(invitation.invitationId)}${query}`, { method: 'DELETE', headers: auth.headers });
+            await loadStaff();
+          } catch (error) { setStatus($('staff-invitations-status'), showError(error), 'error'); }
+        }, true));
+        else actions.textContent = '—';
+        row.append(actions); return row;
+      });
+      if (!invitationRows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No invitations recorded.'); empty.colSpan = 5; empty.className = 'empty-row'; invitationRows.push(row); }
+      $('staff-invitation-rows').replaceChildren(...invitationRows);
+
+      const auditRows = audit.events.map((event) => {
+        const row = document.createElement('tr');
+        appendCell(row, new Date(event.occurredAt).toLocaleString()); appendCell(row, event.action.replaceAll('_', ' '));
+        appendCell(row, event.actorUserId); appendCell(row, event.targetUserId ?? event.invitationId);
+        appendCell(row, event.previousRole && event.nextRole ? `${event.previousRole} → ${event.nextRole}` : event.nextRole ?? event.previousRole ?? '—');
+        return row;
+      });
+      if (!auditRows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No membership events recorded.'); empty.colSpan = 5; empty.className = 'empty-row'; auditRows.push(row); }
+      $('staff-audit-rows').replaceChildren(...auditRows);
+      setStatus($('staff-members-status'), `${members.members.length} shop membership(s) loaded. Email ownership is unverified.`, 'success');
+      setStatus($('staff-invitations-status'), `${invitations.invitations.length} invitation record(s); secret values are not returned.`, 'success');
+      setStatus($('staff-audit-status'), `${audit.events.length} membership event(s). This is not the full business audit history.`, 'success');
+    } catch (error) {
+      for (const id of ['staff-members-status', 'staff-invitations-status', 'staff-audit-status']) setStatus($(id), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
     reportSnapshots.clear();
+    $('staff-invite-token').textContent = '';
+    $('staff-invite-result').classList.add('hidden');
     $('export-report-button').disabled = true;
     setView('overview');
     dashboardPanel.classList.add('hidden');
@@ -573,6 +661,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
     else if (!$('audit-view').classList.contains('hidden')) loadAuditHistory();
     else if (!$('shifts-view').classList.contains('hidden')) loadShifts();
+    else if (!$('staff-view').classList.contains('hidden')) loadStaff();
     else loadOverview();
   });
   $('export-report-button').addEventListener('click', () => {
@@ -598,6 +687,40 @@ import { buildOwnerReportCsv } from './report-export.mjs';
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
   $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
+  $('staff-tab').addEventListener('click', () => { setView('staff'); loadStaff(); });
+  $('staff-invite-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!session || !activeShopId) return;
+    const submit = $('staff-invite-submit'); submit.disabled = true;
+    $('staff-invite-token').textContent = '';
+    $('staff-invite-result').classList.add('hidden');
+    setStatus($('staff-invite-status'), 'Creating one-time staff invitation…');
+    try {
+      const result = await request('/v1/staff/invitations', {
+        method: 'POST', headers: { authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ shopId: activeShopId, email: $('staff-invite-email').value.trim(), role: $('staff-invite-role').value })
+      });
+      $('staff-invite-email').value = '';
+      $('staff-invite-token').textContent = result.invitationToken;
+      $('staff-invite-limits').textContent = `${result.evidence} Expires ${new Date(result.expiresAt).toLocaleString()}.`;
+      $('staff-invite-result').classList.remove('hidden');
+      setStatus($('staff-invite-status'), `Invitation created for ${result.email} as ${result.role}. Save the secret now; it will not be shown again.`, 'success');
+      await loadStaff();
+    } catch (error) { setStatus($('staff-invite-status'), showError(error), 'error'); }
+    finally { submit.disabled = false; }
+  });
+  $('staff-invite-copy').addEventListener('click', async () => {
+    const secret = $('staff-invite-token').textContent;
+    if (!secret) return;
+    try {
+      await navigator.clipboard.writeText(secret);
+      setStatus($('staff-invite-status'), 'One-time invitation secret copied. Share it only through a trusted channel.', 'success');
+    } catch {
+      const selection = window.getSelection(); const range = document.createRange();
+      range.selectNodeContents($('staff-invite-token')); selection.removeAllRanges(); selection.addRange(range);
+      setStatus($('staff-invite-status'), 'Secret selected. Copy it manually and share it only through a trusted channel.', 'neutral');
+    }
+  });
   $('activity-range').addEventListener('change', () => { if (!$('activity-view').classList.contains('hidden')) loadActivity(); });
   $('cashflow-range').addEventListener('change', () => { if (!$('cashflow-view').classList.contains('hidden')) loadCashflow(); });
   $('profit-range').addEventListener('change', () => { if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness(); });

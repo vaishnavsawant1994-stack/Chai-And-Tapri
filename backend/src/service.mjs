@@ -15,6 +15,9 @@ const hasExactKeys = (value, keys) => object(value) && Object.keys(value).length
 const isText = (value, max = 160) => typeof value === 'string' && value.length > 0 && value.length <= max;
 const isInt = (value, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) => Number.isSafeInteger(value) && value >= min && value <= max;
 const enumIs = (value, values) => typeof value === 'string' && values.includes(value);
+const STAFF_ROLES = ['manager', 'cashier'];
+const validEmail = (value) => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
+const requireOwner = (actor) => { if (actor?.role !== 'owner') throw new ApiError(403, 'owner_access_required'); };
 
 /** Validate the only Android payload contract currently eligible for upload. */
 export function validateProjectionDelta(payload) {
@@ -198,6 +201,7 @@ export class SyncService {
       const user = await c.query('INSERT INTO users(email,display_name,password_salt,password_hash,password_parameters) VALUES($1,$2,$3,$4,$5) RETURNING user_id', [email, displayName.trim(), salt, passwordHash, { algorithm: 'scrypt', N: 16384, r: 8, p: 1, keyLength: 64 }]);
       const business = await c.query('INSERT INTO businesses(display_name) VALUES($1) RETURNING business_id', [businessName.trim()]);
       const shop = await c.query('INSERT INTO shops(business_id,display_name) VALUES($1,$2) RETURNING shop_id', [business.rows[0].business_id, shopName.trim()]);
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [shop.rows[0].shop_id]);
       await c.query("INSERT INTO shop_memberships(business_id,shop_id,user_id,role) VALUES($1,$2,$3,'owner')", [business.rows[0].business_id, shop.rows[0].shop_id, user.rows[0].user_id]);
       await c.query('INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)', [deviceId, business.rows[0].business_id, shop.rows[0].shop_id, deviceLabel.trim(), user.rows[0].user_id]);
       await c.query('INSERT INTO sessions(token_hash,business_id,shop_id,user_id,device_id,expires_at) VALUES($1,$2,$3,$4,$5,$6)', [hash(token), business.rows[0].business_id, shop.rows[0].shop_id, user.rows[0].user_id, deviceId, isoAfterHours(this.sessionHours)]);
@@ -226,6 +230,7 @@ export class SyncService {
           locked_until=CASE WHEN auth_failures.failures+1 >= 8 THEN now()+interval '15 minutes' ELSE NULL END`, [email]);
         return { failed: true };
       }
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [shopId]);
       const membership = await c.query(`SELECT m.business_id,m.shop_id,m.role,d.device_id FROM shop_memberships m JOIN devices d USING(business_id,shop_id)
         WHERE m.user_id=$1 AND m.shop_id=$2 AND d.device_id=$3 AND d.revoked_at IS NULL`, [found.rows[0].user_id, shopId, deviceId]);
       if (!membership.rowCount) return { denied: true };
@@ -241,17 +246,204 @@ export class SyncService {
 
   async authenticate(token, shopId) {
     if (!token || !UUID.test(shopId ?? '')) throw new ApiError(401, 'unauthorized');
-    const { rows } = await this.pool.query(`SELECT s.user_id,s.business_id,s.shop_id,s.device_id,m.role FROM sessions s
-      JOIN shop_memberships m USING(business_id,shop_id,user_id) JOIN devices d USING(shop_id,device_id)
-      JOIN users u USING(user_id) WHERE s.token_hash=$1 AND s.shop_id=$2 AND s.revoked_at IS NULL AND s.expires_at>now()
-      AND d.revoked_at IS NULL AND u.disabled_at IS NULL`, [hash(token), shopId]);
-    if (!rows.length) throw new ApiError(401, 'unauthorized');
-    return rows[0];
+    const actor = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [shopId]);
+      const { rows } = await c.query(`SELECT s.user_id,s.business_id,s.shop_id,s.device_id,m.role FROM sessions s
+        JOIN shop_memberships m USING(business_id,shop_id,user_id) JOIN devices d USING(shop_id,device_id)
+        JOIN users u USING(user_id) WHERE s.token_hash=$1 AND s.shop_id=$2 AND s.revoked_at IS NULL AND s.expires_at>now()
+        AND d.revoked_at IS NULL AND u.disabled_at IS NULL`, [hash(token), shopId]);
+      return rows[0] ?? null;
+    });
+    if (!actor) throw new ApiError(401, 'unauthorized');
+    return actor;
   }
 
   async logout(token) {
     if (!token) throw new ApiError(401, 'unauthorized');
     await this.pool.query('UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL', [hash(token)]);
+  }
+
+  async shopStaffMembers(actor) {
+    requireOwner(actor);
+    const { rows } = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      return c.query(`SELECT u.user_id, u.email, u.display_name, m.role, m.created_at
+        FROM shop_memberships m JOIN users u USING(user_id)
+        WHERE m.business_id=$1 AND m.shop_id=$2 ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, lower(u.display_name), u.user_id`,
+      [actor.business_id, actor.shop_id]);
+    });
+    return { businessId: actor.business_id, shopId: actor.shop_id, members: rows.map((row) => ({
+      userId: row.user_id, email: row.email, displayName: row.display_name, role: row.role, joinedAt: row.created_at
+    })), evidence: { identity: 'Account email is self-asserted; this system does not verify email ownership.', access: 'Roles are current shop memberships. This endpoint does not provide per-command permissions or a complete employee audit trail.' } };
+  }
+
+  async shopStaffInvitations(actor) {
+    requireOwner(actor);
+    const { rows } = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      return c.query(`SELECT invitation_id, email, role, created_at, expires_at, accepted_at, revoked_at
+        FROM staff_invitations WHERE business_id=$1 AND shop_id=$2 ORDER BY created_at DESC LIMIT 100`,
+      [actor.business_id, actor.shop_id]);
+    });
+    return { businessId: actor.business_id, shopId: actor.shop_id, invitations: rows.map((row) => ({
+      invitationId: row.invitation_id, email: row.email, role: row.role, createdAt: row.created_at,
+      expiresAt: row.expires_at, acceptedAt: row.accepted_at, revokedAt: row.revoked_at,
+      state: row.revoked_at ? 'revoked' : row.accepted_at ? 'accepted' : new Date(row.expires_at) <= new Date() ? 'expired' : 'pending'
+    })), evidence: { invitation: 'Pending tokens are never returned by list; raw invitation secrets are returned once at creation and stored only as a hash.', identity: 'The invited email is not verified.' } };
+  }
+
+  async shopStaffAudit(actor) {
+    requireOwner(actor);
+    const { rows } = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      return c.query(`SELECT audit_id,actor_user_id,target_user_id,invitation_id,action,previous_role,next_role,occurred_at
+        FROM shop_staff_audit WHERE business_id=$1 AND shop_id=$2 ORDER BY occurred_at DESC,audit_id DESC LIMIT 100`,
+      [actor.business_id, actor.shop_id]);
+    });
+    return { businessId: actor.business_id, shopId: actor.shop_id, events: rows.map((row) => ({
+      auditId: row.audit_id, actorUserId: row.actor_user_id, targetUserId: row.target_user_id, invitationId: row.invitation_id,
+      action: row.action, previousRole: row.previous_role, nextRole: row.next_role, occurredAt: row.occurred_at
+    })), evidence: 'Append-only metadata for staff invitations and membership changes; it is not a complete audit of business actions.' };
+  }
+
+  async createStaffInvitation(actor, { email, role }) {
+    requireOwner(actor);
+    email = String(email ?? '').trim().toLowerCase();
+    if (!validEmail(email) || !STAFF_ROLES.includes(role)) throw new ApiError(400, 'invalid_staff_invitation');
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 24 * 3_600_000);
+    const row = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${actor.shop_id}:${email}`]);
+      const existingMember = await c.query(`SELECT 1 FROM shop_memberships m JOIN users u USING(user_id)
+        WHERE m.business_id=$1 AND m.shop_id=$2 AND lower(u.email)=$3`, [actor.business_id, actor.shop_id, email]);
+      if (existingMember.rowCount) throw new ApiError(409, 'staff_member_already_exists');
+      const retired = await c.query(`UPDATE staff_invitations SET revoked_at=now() WHERE business_id=$1 AND shop_id=$2 AND email=$3
+        AND accepted_at IS NULL AND revoked_at IS NULL RETURNING invitation_id,role`, [actor.business_id, actor.shop_id, email]);
+      for (const old of retired.rows) {
+        await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,invitation_id,action,previous_role)
+          VALUES($1,$2,$3,$4,'invitation_revoked',$5)`, [actor.business_id, actor.shop_id, actor.user_id, old.invitation_id, old.role]);
+      }
+      const pending = await c.query(`SELECT count(*)::integer AS count FROM staff_invitations
+        WHERE business_id=$1 AND shop_id=$2 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>now()`,
+      [actor.business_id, actor.shop_id]);
+      if (pending.rows[0].count >= 50) throw new ApiError(429, 'too_many_pending_staff_invitations');
+      const inserted = await c.query(`INSERT INTO staff_invitations(business_id,shop_id,email,role,token_hash,invited_by,expires_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING invitation_id,created_at,expires_at`,
+      [actor.business_id, actor.shop_id, email, role, hash(token), actor.user_id, expiresAt]);
+      await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,invitation_id,action,next_role)
+        VALUES($1,$2,$3,$4,'invitation_created',$5)`, [actor.business_id, actor.shop_id, actor.user_id, inserted.rows[0].invitation_id, role]);
+      return inserted.rows[0];
+    });
+    return { invitationId: row.invitation_id, email, role, createdAt: row.created_at, expiresAt: row.expires_at, invitationToken: token,
+      evidence: 'Share the one-time secret through a trusted channel. It expires in 24 hours. The invited email is not verified; do not treat it as proof of identity.' };
+  }
+
+  async revokeStaffInvitation(actor, invitationId) {
+    requireOwner(actor);
+    if (!UUID.test(invitationId ?? '')) throw new ApiError(400, 'invalid_staff_invitation');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const result = await c.query(`UPDATE staff_invitations SET revoked_at=now()
+        WHERE invitation_id=$1 AND business_id=$2 AND shop_id=$3 AND revoked_at IS NULL AND accepted_at IS NULL RETURNING role`,
+      [invitationId, actor.business_id, actor.shop_id]);
+      if (!result.rowCount) throw new ApiError(404, 'staff_invitation_not_found');
+      await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,invitation_id,action,previous_role)
+        VALUES($1,$2,$3,$4,'invitation_revoked',$5)`, [actor.business_id, actor.shop_id, actor.user_id, invitationId, result.rows[0].role]);
+      return { invitationId, state: 'revoked' };
+    });
+  }
+
+  async setStaffMemberRole(actor, userId, role) {
+    requireOwner(actor);
+    if (!UUID.test(userId ?? '') || !STAFF_ROLES.includes(role) || userId === actor.user_id) throw new ApiError(400, 'invalid_staff_member_update');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const existing = await c.query(`SELECT role FROM shop_memberships
+        WHERE business_id=$1 AND shop_id=$2 AND user_id=$3 AND role IN ('manager','cashier') FOR UPDATE`,
+      [actor.business_id, actor.shop_id, userId]);
+      if (!existing.rowCount) throw new ApiError(404, 'staff_member_not_found');
+      const previousRole = existing.rows[0].role;
+      if (previousRole === role) return { userId, role, changed: false };
+      const result = await c.query(`UPDATE shop_memberships SET role=$4
+        WHERE business_id=$1 AND shop_id=$2 AND user_id=$3 RETURNING user_id,role`,
+      [actor.business_id, actor.shop_id, userId, role]);
+      await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,target_user_id,action,previous_role,next_role)
+        VALUES($1,$2,$3,$4,'role_changed',$5,$6)`, [actor.business_id, actor.shop_id, actor.user_id, userId, previousRole, role]);
+      return { userId: result.rows[0].user_id, role: result.rows[0].role, changed: true };
+    });
+  }
+
+  async removeStaffMember(actor, userId) {
+    requireOwner(actor);
+    if (!UUID.test(userId ?? '') || userId === actor.user_id) throw new ApiError(400, 'invalid_staff_member_update');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const member = await c.query(`SELECT role FROM shop_memberships WHERE business_id=$1 AND shop_id=$2 AND user_id=$3 FOR UPDATE`,
+        [actor.business_id, actor.shop_id, userId]);
+      if (!member.rowCount || !STAFF_ROLES.includes(member.rows[0].role)) throw new ApiError(404, 'staff_member_not_found');
+      await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,target_user_id,action,previous_role)
+        VALUES($1,$2,$3,$4,'membership_removed',$5)`, [actor.business_id, actor.shop_id, actor.user_id, userId, member.rows[0].role]);
+      await c.query('UPDATE sessions SET revoked_at=now() WHERE business_id=$1 AND shop_id=$2 AND user_id=$3 AND revoked_at IS NULL',
+        [actor.business_id, actor.shop_id, userId]);
+      await c.query('DELETE FROM shop_memberships WHERE business_id=$1 AND shop_id=$2 AND user_id=$3', [actor.business_id, actor.shop_id, userId]);
+      return { userId, state: 'removed', sessionsRevoked: true };
+    });
+  }
+
+  async acceptStaffInvitation({ invitationToken, displayName, password, deviceId, deviceLabel }) {
+    if (typeof invitationToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(invitationToken) ||
+      typeof password !== 'string' || password.length < 12 || password.length > 256 ||
+      typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 100 ||
+      typeof deviceLabel !== 'string' || deviceLabel.trim().length < 1 || deviceLabel.trim().length > 80 || !UUID.test(deviceId ?? '')) {
+      throw new ApiError(400, 'invalid_staff_invitation');
+    }
+    const token = randomBytes(32).toString('base64url');
+    const result = await withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.staff_invitation_hash',$1,true)", [hash(invitationToken).toString('hex')]);
+      const inviteResult = await c.query(`SELECT invitation_id,business_id,shop_id,email,role,invited_by,expires_at,revoked_at,accepted_at
+        FROM staff_invitations WHERE token_hash=$1`, [hash(invitationToken)]);
+      if (!inviteResult.rowCount) throw new ApiError(401, 'invalid_staff_invitation');
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [inviteResult.rows[0].shop_id]);
+      const lockedInvite = await c.query(`SELECT invitation_id,business_id,shop_id,email,role,invited_by,expires_at,revoked_at,accepted_at
+        FROM staff_invitations WHERE invitation_id=$1 FOR UPDATE`, [inviteResult.rows[0].invitation_id]);
+      const invitation = lockedInvite.rows[0];
+      if (invitation.revoked_at || invitation.accepted_at || new Date(invitation.expires_at) <= new Date()) throw new ApiError(401, 'invalid_staff_invitation');
+      const existing = await c.query(`SELECT user_id,display_name,password_salt,password_hash,password_parameters,disabled_at
+        FROM users WHERE email=$1`, [invitation.email]);
+      let userId; let userName;
+      if (existing.rowCount) {
+        const user = existing.rows[0];
+        if (user.disabled_at) throw new ApiError(403, 'staff_account_unavailable');
+        const params = user.password_parameters;
+        const candidate = await scrypt(password, user.password_salt, params.keyLength, { N: params.N, r: params.r, p: params.p, maxmem: 64 * 1024 * 1024 });
+        if (!timingSafeEqual(candidate, user.password_hash)) throw new ApiError(401, 'invalid_staff_credentials');
+        userId = user.user_id; userName = user.display_name;
+      } else {
+        const salt = randomBytes(16);
+        const passwordHash = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+        const created = await c.query(`INSERT INTO users(email,display_name,password_salt,password_hash,password_parameters)
+          VALUES($1,$2,$3,$4,$5) RETURNING user_id,display_name`,
+        [invitation.email, displayName.trim(), salt, passwordHash, { algorithm: 'scrypt', N: 16384, r: 8, p: 1, keyLength: 64 }]);
+        userId = created.rows[0].user_id; userName = created.rows[0].display_name;
+      }
+      const member = await c.query('SELECT role FROM shop_memberships WHERE business_id=$1 AND shop_id=$2 AND user_id=$3',
+        [invitation.business_id, invitation.shop_id, userId]);
+      if (member.rowCount) throw new ApiError(409, 'staff_member_already_exists');
+      await c.query('INSERT INTO shop_memberships(business_id,shop_id,user_id,role) VALUES($1,$2,$3,$4)',
+        [invitation.business_id, invitation.shop_id, userId, invitation.role]);
+      const device = await c.query(`INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)
+        ON CONFLICT(shop_id,device_id) DO NOTHING RETURNING device_id`,
+      [deviceId, invitation.business_id, invitation.shop_id, deviceLabel.trim(), invitation.invited_by]);
+      if (!device.rowCount) throw new ApiError(409, 'staff_device_already_registered');
+      await c.query('UPDATE staff_invitations SET accepted_at=now(),accepted_user_id=$2 WHERE invitation_id=$1', [invitation.invitation_id, userId]);
+      await c.query(`INSERT INTO shop_staff_audit(business_id,shop_id,actor_user_id,target_user_id,invitation_id,action,next_role)
+        VALUES($1,$2,$3,$4,$5,'invitation_accepted',$6)`, [invitation.business_id, invitation.shop_id, invitation.invited_by, userId, invitation.invitation_id, invitation.role]);
+      await c.query('INSERT INTO sessions(token_hash,business_id,shop_id,user_id,device_id,expires_at) VALUES($1,$2,$3,$4,$5,$6)',
+        [hash(token), invitation.business_id, invitation.shop_id, userId, deviceId, isoAfterHours(this.sessionHours)]);
+      return { userId, displayName: userName, businessId: invitation.business_id, shopId: invitation.shop_id, role: invitation.role };
+    });
+    return { ...result, token };
   }
 
   async shopOverview(actor) {

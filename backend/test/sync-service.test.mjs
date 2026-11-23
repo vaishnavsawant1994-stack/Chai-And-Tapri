@@ -101,6 +101,99 @@ test('repeated bad credentials persist a temporary login lock', { skip: !connect
   }
 });
 
+test('owner staff invitations create least-privilege memberships and removal revokes sessions', { skip: !connection }, async()=>{
+  const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool); const deviceId=randomUUID();
+  const suffix=randomUUID(); let owner; let existingAccount; let staffUserId; let invitationId; let server;
+  try {
+    owner=await service.register({email:`staff-owner-${suffix}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'Synthetic Owner',businessName:'Synthetic Business',shopName:'Synthetic Shop',deviceId,deviceLabel:'Owner Test Device'});
+    const ownerActor=await service.authenticate(owner.token,owner.shopId);
+    assert.equal((await pool.query('SELECT user_id FROM shop_memberships WHERE shop_id=$1',[owner.shopId])).rowCount,0,'RLS must hide memberships without an explicit shop scope');
+    const hiddenMemberships=await withTransaction(pool,async(c)=>{
+      await c.query("SELECT set_config('app.current_shop',$1,true)",[randomUUID()]);
+      return c.query('SELECT user_id FROM shop_memberships WHERE shop_id=$1',[owner.shopId]);
+    });
+    assert.equal(hiddenMemberships.rowCount,0,'RLS must prevent a wrong-shop membership lookup');
+    server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const base=`http://127.0.0.1:${server.address().port}`;
+    const invitationResponse=await fetch(`${base}/v1/staff/invitations`,{method:'POST',headers:{authorization:`Bearer ${owner.token}`,'content-type':'application/json'},body:JSON.stringify({shopId:owner.shopId,email:`staff-${suffix}@example.test`,role:'cashier'})});
+    assert.equal(invitationResponse.status,201);
+    const invitation=await invitationResponse.json(); invitationId=invitation.invitationId;
+    assert.match(invitation.invitationToken,/^[A-Za-z0-9_-]{43}$/);
+    assert.ok(new Date(invitation.expiresAt)>new Date());
+    await assert.rejects(service.createStaffInvitation(ownerActor,{email:`owner-${suffix}@example.test`,role:'owner'}),(e)=>e instanceof ApiError&&e.status===400);
+    const listBefore=await fetch(`${base}/v1/staff/invitations?shopId=${owner.shopId}`,{headers:{authorization:`Bearer ${owner.token}`}}).then(r=>r.json());
+    assert.equal(listBefore.invitations[0].state,'pending');
+    assert.equal(Object.hasOwn(listBefore.invitations[0],'invitationToken'),false);
+    assert.equal((await pool.query('SELECT invitation_id FROM staff_invitations WHERE invitation_id=$1',[invitationId])).rowCount,0,'RLS must hide invite rows outside the shop transaction scope');
+    assert.equal((await pool.query('SELECT audit_id FROM shop_staff_audit')).rowCount,0,'RLS must hide staff audit rows outside the shop transaction scope');
+    const staffDeviceId=randomUUID(); const password='Synthetic-Staff-Password-2026!';
+    const acceptedResponse=await fetch(`${base}/v1/staff/accept-invitation`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({invitationToken:invitation.invitationToken,displayName:'Synthetic Cashier',password,deviceId:staffDeviceId,deviceLabel:'Staff Test Device'})});
+    assert.equal(acceptedResponse.status,201);
+    const accepted=await acceptedResponse.json(); staffUserId=accepted.userId;
+    assert.equal(accepted.role,'cashier'); assert.equal(accepted.shopId,owner.shopId); assert.ok(accepted.token);
+    await assert.rejects(service.acceptStaffInvitation({invitationToken:invitation.invitationToken,displayName:'Duplicate',password,deviceId:randomUUID(),deviceLabel:'Duplicate Device'}),(e)=>e instanceof ApiError&&e.status===401);
+    const staffActor=await service.authenticate(accepted.token,owner.shopId);
+    assert.equal(staffActor.role,'cashier');
+    await assert.rejects(service.shopStaffMembers(staffActor),(e)=>e instanceof ApiError&&e.status===403);
+    await assert.rejects(service.createStaffInvitation(staffActor,{email:`another-${suffix}@example.test`,role:'cashier'}),(e)=>e instanceof ApiError&&e.status===403);
+    const ownerMembers=await service.shopStaffMembers(ownerActor);
+    assert.equal(ownerMembers.members.find(m=>m.userId===staffUserId).role,'cashier');
+    const promoted=await service.setStaffMemberRole(ownerActor,staffUserId,'manager');
+    assert.equal(promoted.role,'manager');
+    assert.equal((await service.authenticate(accepted.token,owner.shopId)).role,'manager');
+    existingAccount=await service.register({email:`existing-staff-${suffix}@example.test`,password:'Existing-Staff-Password-2026!',displayName:'Existing Account Owner',businessName:'Separate Business',shopName:'Separate Shop',deviceId:randomUUID(),deviceLabel:'Existing Account Device'});
+    const existingInvite=await service.createStaffInvitation(ownerActor,{email:`existing-staff-${suffix}@example.test`,role:'cashier'});
+    const targetDeviceId=randomUUID();
+    await assert.rejects(service.acceptStaffInvitation({invitationToken:existingInvite.invitationToken,displayName:'Ignored Name',password:'Incorrect-Existing-Password!',deviceId:targetDeviceId,deviceLabel:'Target Device'}),(e)=>e instanceof ApiError&&e.status===401);
+    assert.equal((await service.shopStaffInvitations(ownerActor)).invitations.find(item=>item.invitationId===existingInvite.invitationId).state,'pending');
+    const acceptedExisting=await service.acceptStaffInvitation({invitationToken:existingInvite.invitationToken,displayName:'Ignored Name',password:'Existing-Staff-Password-2026!',deviceId:targetDeviceId,deviceLabel:'Target Device'});
+    assert.equal(acceptedExisting.userId,existingAccount.userId);
+    assert.equal(acceptedExisting.role,'cashier');
+    assert.equal((await service.login({email:`existing-staff-${suffix}@example.test`,password:'Existing-Staff-Password-2026!',shopId:owner.shopId,deviceId:targetDeviceId})).role,'cashier');
+    await assert.rejects(service.setStaffMemberRole(ownerActor,owner.userId,'cashier'),(e)=>e instanceof ApiError&&e.status===400);
+    await assert.rejects(service.removeStaffMember(ownerActor,owner.userId),(e)=>e instanceof ApiError&&e.status===400);
+    const revoked=await service.removeStaffMember(ownerActor,staffUserId);
+    assert.equal(revoked.sessionsRevoked,true);
+    await assert.rejects(service.authenticate(accepted.token,owner.shopId),(e)=>e instanceof ApiError&&e.status===401);
+    await service.removeStaffMember(ownerActor,existingAccount.userId);
+    const removed=await fetch(`${base}/v1/staff/members/${staffUserId}?shopId=${owner.shopId}`,{method:'DELETE',headers:{authorization:`Bearer ${owner.token}`}});
+    assert.equal(removed.status,404);
+    await assert.rejects(service.revokeStaffInvitation(ownerActor,invitationId),(e)=>e instanceof ApiError&&e.status===404);
+    assert.equal((await service.shopStaffInvitations(ownerActor)).invitations[0].state,'accepted');
+    const auditResponse=await fetch(`${base}/v1/staff/audit?shopId=${owner.shopId}`,{headers:{authorization:`Bearer ${owner.token}`}});
+    assert.equal(auditResponse.status,200);
+    const audit=await auditResponse.json();
+    assert.deepEqual(audit.events.map(event=>event.action).sort(),['invitation_accepted','invitation_accepted','invitation_created','invitation_created','membership_removed','membership_removed','role_changed'].sort());
+    assert.equal(audit.events.find(event=>event.action==='role_changed').previousRole,'cashier');
+    assert.equal(audit.events.find(event=>event.action==='role_changed').nextRole,'manager');
+    assert.equal(JSON.stringify(audit).includes(invitation.invitationToken),false);
+    await assert.rejects(pool.query('DELETE FROM shop_staff_audit WHERE shop_id=$1',[owner.shopId]),(e)=>e.code==='42501');
+    const revokedInvite=await service.createStaffInvitation(ownerActor,{email:`revoked-${suffix}@example.test`,role:'cashier'});
+    const revokeResponse=await fetch(`${base}/v1/staff/invitations/${revokedInvite.invitationId}?shopId=${owner.shopId}`,{method:'DELETE',headers:{authorization:`Bearer ${owner.token}`}});
+    assert.equal(revokeResponse.status,200);
+    await assert.rejects(service.acceptStaffInvitation({invitationToken:revokedInvite.invitationToken,displayName:'Revoked Staff',password,deviceId:randomUUID(),deviceLabel:'Revoked Device'}),(e)=>e instanceof ApiError&&e.status===401);
+    const finalAudit=await service.shopStaffAudit(ownerActor);
+    assert.ok(finalAudit.events.some(event=>event.action==='invitation_revoked'));
+  } finally {
+    if(server) await new Promise(resolve=>server.close(resolve));
+    if(owner) await withTransaction(admin,async(c)=>{
+      await c.query("SELECT set_config('app.current_shop',$1,true)",[owner.shopId]);
+      await c.query('DELETE FROM sessions WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM shop_staff_audit WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM staff_invitations WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM devices WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM shop_memberships WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM sync_conflicts WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM sync_events WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM shops WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM businesses WHERE business_id=$1',[owner.businessId]);
+      await c.query('DELETE FROM users WHERE user_id=ANY($1::uuid[])',[[owner.userId,...(staffUserId?[staffUserId]:[])]]);
+    });
+    await cleanupEnrollment(admin,existingAccount);
+    await pool.end(); await admin.end();
+  }
+});
+
 test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its bearer session', { skip: !connection }, async()=>{
   const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool); const server=createApiServer(service); const deviceId=randomUUID(); let enrollment;
   await new Promise((resolve)=>server.listen(0,'127.0.0.1',resolve));

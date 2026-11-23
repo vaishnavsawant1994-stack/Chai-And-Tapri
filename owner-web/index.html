@@ -64,6 +64,7 @@
           <button id="profit-tab" class="nav-tab" type="button" aria-current="false">Profit readiness</button>
           <button id="audit-tab" class="nav-tab" type="button" aria-current="false">Accepted event history</button>
           <button id="shifts-tab" class="nav-tab" type="button" aria-current="false">Shift &amp; drawer sessions</button>
+          <button id="staff-tab" class="nav-tab" type="button" aria-current="false">Staff access</button>
         </nav>
         <section id="overview-view">
         <div id="metrics" class="metrics" aria-live="polite"></div>
@@ -189,6 +190,42 @@
           <div class="table-wrap"><table><thead><tr><th scope="col">Opaque session ID</th><th scope="col">Session type</th><th scope="col">Opened (device time)</th><th scope="col">State</th><th scope="col">Opening cash</th><th scope="col">Expected cash (device-reported)</th><th scope="col">Counted cash</th><th scope="col">Reported variance</th></tr></thead><tbody id="shifts-rows"></tbody></table></div>
           <section class="panel evidence-panel" aria-labelledby="shifts-evidence-heading"><h3 id="shifts-evidence-heading">Identity and reconciliation limits</h3><ul id="shifts-evidence-list"></ul></section>
           <p id="shifts-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="staff-view" class="hidden" aria-labelledby="staff-heading">
+          <div class="section-heading"><div><p class="eyebrow">SHOP MEMBERSHIPS</p><h2 id="staff-heading">Staff access</h2></div></div>
+          <p class="scope-note">Invite a person as a manager or cashier. The one-time invite secret is shown only at creation; share it through a trusted channel. Email ownership is not verified. These server roles do not yet define per-command Android permissions or prove who performed an offline action.</p>
+          <section class="panel" aria-labelledby="invite-heading">
+            <h3 id="invite-heading">Invite staff</h3>
+            <form id="staff-invite-form">
+              <div class="field-pair">
+                <label>Account email<input id="staff-invite-email" type="email" required maxlength="254" autocomplete="off"></label>
+                <label>Role<select id="staff-invite-role"><option value="cashier">Cashier</option><option value="manager">Manager</option></select></label>
+              </div>
+              <button id="staff-invite-submit" class="primary" type="submit">Create one-time invitation</button>
+            </form>
+            <p id="staff-invite-status" class="status" role="status" aria-live="polite"></p>
+            <div id="staff-invite-result" class="invite-result hidden" aria-live="polite">
+              <strong>One-time invitation secret</strong>
+              <code id="staff-invite-token"></code>
+              <p id="staff-invite-limits" class="muted"></p>
+              <button id="staff-invite-copy" class="secondary" type="button">Copy secret</button>
+            </div>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="members-heading">
+            <h3 id="members-heading">Current members</h3>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Account email</th><th scope="col">Role</th><th scope="col">Member since</th><th scope="col">Actions</th></tr></thead><tbody id="staff-member-rows"></tbody></table></div>
+            <p id="staff-members-status" class="status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="invitations-heading">
+            <h3 id="invitations-heading">Invitations</h3>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Email (unverified)</th><th scope="col">Role</th><th scope="col">State</th><th scope="col">Expires</th><th scope="col">Action</th></tr></thead><tbody id="staff-invitation-rows"></tbody></table></div>
+            <p id="staff-invitations-status" class="status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="staff-audit-heading">
+            <h3 id="staff-audit-heading">Membership event history</h3>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Time (server)</th><th scope="col">Action</th><th scope="col">Actor ID</th><th scope="col">Target ID</th><th scope="col">Role change</th></tr></thead><tbody id="staff-audit-rows"></tbody></table></div>
+            <p id="staff-audit-status" class="status" role="status" aria-live="polite"></p>
+          </section>
         </section>
       </section>
       <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>

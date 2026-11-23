@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { ApiError } from './service.mjs';
 
 const json = (res,status,body) => { res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}); res.end(JSON.stringify(body)); };
+const hasExactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const ownerAssets = new Map([
   ['/owner/', ['../../owner-web/index.html', 'text/html; charset=utf-8']],
   ['/owner/index.html', ['../../owner-web/index.html', 'text/html; charset=utf-8']],
@@ -37,12 +39,54 @@ export function createApiServer(service) {
       if(req.method==='GET'&&ownerAssets.has(url.pathname)) return await serveOwnerAsset(url.pathname,res);
       if(req.method==='POST'&&url.pathname==='/v1/register') return json(res,201,await service.register(await readBody(req)));
       if(req.method==='POST'&&url.pathname==='/v1/login') return json(res,200,await service.login(await readBody(req)));
+      if(req.method==='POST'&&url.pathname==='/v1/staff/accept-invitation') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['invitationToken','displayName','password','deviceId','deviceLabel'])) throw new ApiError(400,'invalid_staff_invitation');
+        return json(res,201,await service.acceptStaffInvitation(body));
+      }
       const token=(req.headers.authorization??'').replace(/^Bearer\s+/i,'');
       if(req.method==='POST'&&url.pathname==='/v1/logout') { await service.logout(token); return json(res,200,{status:'revoked'}); }
       if(req.method==='POST'&&url.pathname==='/v1/sync/events') {
         const body=await readBody(req); const actor=await service.authenticate(token,body.shopId);
         const result=await service.submitEvents(actor,body.events);
         const conflict=result.results.some(x=>x.status==='conflict'); return json(res,conflict?409:200,result);
+      }
+      if(url.pathname==='/v1/staff/members'&&req.method==='GET') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopStaffMembers(actor));
+      }
+      if(url.pathname==='/v1/staff/invitations'&&req.method==='GET') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopStaffInvitations(actor));
+      }
+      if(url.pathname==='/v1/staff/audit'&&req.method==='GET') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopStaffAudit(actor));
+      }
+      if(url.pathname==='/v1/staff/invitations'&&req.method==='POST') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','email','role'])) throw new ApiError(400,'invalid_staff_invitation');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,201,await service.createStaffInvitation(actor,body));
+      }
+      const invitationMatch=url.pathname.match(/^\/v1\/staff\/invitations\/([0-9a-f-]+)$/i);
+      if(invitationMatch&&req.method==='DELETE') {
+        const actor=await service.authenticate(token,url.searchParams.get('shopId'));
+        return json(res,200,await service.revokeStaffInvitation(actor,invitationMatch[1]));
+      }
+      const memberMatch=url.pathname.match(/^\/v1\/staff\/members\/([0-9a-f-]+)$/i);
+      if(memberMatch&&req.method==='PATCH') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','role'])) throw new ApiError(400,'invalid_staff_member_update');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,200,await service.setStaffMemberRole(actor,memberMatch[1],body.role));
+      }
+      if(memberMatch&&req.method==='DELETE') {
+        const actor=await service.authenticate(token,url.searchParams.get('shopId'));
+        return json(res,200,await service.removeStaffMember(actor,memberMatch[1]));
       }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/overview') {
         const shopId=url.searchParams.get('shopId');
