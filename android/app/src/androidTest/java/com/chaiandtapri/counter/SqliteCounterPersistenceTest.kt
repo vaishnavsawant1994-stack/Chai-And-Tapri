@@ -598,8 +598,14 @@ class SqliteCounterPersistenceTest {
                     fun activate(node: AccessibilityNodeInfo?): Boolean {
                         if (node == null) return false
                         val text = node.text?.toString().orEmpty()
-                        if (text.startsWith(prefix, ignoreCase = true) && node.isClickable && node.isEnabled &&
-                            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                        if (text.startsWith(prefix, ignoreCase = true)) {
+                            var target: AccessibilityNodeInfo? = node
+                            while (target != null) {
+                                if (target.isClickable && target.isEnabled &&
+                                    target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                                target = target.parent
+                            }
+                        }
                         for (index in 0 until node.childCount) if (activate(node.getChild(index))) return true
                         return false
                     }
@@ -2517,7 +2523,24 @@ class SqliteCounterPersistenceTest {
                 throw AssertionError("Procurement UI node not found: prefix=$prefix hint=$hintPart; UI=$labels")
             }
             fun click(prefix: String) {
-                assertTrue("Could not click procurement control '$prefix'", findNode(prefix = prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                repeat(120) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun activate(node: AccessibilityNodeInfo?): Boolean {
+                        if (node == null) return false
+                        if (node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) {
+                            var target: AccessibilityNodeInfo? = node
+                            while (target != null) {
+                                if (target.isClickable && target.isEnabled && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                                target = target.parent
+                            }
+                        }
+                        for (index in 0 until node.childCount) if (activate(node.getChild(index))) return true
+                        return false
+                    }
+                    if (activate(root)) return
+                    Thread.sleep(100)
+                }
+                assertTrue("Could not click procurement control '$prefix' or its clickable parent", false)
             }
             fun clickNodeOrClickableParent(node: AccessibilityNodeInfo) {
                 var candidate: AccessibilityNodeInfo? = node
