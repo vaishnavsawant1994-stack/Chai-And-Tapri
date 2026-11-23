@@ -2,7 +2,7 @@
 
 ## Current continuation — CT-13/14 catalogue-to-Quick Sale — 23 November 2026
 
-API 37 instrumentation passed 1/1 for creating a synthetic product through the owner catalogue UI, explicitly confirming ₹12.50 price, recording a five-unit opening count, and selling one unit through native Quick Sale for staff-declared cash. Persisted assertions cover order amount, stock balance, linked `quick_sale` movement, cash ledger entry and product audit event. Kotlin JVM 68/68; debug/instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is a single connected UI slice, not full module qualification. See `CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
+API 37 instrumentation passed 1/1 for creating a synthetic product through the owner catalogue UI, explicitly confirming ₹12.50 price, recording a five-unit opening count, editing aliases/favourite, finding it by alias in Quick Sale, and selling one unit for staff-declared cash. Persisted assertions cover order amount, stock balance, linked `quick_sale` movement, cash ledger entry and product audit event. Kotlin JVM 68/68; debug/instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is a single connected UI slice, not full module qualification. See `CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
 
 ## CAT-052 outbox recovery across instrumentation-process termination - 22 November 2026
 

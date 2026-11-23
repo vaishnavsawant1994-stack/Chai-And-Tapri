@@ -10,8 +10,9 @@ Instrumentation test `catalogueUiCreatesConfirmedProductAndQuickSalePostsItsConf
 1. Open the owner-protected Products & Prices screen.
 2. Create synthetic product `e2e_lemon_chai` (`E2E Lemon Chai`, category `Chai`) at ₹12.50 and explicitly confirm that price.
 3. Record an audited physical opening count of five units with a reason.
-4. Open native Quick Sale, select the new catalogue product, and record a cash checkout.
-5. Reopen the persisted snapshot and verify the ₹12.50 order, four units remaining, a single `quick_sale` movement of −1 linked to that order, and a `staff_declared` cash collection. The audit history includes the product change.
+4. Edit the product in the catalogue UI, save the aliases `lemon` and `nimbu chai`, and mark it as a favourite.
+5. Open native Quick Sale, find the product using the `nimbu` alias, and record a cash checkout.
+6. Reopen the persisted snapshot and verify the ₹12.50 order, four units remaining, a single `quick_sale` movement of −1 linked to that order, and a `staff_declared` cash collection. The audit history includes the product changes.
 
 The test uses an isolated synthetic database and deletes it after assertions. It does not use real shop/customer data.
 
@@ -26,4 +27,4 @@ The test uses an isolated synthetic database and deletes it after assertions. It
 
 ## Qualification limits
 
-This verifies one owner-created product and cash sale path on the API 37 emulator. It does not qualify every editor validation/error path, staff role policy, product price history/approval, payment choices, scanner decoding, accessibility/manual usability, the full CT-06/CT-13/CT-14 screens, real hardware, or shop use. Overall six-wave and production status remain incomplete.
+This verifies one owner-created product, editor alias/favourite update, alias search and cash sale path on the API 37 emulator. It does not qualify every editor validation/error path, staff role policy, product price history/approval, other payment choices, scanner decoding, accessibility/manual usability, the full CT-06/CT-13/CT-14 screens, real hardware, or shop use. Overall six-wave and production status remain incomplete.

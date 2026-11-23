@@ -2,7 +2,7 @@
 
 ## Latest continuation — CT-13/14 catalogue-to-Quick Sale workflow — 23 November 2026
 
-Added an API 37 instrumentation journey through the native owner UI: create a synthetic catalogue product at ₹12.50, explicitly confirm the price, record an audited five-unit opening count, then create a cash Quick Sale. Persisted state verifies a ₹12.50 order, stock 4, one linked −1 `quick_sale` movement, and staff-declared cash. Focused test passed 1/1; Kotlin JVM 68/68; debug and instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is one connected workflow, not full product catalogue or CT-06 qualification. Details: `specs/CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
+Added an API 37 instrumentation journey through the native owner UI: create a synthetic catalogue product at ₹12.50, explicitly confirm the price, record an audited five-unit opening count, update aliases/favourite through the editor, find it by alias in Quick Sale, and record a cash checkout. Persisted state verifies a ₹12.50 order, stock 4, one linked −1 `quick_sale` movement, and staff-declared cash. Focused test passed 1/1; Kotlin JVM 68/68; debug and instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is one connected workflow, not full product catalogue or CT-06 qualification. Details: `specs/CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
 
 ## Latest continuation — Wave 5 Mode C camera-to-cart path — 23 November 2026
 

@@ -5,7 +5,7 @@
 
 ## Current continuation — CT-13/14 catalogue-to-Quick Sale — 23 November 2026
 
-The native owner UI now has a tested connected path to a Quick Sale: create a synthetic catalogue item, confirm its ₹12.50 price, save a five-unit physical count, and record a cash sale. Persisted state showed four units, one linked `quick_sale` movement, a ₹12.50 order and staff-declared cash. Focused API 37 test 1/1; Kotlin JVM 68/68; APK build tasks passed; lint 0 errors / 175 warnings. This does not complete CT-06 or CT-13/14. Detailed evidence: [`CT-13/14 workflow report`](CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md). The six-wave product and production qualification remain incomplete.
+The native owner UI now has a tested connected path to a Quick Sale: create a synthetic catalogue item, confirm its ₹12.50 price, save a five-unit physical count, edit aliases/favourite, find the item by alias, and record a cash sale. Persisted state showed four units, one linked `quick_sale` movement, a ₹12.50 order and staff-declared cash. Focused API 37 test 1/1; Kotlin JVM 68/68; APK build tasks passed; lint 0 errors / 175 warnings. This does not complete CT-06 or CT-13/14. Detailed evidence: [`CT-13/14 workflow report`](CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md). The six-wave product and production qualification remain incomplete.
 
 ## Verified in this continuation
 

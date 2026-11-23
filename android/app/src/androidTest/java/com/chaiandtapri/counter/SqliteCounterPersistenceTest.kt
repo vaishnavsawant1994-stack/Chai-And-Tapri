@@ -3804,6 +3804,20 @@ class SqliteCounterPersistenceTest {
                 assertTrue("Catalogue UI should persist the explicit opening-stock confirmation", verified.isStockConfirmed("e2e_lemon_chai"))
                 assertEquals(5, verified.stockLevels()["e2e_lemon_chai"])
             }
+            tap(await(text = "Edit E2E Lemon Chai"))
+            set("Voice/search aliases, comma separated", "lemon, nimbu chai")
+            tap(await(text = "Favourite shortcut"))
+            tap(await(text = "Save"))
+            val editDeadline = android.os.SystemClock.elapsedRealtime() + 10_000
+            var aliasSaved = false
+            while (!aliasSaved && android.os.SystemClock.elapsedRealtime() < editDeadline) {
+                aliasSaved = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { store ->
+                    val product = store.products().single { it.productId == "e2e_lemon_chai" }
+                    product.aliases == listOf("lemon", "nimbu chai") && product.favorite
+                }
+                if (!aliasSaved) Thread.sleep(100)
+            }
+            assertTrue("Catalogue editor alias and favourite changes should persist", aliasSaved)
         } finally {
             instrumentation.runOnMainSync { catalogue.finish() }
             instrumentation.waitForIdleSync()
@@ -3833,6 +3847,11 @@ class SqliteCounterPersistenceTest {
             fun tapSale(prefix: String) {
                 assertTrue("Could not activate Quick Sale control: $prefix", awaitSaleNode(prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
             }
+            val search = awaitSaleNode("Search product, category or alias")
+            val searchArgs = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "nimbu")
+            }
+            assertTrue("Quick Sale should accept product alias search", search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, searchArgs))
             tapSale("E2E Lemon Chai")
             awaitSaleNode("1 × E2E Lemon Chai")
             tapSale("Checkout")
