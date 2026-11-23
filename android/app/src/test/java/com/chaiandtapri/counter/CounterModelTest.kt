@@ -169,6 +169,10 @@ class CounterModelTest {
         private val products = linkedMapOf<String, TapriProduct>()
         private val profiles = linkedMapOf<String, CustomerProfile>()
         override fun load() = state
+        override fun loadAuditRecords(): List<AuditRecord> = state?.auditEvents.orEmpty().map { event ->
+            val commandId = event.substringBefore(' ')
+            AuditRecord(commandId, commandId, event, 1L)
+        }
         override fun loadProducts() = products.values.toList()
         override fun saveProduct(product: TapriProduct, commandId: String): Boolean { products[product.productId] = product; return true }
         override fun loadCustomerProfiles() = profiles.values.toList()
@@ -180,6 +184,28 @@ class CounterModelTest {
             lastSyncPayload = syncPayload
             return true
         }
+    }
+
+    @Test fun busyCounterEstimateIsAuditedAndNeverChangesRecordedBusinessTotals() {
+        val persistence = MemoryPersistence()
+        val model = CounterModel(persistence)
+        val summaryBefore = model.localBusinessSummary()
+        val ordersBefore = model.allOrders()
+        val stockBefore = model.stockMovements()
+        val paymentsBefore = model.paymentHistory()
+
+        assertTrue(model.recordUnitemizedSalesEstimate(875, "Rush period count", "estimate-001").contains("estimate only"))
+        assertEquals(summaryBefore, model.localBusinessSummary())
+        assertEquals(ordersBefore, model.allOrders())
+        assertEquals(stockBefore, model.stockMovements())
+        assertEquals(paymentsBefore, model.paymentHistory())
+        assertEquals("Duplicate command ignored.", model.recordUnitemizedSalesEstimate(875, "Rush period count", "estimate-001"))
+        assertTrue(model.recordUnitemizedSalesEstimate(0, "Rush period count", "estimate-invalid").contains("No estimate saved"))
+
+        val reopened = CounterModel(persistence)
+        assertEquals(listOf(UnitemizedSalesEstimate("estimate-001", 875, "Rush period count", 1L)), reopened.unitemizedSalesEstimates())
+        assertEquals(summaryBefore, reopened.localBusinessSummary())
+        assertTrue(reopened.auditEvents().single().contains("classification=estimated amount=875p"))
     }
 
     @Test fun lowStockAlertsRequireAConfiguredThresholdAndConfirmedPhysicalCount() {

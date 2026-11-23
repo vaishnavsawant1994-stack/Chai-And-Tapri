@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Progress Audit
 
+## Latest continuation — CT-28 busy-counter estimate capture — 23 November 2026
+
+Daily Closing now captures unitemized values as explicitly labeled estimates with a reason and confirmation. The encrypted audit event is idempotent and does not affect orders, recorded collections, stock, expenses, cash close, or profit. JVM test passed; focused API 37 UI test passed 1/1; Kotlin JVM 69/69; APK builds passed; lint 0 errors/176 warnings. Estimates remain local-only; Mode D and CT-28 remain partial. See [report](CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md).
+
 **Date:** 23 November 2026  
 **Scope:** Current-source CAT-051B synthetic recovery replay and latest dashboard export slice. This audit updates selected evidence; it does not replace the broader module/screen assessment in the 22 November audit.
 

@@ -13,6 +13,9 @@ import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /** CT-28 review for a completed drawer session. This is not yet a calendar-day accounting report. */
 class DailyClosingActivity : Activity() {
@@ -69,6 +72,13 @@ class DailyClosingActivity : Activity() {
             content.addView(label("Daily Closing | CT-28", 24f))
             content.addView(label("Closing review is scoped to a closed cash-drawer session. Calendar-day sales totals, unlinked cash activity and verified UPI settlement are not available here.", 14f))
             status = label("", 14f); content.addView(status)
+            content.addView(label("Busy-counter estimates", 18f))
+            content.addView(label("These amounts are operator estimates only. They do not create sales, collections, stock movements, or profit and remain separate from verified records.", 14f))
+            content.addView(button("Record unitemized sales estimate") { estimateDialog(current) })
+            current.unitemizedSalesEstimates().take(10).forEach { estimate ->
+                val whenRecorded = if (estimate.recordedAtEpochMs > 0) time(estimate.recordedAtEpochMs) else "time unavailable"
+                content.addView(label("ESTIMATED · ${money(estimate.amountPaise.toLong())} · $whenRecorded\nReason: ${estimate.reason}\nNot recorded sales or a collection", 14f))
+            }
             val active = current.activeCashDrawer()
             if (active != null) {
                 content.addView(label("A drawer session is still open. Close and count it before reviewing that session.", 16f))
@@ -93,6 +103,46 @@ class DailyClosingActivity : Activity() {
             content.addView(label("Screen error: ${error.javaClass.simpleName}", 14f))
             content.addView(button("Retry") { render() })
         }
+    }
+
+    private fun estimateDialog(current: CounterModel) {
+        val amount = EditText(this).apply {
+            hint = "Unitemized estimate in rupees"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setSingleLine(true)
+        }
+        val reason = EditText(this).apply {
+            hint = "Reason for estimate (4 to 120 characters)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 2
+            filters = arrayOf(android.text.InputFilter.LengthFilter(120))
+        }
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 4, 20, 0); addView(amount); addView(reason) }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Record estimated amount")
+            .setMessage("Use only to note a busy-counter amount that was not itemized. This stays classified as an estimate and will not be added to actual sales or collections.")
+            .setView(form).setNegativeButton("Cancel", null).setPositiveButton("Review estimate", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val paise = runCatching { BigDecimal(amount.text.toString().trim()).movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).intValueExact() }.getOrNull()
+                val note = reason.text.toString().trim()
+                if (paise == null || paise !in 1..100_000_000) { amount.error = "Enter a positive amount with at most two decimals"; return@setOnClickListener }
+                if (note.length !in 4..120) { reason.error = "Enter a reason between 4 and 120 characters"; return@setOnClickListener }
+                dialog.dismiss()
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm estimate only")
+                    .setMessage("Save ${money(paise.toLong())} as an unitemized estimate? This will not change actual sales, collections, inventory, profit, or cash reconciliation.")
+                    .setNegativeButton("Go back", null)
+                    .setPositiveButton("Save estimate only") { _, _ ->
+                        status.text = "Saving estimate in encrypted audit history…"
+                        RecoveryExecutor.executor.execute {
+                            val result = current.recordUnitemizedSalesEstimate(paise, note, "busy-counter-estimate-${UUID.randomUUID()}")
+                            runOnUiThread { if (!destroyed) { status.text = result; render() } }
+                        }
+                    }.show()
+            }
+        }
+        dialog.show()
     }
 
     private fun renderSession(current: CounterModel, session: CashDrawerSession) {

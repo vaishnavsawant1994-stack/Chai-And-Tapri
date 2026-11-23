@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-28 busy-counter estimate capture — 23 November 2026
+
+Daily Closing now accepts an unitemized estimate with a reason and confirmation, saves it as an idempotent encrypted audit event, and displays it separately. It does not create actual sales, collections, stock, expense, cash or profit records. JVM test passed; focused API 37 UI test passed 1/1; Kotlin JVM 69/69; APK builds passed; lint 0 errors/176 warnings. The estimate is local-only and CT-28/Mode D remain partial. See `specs/CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-11/CT-12 split-tender refund — 23 November 2026
 
 Sales History → Refund now has a synthetic API 37 UI test for split-tender allocation. On a ₹24 order funded by ₹5 cash and ₹19 Udhar, a ₹12 item refund reversed receivable first. An additional ₹8 amount correction reversed the remaining ₹7 credit and required explicit staff confirmation for the final ₹1 cash payout. Final: ₹20 refunded, ₹4 net cash, no credit/due, and no restock. Focused instrumentation passed 1/1; Kotlin JVM 68/68; APK builds passed; lint 0 errors/175 warnings. CT-11/12 remain partial; cash is staff-declared, and this is not production qualification. See `specs/CT-11-12-SPLIT-TENDER-REFUND-REPORT-2026-11-23.md`.

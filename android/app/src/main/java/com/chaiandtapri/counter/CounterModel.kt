@@ -41,6 +41,7 @@ data class LocalBusinessSummary(
     val productCount: Int,
     val stockConfirmedProductCount: Int
 )
+data class UnitemizedSalesEstimate(val commandId: String, val amountPaise: Int, val reason: String, val recordedAtEpochMs: Long)
 
 /** Native transaction prototype. A configured store persists commands atomically; this remains a subset of CAT-047. */
 class CounterModel(private val persistence: CounterPersistence? = null, private val returnableProducts: Set<String> = emptySet(), private val requireConfiguredProducts: Boolean = false) : AutoCloseable {
@@ -251,6 +252,30 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     }
     fun auditEvents(): List<String> = events.toList()
     fun auditRecords(): List<AuditRecord> = persistence?.loadAuditRecords().orEmpty()
+    fun unitemizedSalesEstimates(): List<UnitemizedSalesEstimate> = auditRecords().mapNotNull { record ->
+        val prefix = "busy_counter.estimate classification=estimated "
+        val normalizedEvent = record.event.removePrefix("${record.commandId} ")
+        if (!normalizedEvent.startsWith(prefix)) return@mapNotNull null
+        val fields = normalizedEvent.removePrefix(prefix)
+        val amount = fields.substringAfter("amount=", "").substringBefore(' ').removeSuffix("p").toIntOrNull()
+            ?: return@mapNotNull null
+        val reason = fields.substringAfter("reason=", "").trim()
+        if (amount <= 0 || reason.isBlank()) return@mapNotNull null
+        UnitemizedSalesEstimate(record.commandId, amount, reason, record.createdAtEpochMs)
+    }.asReversed()
+    /** Stores an explicitly estimated, unitemized amount in the audit journal only. It is never a sale or collection. */
+    fun recordUnitemizedSalesEstimate(amountPaise: Int, reason: String, commandId: String = java.util.UUID.randomUUID().toString()): String {
+        if (persistence == null) return "Busy-counter estimates require encrypted local storage. No estimate saved."
+        if (commandId.isBlank()) return "Estimate command ID is required. No estimate saved."
+        if (commandId in appliedCommandIds) return "Duplicate command ignored."
+        val note = reason.trim().replace(Regex("[\\r\\n\\t]+"), " ").replace(Regex("\\s{2,}"), " ")
+        if (amountPaise !in 1..100_000_000) return "Enter an estimate from ₹0.01 to ₹1,000,000. No estimate saved."
+        if (note.length !in 4..120) return "Enter an estimate reason between 4 and 120 characters. No estimate saved."
+        val before = snapshot()
+        return commitMutation(before, commandId,
+            "Unitemized amount saved as an estimate only: ${money(amountPaise)}. It is not recorded sales or a collection.",
+            "busy_counter.estimate classification=estimated amount=${amountPaise}p reason=$note")
+    }
     fun stockMovements(): List<StockMovement> = movements.toList()
     fun creditBalance(customerId: String): Int = credits.filter { it.customerId == customerId }.sumOf { it.outstandingPaise }
     fun customerCredits(): List<CustomerCredit> = credits.toList()

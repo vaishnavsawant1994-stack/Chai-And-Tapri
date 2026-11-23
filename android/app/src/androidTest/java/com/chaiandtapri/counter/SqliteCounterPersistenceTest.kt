@@ -2803,6 +2803,27 @@ class SqliteCounterPersistenceTest {
             }
             throw AssertionError("Daily closing UI node not found: text=$text class=$className; UI=$labels")
         }
+        fun awaitClosingHint(hint: String): AccessibilityNodeInfo {
+            repeat(120) {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                var found: AccessibilityNodeInfo? = null
+                fun visit(node: AccessibilityNodeInfo?) {
+                    if (node == null) return
+                    if (node.className?.toString() == "android.widget.EditText" && node.hintText?.toString()?.startsWith(hint, ignoreCase = true) == true) found = node
+                    for (index in 0 until node.childCount) visit(node.getChild(index))
+                }
+                visit(root)
+                found?.let { return it }
+                Thread.sleep(100)
+            }
+            throw AssertionError("Daily closing input not found for hint=$hint")
+        }
+        fun setClosingText(node: AccessibilityNodeInfo, value: String) {
+            assertTrue("Daily closing field should accept text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue("Daily closing field text should update", node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+            }))
+        }
         assertTrue(awaitClosingNode(text = "Acknowledge review and note follow-up").performAction(AccessibilityNodeInfo.ACTION_CLICK))
         assertTrue(awaitClosingNode(className = "android.widget.EditText").performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Recount float tomorrow")
@@ -2820,6 +2841,44 @@ class SqliteCounterPersistenceTest {
         assertEquals(paymentsBeforeReview, afterReview.paymentHistory())
         assertEquals(stockBeforeReview, afterReview.stockMovements())
         afterReview.close()
+
+        val beforeEstimate = SqliteCounterPersistence(context).use { it.load()!! }
+        assertTrue(awaitClosingNode(text = "Record unitemized sales estimate").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        setClosingText(awaitClosingHint("Unitemized estimate in rupees"), "8.75")
+        setClosingText(awaitClosingHint("Reason for estimate"), "Rush counter estimate")
+        assertTrue(awaitClosingNode(text = "Review estimate").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        assertTrue(awaitClosingNode(text = "Save estimate only").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        var estimateRendered = false
+        var estimateUi = ""
+        for (attempt in 0 until 100) {
+            val root = instrumentation.uiAutomation.rootInActiveWindow
+            fun visit(node: AccessibilityNodeInfo?) {
+                if (node == null) return
+                val text = node.text?.toString().orEmpty()
+                if (text.isNotEmpty()) estimateUi += "$text | "
+                if (text.contains("ESTIMATED") && text.contains("8.75")) estimateRendered = true
+                for (index in 0 until node.childCount) visit(node.getChild(index))
+            }
+            estimateUi = ""
+            visit(root)
+            if (estimateRendered) break
+            Thread.sleep(100)
+        }
+        assertTrue("Saved estimate should render with an explicit classification; UI=$estimateUi", estimateRendered)
+        val afterEstimate = SqliteCounterPersistence(context).use { it.load()!! }
+        assertEquals("An estimate must not rewrite the order ledger", beforeEstimate.orders, afterEstimate.orders)
+        assertEquals("An estimate must not change stock", beforeEstimate.stock, afterEstimate.stock)
+        assertEquals("An estimate must not create a stock movement", beforeEstimate.stockMovements, afterEstimate.stockMovements)
+        assertEquals("An estimate must not create a payment", beforeEstimate.paymentEntries, afterEstimate.paymentEntries)
+        assertEquals("An estimate must not change expenses", beforeEstimate.expenses, afterEstimate.expenses)
+        assertEquals("An estimate must not change the counted drawer", beforeEstimate.cashDrawerSessions, afterEstimate.cashDrawerSessions)
+        assertTrue(afterEstimate.auditEvents.any { it.contains("busy_counter.estimate classification=estimated amount=875p reason=Rush counter estimate") })
+        val estimateModel = CounterModel(SqliteCounterPersistence(context))
+        val estimateAudit = estimateModel.auditRecords().single { it.event.contains("busy_counter.estimate classification=estimated ") }
+        assertEquals(listOf(UnitemizedSalesEstimate(estimateAudit.commandId, 875, "Rush counter estimate", estimateAudit.createdAtEpochMs)), estimateModel.unitemizedSalesEstimates())
+        assertEquals(reopened.localBusinessSummary(), estimateModel.localBusinessSummary())
+        assertEquals(expectedBeforeReview, estimateModel.expectedCashPaise("closing-open"))
+        estimateModel.close()
         instrumentation.runOnMainSync { activity.finish() }
         reopened.close()
         context.deleteDatabase("chai_tapri_counter.db")

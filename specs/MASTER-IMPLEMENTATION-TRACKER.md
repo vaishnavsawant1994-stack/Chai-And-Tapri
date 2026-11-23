@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Current continuation - CT-28 busy-counter estimate capture - 23 November 2026
+
+Added a Daily Closing estimate-only flow: owner/manager enters an unitemized amount and reason, reviews the explicit `estimated` classification, and confirms. The value is an idempotent encrypted-local audit entry, kept out of actual sales, collections, stock, expenses and profit. Focused API 37 UI test passed 1/1; Kotlin JVM 69/69; debug and instrumentation APK builds passed; lint 0 errors/176 warnings. Estimates are not synchronized or included in full accounting; CT-28 and Mode D remain partial. See [CT-28 estimate report](CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md).
+
 ## Current continuation - CT-11/CT-12 split-tender refund - 23 November 2026
 
 Current-source API 37 UI instrumentation passed 1/1 for a synthetic ₹24 order funded by ₹5 cash and ₹19 customer credit. Returning a delivered ₹12 item allocated to receivable first. A subsequent ₹8 amount correction reversed the remaining ₹7 receivable and required explicit staff confirmation for the final ₹1 cash payout. Final persisted state: refunded ₹20, net collected cash ₹4, credit/due ₹0, no stock restock, audited item return and amount correction. Kotlin JVM suite 68/68; debug/instrumentation APK builds pass; lint 0 errors/175 warnings. The ₹1 cash event is staff-declared, not externally verified. This is one refund allocation path only; CT-11/12 remain partial. See [CT-11/12 report](CT-11-12-SPLIT-TENDER-REFUND-REPORT-2026-11-23.md).
