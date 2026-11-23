@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Current continuation - CT-01/02/05/06 guided first-sale flow - 23 November 2026
+
+CT-05 now presents the owner's next prerequisite based on local setup state and offers Quick Sale only after shop identity, a sellable catalogue, and physical stock confirmation are present. A connected API 37 synthetic UI test passed 1/1 through shop profile, confirmed-price product creation, eight-unit opening count, and a ₹15 cash sale. Persisted encrypted state asserts a staff-declared cash entry, stock 8→7, one order, and one linked stock movement. Kotlin JVM 71/71; build/JVM/instrumentation APK and lint tasks succeeded; lint 0 errors/176 warnings. Early harness issues (active notification shade and ambiguous selector) were corrected; final focused rerun passed. Previous broad Android result 82/120 remains failed and is not qualified. See [workflow report](CT-01-06-GUIDED-FIRST-SALE-REPORT-2026-11-23.md) and ignored JUnit evidence at `../test-evidence/2026-11-23/first-sale-guided-workflow/`.
+
 ## Current continuation - CT-28 busy-counter estimate capture - 23 November 2026
 
 Added a Daily Closing estimate-only flow: owner/manager enters an unitemized amount and reason, reviews the explicit `estimated` classification, and confirms. The value is an idempotent encrypted-local audit entry, kept out of actual sales, collections, stock, expenses and profit. Focused API 37 UI test passed 1/1; Kotlin JVM 69/69; debug and instrumentation APK builds passed; lint 0 errors/176 warnings. Estimates are not synchronized or included in full accounting; CT-28 and Mode D remain partial. See [CT-28 estimate report](CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md).

@@ -1,5 +1,8 @@
 # Chai And Tapri OS â€” Progress Audit
 
+## Latest continuation — CT-01/02/05/06 guided first-sale flow — 23 November 2026
+
+CT-05 now selects the owner's next setup destination from saved shop identity, sellable-product count, and physically confirmed opening stock; once complete it routes to Quick Sale. A connected API 37 synthetic UI test traversed shop profile setup, explicit ₹15 product-price confirmation, an eight-unit physical count, and first cash checkout. Persisted encrypted state contained one ₹15 order, one staff-declared cash entry, stock 8→7, one linked `quick_sale` movement, and product audit history. Focused instrumentation 1/1 passed; Kotlin JVM 71/71; `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` succeeded; lint 0 errors/176 warnings. Node/backend tests were not rerun. Two initial attempts failed at the harness layer (notification shade active; selector hit search field); the corrected final attempt passed. The existing full Android regression remains failed at 82/120 and this focused result does not supersede it. See [report](CT-01-06-GUIDED-FIRST-SALE-REPORT-2026-11-23.md) and ignored XML at `../test-evidence/2026-11-23/first-sale-guided-workflow/`.
 ## Latest continuation — CT-28 busy-counter estimate capture — 23 November 2026
 
 Daily Closing now captures unitemized values as explicitly labeled estimates with a reason and confirmation. The encrypted audit event is idempotent and does not affect orders, recorded collections, stock, expenses, cash close, or profit. JVM test passed; focused API 37 UI test passed 1/1; Kotlin JVM 69/69; APK builds passed; lint 0 errors/176 warnings. Estimates remain local-only; Mode D and CT-28 remain partial. See [report](CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md).

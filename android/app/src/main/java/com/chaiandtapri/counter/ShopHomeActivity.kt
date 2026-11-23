@@ -47,6 +47,16 @@ class ShopHomeActivity : ComponentActivity() {
             content.addView(label("${if (profile.shopName.isNotBlank()) "✓" else "○"} Shop identity${if (profile.shopName.isNotBlank()) " · ${profile.businessType}" else " · needs setup"}", 14f))
             content.addView(label("${if (summary.productCount > 0) "✓" else "○"} Sellable products · ${summary.productCount}", 14f))
             content.addView(label("${if (summary.productCount > 0 && summary.stockConfirmedProductCount == summary.productCount) "✓" else "○"} Physical opening stock · ${summary.stockConfirmedProductCount}/${summary.productCount} products confirmed", 14f))
+            if (LocalSessionState.isOwner) {
+                val setupAction = FirstSaleSetupAction.next(profile.shopName, summary.productCount, summary.stockConfirmedProductCount)
+                val destination = when (setupAction) {
+                    FirstSaleSetupAction.SET_SHOP_IDENTITY -> ShopSetupActivity::class.java
+                    FirstSaleSetupAction.ADD_PRODUCTS -> ProductCatalogueActivity::class.java
+                    FirstSaleSetupAction.CONFIRM_OPENING_STOCK -> StockCountActivity::class.java
+                    FirstSaleSetupAction.START_SELLING -> QuickSaleActivity::class.java
+                }
+                content.addView(button(setupAction.buttonLabel) { startActivity(Intent(this, destination)) })
+            }
             if (LocalSessionState.isOwner && profile.shopName.isBlank()) {
                 content.addView(button("Set up shop identity") { startActivity(Intent(this, ShopSetupActivity::class.java)) })
             }

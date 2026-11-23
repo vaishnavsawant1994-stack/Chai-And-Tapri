@@ -1885,6 +1885,136 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun ownerCanCompleteGuidedSetupAndRecordFirstSaleFromShopHome() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("First Sale Owner")
+        val setupMonitor = instrumentation.addMonitor(ShopSetupActivity::class.java.name, null, false)
+        val catalogueMonitor = instrumentation.addMonitor(ProductCatalogueActivity::class.java.name, null, false)
+        val stockMonitor = instrumentation.addMonitor(StockCountActivity::class.java.name, null, false)
+        val saleMonitor = instrumentation.addMonitor(QuickSaleActivity::class.java.name, null, false)
+        var home: ShopHomeActivity? = null
+        var setup: ShopSetupActivity? = null
+        var catalogue: ProductCatalogueActivity? = null
+        var stock: StockCountActivity? = null
+        var sale: QuickSaleActivity? = null
+        try {
+            runCatching { instrumentation.uiAutomation.executeShellCommand("cmd statusbar collapse").close() }
+            Thread.sleep(500)
+            fun find(text: String? = null, hint: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun walk(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if ((text != null && node.text?.toString()?.startsWith(text, ignoreCase = true) == true) ||
+                        (hint != null && node.hintText?.toString() == hint)) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { walk(it)?.let { found -> return found } }
+                    return null
+                }
+                return walk(root)
+            }
+            fun await(text: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(150) { find(text, hint)?.let { return it }; Thread.sleep(100) }
+                val labels = mutableListOf<String>()
+                fun collect(node: AccessibilityNodeInfo?) {
+                    if (node == null) return
+                    node.text?.toString()?.takeIf(String::isNotBlank)?.let(labels::add)
+                    for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                }
+                collect(instrumentation.uiAutomation.rootInActiveWindow)
+                throw AssertionError("First-sale workflow control not found: text=$text hint=$hint; UI=${labels.joinToString(" | ")}")
+            }
+            fun tap(text: String) {
+                val node = await(text = text)
+                assertTrue("Could not activate $text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            fun set(hint: String, value: String) {
+                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
+                assertTrue("Could not enter $hint", await(hint = hint).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args))
+            }
+
+            home = instrumentation.startActivitySync(Intent(context, ShopHomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as? ShopHomeActivity
+            assertNotNull("Shop Home should open for an authenticated owner", home)
+            tap("Continue setup · shop identity")
+            setup = setupMonitor.waitForActivityWithTimeout(15_000) as? ShopSetupActivity
+            assertNotNull("Home should route the owner to shop identity setup", setup)
+            set("For example, Shree Tea Corner", "First Sale Tapri")
+            tap("Save and configure products")
+            catalogue = catalogueMonitor.waitForActivityWithTimeout(15_000) as? ProductCatalogueActivity
+            assertNotNull("A saved shop profile should open the catalogue", catalogue)
+
+            tap("Add product")
+            set("Stable product ID, e.g. bun_maska", "first_sale_cutting_chai")
+            set("Product name", "First Sale Cutting Chai")
+            set("Category", "Chai")
+            set("Actual selling price in ₹", "15.00")
+            tap("I confirm this is the shop's actual price")
+            tap("Save")
+            val productTitle = await(text = "First Sale Cutting Chai · Chai")
+            var productCard: AccessibilityNodeInfo? = productTitle.parent
+            var countAction: AccessibilityNodeInfo? = null
+            repeat(6) {
+                val parent = productCard ?: return@repeat
+                if (countAction != null) return@repeat
+                fun search(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if (node.text?.toString()?.startsWith("Confirm physical opening stock", true) == true) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { search(it)?.let { found -> return found } }
+                    return null
+                }
+                countAction = search(parent)
+                if (countAction == null) productCard = parent.parent
+            }
+            assertNotNull("New product card should offer an actual opening count", countAction)
+            assertTrue(countAction!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            set("Physical quantity counted (0 to 100000)", "8")
+            set("Count note / reason (at least 4 characters)", "synthetic first stock count")
+            tap("Save physical count")
+            repeat(100) {
+                val ready = SqliteCounterPersistence(context).use { store ->
+                    val state = store.load()
+                    state?.stockConfirmedProductIds?.contains("first_sale_cutting_chai") == true &&
+                        state.stock["first_sale_cutting_chai"] == 8
+                }
+                if (ready) return@repeat
+                Thread.sleep(100)
+            }
+
+            instrumentation.runOnMainSync { catalogue?.finish(); setup?.finish() }
+            assertNotNull("Home should reopen after setup", home)
+            tap("Start selling · Quick Sale")
+            sale = saleMonitor.waitForActivityWithTimeout(15_000) as? QuickSaleActivity
+            assertNotNull("A ready setup should open the native Quick Sale screen", sale)
+            val search = await(hint = "Search product, category or alias")
+            val query = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "First Sale Cutting Chai") }
+            assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, query))
+            tap("FIRST SALE CUTTING CHAI · ₹15.00")
+            await(text = "1 × First Sale Cutting Chai")
+            tap("Checkout")
+            tap("Cash received")
+
+            var saved: CounterSnapshot? = null
+            repeat(100) {
+                val current = SqliteCounterPersistence(context).use { it.load() }
+                if (current?.orders?.any { order -> order.lines.any { it.productId == "first_sale_cutting_chai" } } == true) saved = current
+                if (saved != null) return@repeat
+                Thread.sleep(100)
+            }
+            assertNotNull("First sale should persist after guided onboarding", saved)
+            val state = saved!!
+            val firstOrder = state.orders.single { it.lines.any { line -> line.productId == "first_sale_cutting_chai" } }
+            assertEquals(1500, firstOrder.lines.sumOf { it.quantity * it.unitPricePaise })
+            assertEquals(Payment.STAFF_DECLARED, firstOrder.payment)
+            assertEquals(7, state.stock.getValue("first_sale_cutting_chai"))
+            assertEquals("staff_declared", state.paymentEntries.single { it.orderNumber == firstOrder.number && it.method == "cash" }.status)
+            assertEquals(1, state.stockMovements.count { it.productId == "first_sale_cutting_chai" && it.orderNumber == firstOrder.number && it.reason == "quick_sale" })
+            assertTrue(state.auditEvents.any { it.contains("first_sale_cutting_chai") })
+        } finally {
+            listOf(setupMonitor, catalogueMonitor, stockMonitor, saleMonitor).forEach(instrumentation::removeMonitor)
+            instrumentation.runOnMainSync { sale?.finish(); stock?.finish(); catalogue?.finish(); setup?.finish(); home?.finish(); LocalSessionState.clear() }
+            Thread.sleep(300)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun businessAlertsUseLocalRecordsAndDiscloseUnavailableAlertClasses() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

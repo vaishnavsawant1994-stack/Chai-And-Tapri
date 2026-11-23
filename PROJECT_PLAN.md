@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-01/02/05/06 guided first sale — 23 November 2026
+
+Shop Home now selects the owner's next setup action from persisted shop identity, configured products, and physically confirmed stock; once all prerequisites are complete it routes to Quick Sale. A connected synthetic Android UI test covered profile → confirmed-price product → physical count → ₹15 staff-declared cash sale. API 37 focused instrumentation passed 1/1; Kotlin JVM 71/71; debug/JVM/instrumentation APK build and lint task group succeeded; lint 0 errors/176 warnings. Persisted state verified one order, one cash event, stock 8→7, and exactly one linked sale movement. This is focused workflow evidence only; the prior 120-test broad run (82 pass/38 fail) remains failed. Details: `specs/CT-01-06-GUIDED-FIRST-SALE-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-01/02/05 first-sale setup — 23 November 2026
 
 First owner enrollment now opens Shop Setup; successful profile save can continue into the actual product catalogue; Shop Home displays local setup status and routes owners to missing opening-stock count. Three focused API 37 journeys passed individually (1/1 each). Android JVM tests passed 69/69; `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` succeeded with 0 lint errors / 176 warnings. No full connected regression was run for this change; Node/backend suites were not rerun. Report and XML evidence: `specs/CT-01-02-05-FIRST-SALE-SETUP-REPORT-2026-11-23.md` and `test-evidence/2026-11-23/ct01-02-first-sale-onboarding/`. This advances onboarding only; the first sale still depends on owner-configured prices and a confirmed physical count. The six-wave product remains incomplete.
