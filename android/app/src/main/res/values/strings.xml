@@ -1,3 +1,4 @@
 <resources>
     <string name="stock_movement_results">Showing %1$d of %2$d recorded movements</string>
+    <string name="cash_count_invalid">Enter valid whole note and coin counts up to the drawer limit. No drawer was closed.</string>
 </resources>

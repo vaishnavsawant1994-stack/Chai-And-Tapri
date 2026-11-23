@@ -2614,6 +2614,75 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun denominationCashCountClosesDrawerWithoutChangingSalesOrStock() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("denom_chai", "Denomination Chai", "Chai", 1500, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("denom_chai", 5, "synthetic denomination cash test", "denom-stock").contains("5 units"))
+            assertTrue(model.openCashDrawer(100_000, "denom-drawer-open").contains("opened"))
+            assertTrue(model.quickSale(listOf("denom_chai" to 1), "cash", commandId = "denom-cash-sale").startsWith("Quick sale"))
+            assertEquals(101_500L, model.expectedCashPaise("denom-drawer-open"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load()!! }
+        val activity = instrumentation.startActivitySync(Intent(context, CashRegisterActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun find(text: String? = null, hint: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun walk(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    val nodeText = node.text?.toString()
+                    if ((text != null && nodeText?.startsWith(text, ignoreCase = true) == true) ||
+                        (hint != null && (node.hintText?.toString() == hint || node.contentDescription?.toString() == hint))) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { walk(it)?.let { found -> return found } }
+                    return null
+                }
+                return walk(root)
+            }
+            fun await(text: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(100) {
+                    find(text, hint)?.let { return it }
+                    instrumentation.uiAutomation.rootInActiveWindow?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Cash count control not found: text=$text hint=$hint")
+            }
+            fun click(text: String) = assertTrue("Could not click $text", await(text = text).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            click("Count notes and coins, then close drawer")
+            fun setCount(denomination: Int, quantity: String) {
+                val field = await(hint = "Count ₹$denomination notes or coins")
+                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, quantity) }
+                assertTrue("Could not enter count for ₹$denomination", field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args))
+            }
+            setCount(500, "2")
+            setCount(10, "1")
+            setCount(5, "1")
+            await(text = "Physical count total: ₹1015.00")
+            await(text = "Expected cash: ₹1015.00 · difference: ₹0.00")
+            click("Review count")
+            await(text = "Counted ₹1015.00; expected ₹1015.00; difference ₹0.00.")
+            click("Close drawer")
+
+            var after: CounterSnapshot? = null
+            repeat(50) {
+                val saved = SqliteCounterPersistence(context).use { it.load() }
+                if (saved?.cashDrawerSessions?.singleOrNull()?.closedAt != null) after = saved
+                if (after == null) Thread.sleep(100)
+            }
+            assertNotNull("Denomination total should close the drawer through the audited operation", after)
+            val closed = after!!
+            assertEquals(101_500, closed.cashDrawerSessions.single().closingCashPaise)
+            assertEquals(before.orders, closed.orders)
+            assertEquals(before.paymentEntries, closed.paymentEntries)
+            assertEquals(before.stock, closed.stock)
+            assertEquals(before.stockMovements, closed.stockMovements)
+            assertTrue(closed.auditEvents.any { it.contains("cash_drawer.closed") && it.contains("counted=101500p") })
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun dailyClosingReviewShowsSessionTotalsAndKeepsCurrentExceptionsSeparate() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

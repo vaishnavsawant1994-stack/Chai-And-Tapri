@@ -3,7 +3,9 @@ package com.chaiandtapri.counter
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -45,7 +47,8 @@ class CashRegisterActivity : Activity() {
                 content.addView(label("Opening cash: ${money(active.openingCashPaise.toLong())}", 17f))
                 content.addView(label("Expected cash now: ${money(expected)}", 23f))
                 content.addView(button("Record cash in / cash out") { movementDialog() })
-                content.addView(button("Close drawer and count cash") { closeDialog(expected) })
+                content.addView(button("Count notes and coins, then close drawer") { denominationCountDialog(expected) })
+                content.addView(button("Enter cash total manually") { closeDialog(expected) })
                 content.addView(label("Session cash events", 18f))
                 val events = current.cashDrawerMovements(active.sessionId).asReversed()
                 if (events.isEmpty()) content.addView(label("No manual cash movements.", 14f))
@@ -84,6 +87,78 @@ class CashRegisterActivity : Activity() {
             } }
             dialog.show()
         }
+    }
+
+    private fun denominationCountDialog(expected: Long) {
+        val denominations = listOf(2000, 500, 200, 100, 50, 20, 10, 5, 2, 1)
+        val counts = linkedMapOf<Int, EditText>()
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 8, 20, 8) }
+        form.addView(label("Count the physical notes and coins in the drawer. This does not infer sales, verify UPI, or adjust stock.", 14f))
+        denominations.forEach { rupees ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row.addView(label("₹$rupees ×", 15f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            val count = EditText(this).apply {
+                hint = "Count"
+                contentDescription = "Count ₹$rupees notes or coins"
+                inputType = InputType.TYPE_CLASS_NUMBER
+                setSingleLine(true)
+            }
+            counts[rupees] = count
+            row.addView(count, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            form.addView(row)
+        }
+        val total = label("Physical count total: ₹0.00", 20f)
+        form.addView(total)
+        val variance = label("Expected cash: ${money(expected)}", 15f)
+        form.addView(variance)
+        fun calculate(): Long? {
+            var sum = 0L
+            for ((denomination, input) in counts) {
+                val raw = input.text.toString().trim()
+                val quantity = if (raw.isEmpty()) 0 else raw.toIntOrNull() ?: return null
+                if (quantity !in 0..1_000_000) return null
+                val line = denomination.toLong() * 100L * quantity
+                if (line > 100_000_000L - sum) return null
+                sum += line
+            }
+            return sum
+        }
+        fun refreshTotal() {
+            val counted = calculate()
+            total.text = if (counted == null) "Enter whole non-negative note/coin counts within the supported drawer limit." else "Physical count total: ${money(counted)}"
+            variance.text = if (counted == null) "Expected cash: ${money(expected)}" else "Expected cash: ${money(expected)} · difference: ${money(counted - expected)}"
+        }
+        counts.values.forEach { input -> input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = refreshTotal()
+            override fun afterTextChanged(s: Editable?) = Unit
+        }) }
+        val dialog = AlertDialog.Builder(this).setTitle("Count physical cash")
+            .setView(ScrollView(this).apply { addView(form) })
+            .setNegativeButton("Cancel", null).setPositiveButton("Review count", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val counted = calculate()
+                if (counted == null) {
+                    status.text = getString(R.string.cash_count_invalid)
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                val countedInt = counted.toInt()
+                val difference = counted - expected
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm physical cash count")
+                    .setMessage("Counted ${money(counted)}; expected ${money(expected)}; difference ${money(difference)}. This records only the count and variance. It will not create or change sales, payments, stock, or UPI status.")
+                    .setNegativeButton("Go back", null)
+                    .setPositiveButton("Close drawer") { _, _ ->
+                        val result = model?.closeCashDrawer(countedInt) ?: "Storage is unavailable."
+                        status.text = result
+                        render()
+                    }
+                    .show()
+            }
+        }
+        dialog.show()
     }
 
     private fun closeDialog(expected: Long) = amountDialog("Close cash drawer", "Physical cash counted in rupees · expected ${money(expected)}") { paise ->

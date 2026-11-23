@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-26 denomination cash count — 23 November 2026
+
+Added an optional physical notes/coins count (₹2,000 through ₹1) to the cash drawer closing screen, with an expected-cash comparison and explicit confirmation. It uses the audited drawer-close operation and leaves sales, payments and stock unchanged. Focused API 37 instrumentation passed 1/1; Kotlin JVM 68/68; APK build tasks passed; lint 0 errors / 175 warnings. This is a cash-counting improvement, not full Mode D reconciliation or full CT-26 qualification. Details: `specs/CT-26-DENOMINATION-CASH-COUNT-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-13/14 catalogue-to-Quick Sale workflow — 23 November 2026
 
 Added an API 37 instrumentation journey through the native owner UI: create a synthetic catalogue product at ₹12.50, explicitly confirm the price, record an audited five-unit opening count, update aliases/favourite through the editor, find it by alias in Quick Sale, and record a cash checkout. Persisted state verifies a ₹12.50 order, stock 4, one linked −1 `quick_sale` movement, and staff-declared cash. Focused test passed 1/1; Kotlin JVM 68/68; debug and instrumentation APK build tasks passed; lint 0 errors / 175 warnings. This is one connected workflow, not full product catalogue or CT-06 qualification. Details: `specs/CT-13-14-CATALOGUE-TO-QUICK-SALE-REPORT-2026-11-23.md`.
