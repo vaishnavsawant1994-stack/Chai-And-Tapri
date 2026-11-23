@@ -2,6 +2,12 @@
 
 This audit records the current verified continuation from the repository. Historical counts in prior progress reports are not evidence for this continuation.
 
+## Latest continuation — OW-09B role-scoped sync
+
+The sync service now enforces owner/manager/cashier authorization from the authenticated membership and records the authenticated submitter on new accepted journal events. Cashier sale stock movements must reconcile to the server stock snapshot and delivered-quantity delta; collections and new credit must reconcile to their order balance changes. Cashiers cannot submit refunds/voids, expense or procurement projections, or manual inventory adjustments. The complete restricted-role PostgreSQL suite passed **33/33**, and prototype suite **52/52**. See [OW-09B report](OW-09B-ROLE-SCOPED-SYNC-REPORT-2026-11-24.md).
+
+Remaining limits: local offline commands still do not carry authenticated cloud actor identity; cashiers can create new order prices without server catalogue validation; manager remains a broad operational role for all currently supported projections; and visual review, security review and deployment are not qualified.
+
 ## Latest verified work
 
 OW-10 anonymous shift summaries are documented in [the OW-10 report](OW-10-ANONYMOUS-SHIFT-SUMMARIES-REPORT-2026-11-24.md). The latest continuation adds the partial OW-09 server membership workflow described in [the OW-09 report](OW-09-STAFF-MEMBERSHIP-REPORT-2026-11-24.md).

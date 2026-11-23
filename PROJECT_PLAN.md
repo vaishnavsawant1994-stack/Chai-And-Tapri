@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — OW-09B role-scoped sync and submitter audit — 24 November 2026
+
+Authenticated sync now derives authorization from the live shop membership. Cashiers can submit supported sales, collections, customer credit/repayments, and shift projections; refunds, voids, manual stock adjustments, expenses and procurement require manager/owner role. Cashier stock movements must match previous server stock and delivered order quantities; order collection/credit events must match the order's balance changes. Newly accepted events record the authenticated submitter and role, visible in the owner accepted-event history. Disposable PostgreSQL 17 backend suite passed 33/33 with a restricted runtime role; prototype suite 52/52; syntax and diff checks passed. Offline actions are not tied to a cloud identity, prices are not validated against a synced server catalogue, and this is not production authorization or browser-visual qualification. See `specs/OW-09B-ROLE-SCOPED-SYNC-REPORT-2026-11-24.md`.
+
 ## Latest continuation — OW-09 staff membership administration — 24 November 2026
 
 Added owner-managed manager/cashier invitations, member role changes and removal/session revocation, a one-time 24-hour invitation secret, shop-scoped forced RLS and append-only staff membership metadata. The owner Staff access tab can issue/revoke invitations and inspect memberships/audit events. Full backend suite passed 32/32 with a restricted API role on a disposable PostgreSQL 17 database; static UI/API route checks and owner module syntax passed. This is a partial membership administration slice: invitation email is not verified or sent, there is no Android invite-acceptance UI, per-business-command role authorization and local PIN-to-cloud identity linkage are not implemented, and the owner view is not visually reviewed. See `specs/OW-09-STAFF-MEMBERSHIP-REPORT-2026-11-24.md`.

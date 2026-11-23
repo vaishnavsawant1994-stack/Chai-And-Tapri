@@ -16,8 +16,97 @@ const isText = (value, max = 160) => typeof value === 'string' && value.length >
 const isInt = (value, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) => Number.isSafeInteger(value) && value >= min && value <= max;
 const enumIs = (value, values) => typeof value === 'string' && values.includes(value);
 const STAFF_ROLES = ['manager', 'cashier'];
+const CASHIER_PAYMENT_KINDS = new Map([
+  ['order_collection', 'staff_declared'], ['payment_attempt', 'pending'],
+  ['payment_attempt_cancelled', 'cancelled'], ['credit_sale', 'receivable'],
+  ['customer_repayment', 'staff_declared']
+]);
 const validEmail = (value) => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
 const requireOwner = (actor) => { if (actor?.role !== 'owner') throw new ApiError(403, 'owner_access_required'); };
+
+/** Enforce server-side sync scopes using the authenticated membership, never a client role claim. */
+export function authorizeProjectionForRole(role, payload, stockBefore = new Map(), creditsBefore = new Map(), ordersBefore = new Map()) {
+  if (role === 'owner' || role === 'manager') return true;
+  if (role !== 'cashier') throw new ApiError(403, 'business_sync_role_denied');
+  const privilegedFamilies = ['expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'];
+  if (privilegedFamilies.some((field) => (payload[field] ?? []).length > 0)) throw new ApiError(403, 'cashier_business_permission_denied');
+  if ((payload.paymentEntries ?? []).some((entry) => CASHIER_PAYMENT_KINDS.get(entry.kind) !== entry.status || entry.amountPaise <= 0)) throw new ApiError(403, 'cashier_business_permission_denied');
+  const currentOrders = new Map((payload.orders ?? []).map((order) => [order.orderNumber, order]));
+  const expectedDeliveries = new Map();
+  if ((payload.orders ?? []).some((order) => order.voided || order.fulfillment === 'CANCELLED' || order.refundedPaise > 0 || order.cashRefundedPaise > 0 || order.creditReversedPaise > 0 || order.payment === 'REFUNDED')) {
+    throw new ApiError(403, 'cashier_business_permission_denied');
+  }
+  const paidByOrder = new Map();
+  const creditByOrder = new Map();
+  for (const entry of payload.paymentEntries ?? []) {
+    if (entry.kind === 'customer_repayment') {
+      if (entry.orderNumber !== null || entry.customerId === null) throw new ApiError(403, 'cashier_business_permission_denied');
+      continue;
+    }
+    if (entry.orderNumber === null || !currentOrders.has(entry.orderNumber)) throw new ApiError(403, 'cashier_business_permission_denied');
+    if (entry.kind === 'order_collection') paidByOrder.set(entry.orderNumber, (paidByOrder.get(entry.orderNumber) ?? 0) + entry.amountPaise);
+    if (entry.kind === 'credit_sale') {
+      if (entry.customerId === null) throw new ApiError(403, 'cashier_business_permission_denied');
+      creditByOrder.set(entry.orderNumber, (creditByOrder.get(entry.orderNumber) ?? 0) + entry.amountPaise);
+    }
+  }
+  for (const order of payload.orders ?? []) {
+    const previous = ordersBefore.get(order.orderNumber);
+    if (previous && (order.createdAtEpochMs !== previous.createdAtEpochMs || order.revision <= previous.revision ||
+      order.paidPaise < previous.paidPaise || order.creditPaise < previous.creditPaise || (previous.salePosted && !order.salePosted) ||
+      JSON.stringify(order.lines.map(({ productId, quantity, unitPricePaise }) => [productId, quantity, unitPricePaise]).sort()) !==
+        JSON.stringify(previous.lines.map(({ productId, quantity, unitPricePaise }) => [productId, quantity, unitPricePaise]).sort()))) {
+      throw new ApiError(403, 'cashier_business_permission_denied');
+    }
+    const paidDelta = order.paidPaise - (previous?.paidPaise ?? 0);
+    const creditDelta = order.creditPaise - (previous?.creditPaise ?? 0);
+    if (!Number.isSafeInteger(paidByOrder.get(order.orderNumber) ?? 0) || (paidByOrder.get(order.orderNumber) ?? 0) !== paidDelta ||
+      !Number.isSafeInteger(creditByOrder.get(order.orderNumber) ?? 0) || (creditByOrder.get(order.orderNumber) ?? 0) !== creditDelta) {
+      throw new ApiError(403, 'cashier_business_permission_denied');
+    }
+    const previousDelivered = new Map((previous?.lines ?? []).map((line) => [line.productId, line.deliveredQuantity]));
+    for (const line of order.lines) {
+      const deliveredDelta = line.deliveredQuantity - (previousDelivered.get(line.productId) ?? 0);
+      if (deliveredDelta < 0 || (previous && line.refundedQuantity !== (previous.lines.find((item) => item.productId === line.productId)?.refundedQuantity ?? 0))) {
+        throw new ApiError(403, 'cashier_business_permission_denied');
+      }
+      if (deliveredDelta > 0) expectedDeliveries.set(line.productId, (expectedDeliveries.get(line.productId) ?? 0) - deliveredDelta);
+    }
+  }
+  const movementTotals = new Map();
+  for (const movement of payload.stockMovements ?? []) {
+    if (movement.orderNumber === null || movement.quantityDelta >= 0) throw new ApiError(403, 'cashier_business_permission_denied');
+    const order = currentOrders.get(movement.orderNumber);
+    if (!order || order.voided || order.refundedPaise > 0 || !order.lines.some((line) => line.productId === movement.productId && line.deliveredQuantity > 0)) {
+      throw new ApiError(403, 'cashier_business_permission_denied');
+    }
+    const total = (movementTotals.get(movement.productId) ?? 0) + movement.quantityDelta;
+    if (!Number.isSafeInteger(total)) throw new ApiError(403, 'cashier_stock_reconciliation_required');
+    movementTotals.set(movement.productId, total);
+  }
+  if (movementTotals.size !== expectedDeliveries.size || [...expectedDeliveries].some(([productId, quantityDelta]) => movementTotals.get(productId) !== quantityDelta)) {
+    throw new ApiError(403, 'cashier_business_permission_denied');
+  }
+  const stockChanges = new Map((payload.stock ?? []).map((item) => [item.productId, item.quantity]));
+  if (stockChanges.size !== movementTotals.size) throw new ApiError(403, 'cashier_business_permission_denied');
+  for (const [productId, delta] of movementTotals) {
+    const before = stockBefore.get(productId);
+    const after = stockChanges.get(productId);
+    const expected = before + delta;
+    if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after) || !Number.isSafeInteger(expected) || after !== expected || after < 0) {
+      throw new ApiError(403, 'cashier_stock_reconciliation_required');
+    }
+  }
+  for (const credit of payload.customerCredits ?? []) {
+    const previous = creditsBefore.get(credit.creditId);
+    if (previous && (credit.customerId !== previous.customerId || credit.amountPaise !== previous.amountPaise ||
+      credit.reversedPaise !== previous.reversedPaise || credit.repaidPaise < previous.repaidPaise)) {
+      throw new ApiError(403, 'cashier_business_permission_denied');
+    }
+    if (!previous && credit.reversedPaise !== 0) throw new ApiError(403, 'cashier_business_permission_denied');
+  }
+  return true;
+}
 
 /** Validate the only Android payload contract currently eligible for upload. */
 export function validateProjectionDelta(payload) {
@@ -550,8 +639,10 @@ export class SyncService {
       await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
       const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
       if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
-      const result = await c.query(`SELECT server_revision,event_id,event_type,base_revision,envelope,received_at
-        FROM sync_events WHERE shop_id=$1 ORDER BY server_revision DESC LIMIT $2`, [actor.shop_id, limit]);
+      const result = await c.query(`SELECT e.server_revision,e.event_id,e.event_type,e.base_revision,e.envelope,e.received_at,
+        e.actor_user_id,e.actor_role,u.display_name AS actor_display_name
+        FROM sync_events e LEFT JOIN users u ON u.user_id=e.actor_user_id
+        WHERE e.shop_id=$1 ORDER BY e.server_revision DESC LIMIT $2`, [actor.shop_id, limit]);
       return buildAuditHistory({
         shopId: actor.shop_id, shopName: shop.rows[0].display_name,
         serverRevision: Number(shop.rows[0].server_revision), events: result.rows.reverse(), limit
@@ -584,10 +675,16 @@ export class SyncService {
       const supplierLedger = emptySupplierLedger();
       const customerLedger = emptyCustomerLedger();
       const staffShiftLedger = emptyStaffShiftLedger();
+      const stockLedger = new Map();
+      const creditState = new Map();
+      const orderState = new Map();
       for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') {
         applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
         applyCustomerLedgerDelta(customerLedger, row.envelope.payload);
         applyStaffShiftLedgerDelta(staffShiftLedger, row.envelope.payload);
+        for (const item of row.envelope.payload.stock ?? []) stockLedger.set(item.productId, item.quantity);
+        for (const credit of row.envelope.payload.customerCredits ?? []) creditState.set(credit.creditId, credit);
+        for (const order of row.envelope.payload.orders ?? []) orderState.set(order.orderNumber, order);
       }
       const results = [];
       for (const e of events) {
@@ -608,13 +705,17 @@ export class SyncService {
             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.business_id,actor.shop_id,e.eventId,e.commandId,e.deviceId,e.baseRevision,revision,e]);
           results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
         }
+        authorizeProjectionForRole(actor.role, e.payload, stockLedger, creditState, orderState);
         applySupplierLedgerDelta(supplierLedger, e.payload);
         applyCustomerLedgerDelta(customerLedger, e.payload);
         applyStaffShiftLedgerDelta(staffShiftLedger, e.payload);
         const next = revision + 1;
-        await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,event_type,schema_version,base_revision,payload_hash,envelope)
-          VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,e.type,e.baseRevision,payloadHash,e]);
+        await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,actor_user_id,actor_role,event_type,schema_version,base_revision,payload_hash,envelope)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10,$11,$12)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,actor.user_id,actor.role,e.type,e.baseRevision,payloadHash,e]);
         await c.query('UPDATE shops SET server_revision=$2 WHERE shop_id=$1',[actor.shop_id,next]); shop.rows[0].server_revision=next;
+        for (const item of e.payload.stock ?? []) stockLedger.set(item.productId, item.quantity);
+        for (const credit of e.payload.customerCredits ?? []) creditState.set(credit.creditId, credit);
+        for (const order of e.payload.orders ?? []) orderState.set(order.orderNumber, order);
         results.push({ eventId:e.eventId,status:'accepted',serverRevision:next });
       }
       return { currentRevision:Number(shop.rows[0].server_revision),results };

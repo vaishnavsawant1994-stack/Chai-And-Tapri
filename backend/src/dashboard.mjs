@@ -535,6 +535,9 @@ export function buildAuditHistory({ shopId, shopName, serverRevision, events, li
       eventId: row.event_id,
       eventType: row.event_type,
       baseRevision: Number(row.base_revision),
+      actorUserId: row.actor_user_id ?? null,
+      actorDisplayName: row.actor_display_name ?? null,
+      actorRole: row.actor_role ?? null,
       receivedAt: Number.isNaN(receivedAt.valueOf()) ? null : receivedAt.toISOString(),
       changeCounts
     };
@@ -545,7 +548,7 @@ export function buildAuditHistory({ shopId, shopName, serverRevision, events, li
     evidence: {
       scope: 'Latest events accepted by the server for this authenticated shop, newest first.',
       source: 'Server revision, event envelope metadata, and counts of allow-listed record arrays.',
-      exclusions: 'Raw payloads, product/customer identifiers, transaction amounts, device identifiers, and employee identity are not included. The current event contract does not identify the staff member who created an event.',
+      exclusions: 'Raw payloads, product/customer identifiers, transaction amounts, and device identifiers are not included. Actor identity is the authenticated account that submitted the sync event, not necessarily the person who created an offline action.',
       limitation: 'This is an accepted sync-event history, not a complete employee audit trail or proof of the underlying business activity.'
     }
   };

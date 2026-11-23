@@ -103,7 +103,7 @@ test('repeated bad credentials persist a temporary login lock', { skip: !connect
 
 test('owner staff invitations create least-privilege memberships and removal revokes sessions', { skip: !connection }, async()=>{
   const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool); const deviceId=randomUUID();
-  const suffix=randomUUID(); let owner; let existingAccount; let staffUserId; let invitationId; let server;
+  const suffix=randomUUID(); let owner; let existingAccount; let staffUserId; let invitationId; let server; let cashierSaleEventId;
   try {
     owner=await service.register({email:`staff-owner-${suffix}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'Synthetic Owner',businessName:'Synthetic Business',shopName:'Synthetic Shop',deviceId,deviceLabel:'Owner Test Device'});
     const ownerActor=await service.authenticate(owner.token,owner.shopId);
@@ -134,6 +134,15 @@ test('owner staff invitations create least-privilege memberships and removal rev
     await assert.rejects(service.acceptStaffInvitation({invitationToken:invitation.invitationToken,displayName:'Duplicate',password,deviceId:randomUUID(),deviceLabel:'Duplicate Device'}),(e)=>e instanceof ApiError&&e.status===401);
     const staffActor=await service.authenticate(accepted.token,owner.shopId);
     assert.equal(staffActor.role,'cashier');
+    const deniedExpense={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`cashier-expense-${randomUUID()}`,businessId:owner.businessId,shopId:owner.shopId,deviceId:staffDeviceId,baseRevision:0,payload:{...projectionDelta([]),expenses:[{expenseId:'cashier-expense',category:'transport',amountPaise:500,method:'cash',status:'staff_declared'}]}};
+    await assert.rejects(service.submitEvents(staffActor,[deniedExpense]),(e)=>e instanceof ApiError&&e.status===403&&e.code==='cashier_business_permission_denied');
+    const afterDenied=await withTransaction(pool,async(c)=>{await c.query("SELECT set_config('app.current_shop',$1,true)",[owner.shopId]);return c.query('SELECT server_revision FROM shops WHERE shop_id=$1',[owner.shopId]);});
+    assert.equal(Number(afterDenied.rows[0].server_revision),0,'denied staff writes must not advance the journal');
+    const openingStock={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`owner-stock-${randomUUID()}`,businessId:owner.businessId,shopId:owner.shopId,deviceId,baseRevision:0,payload:projectionDelta([{productId:'chai',quantity:5}])};
+    assert.equal((await service.submitEvents(ownerActor,[openingStock])).results[0].status,'accepted');
+    cashierSaleEventId=randomUUID();
+    const cashierSale={type:'business.command.v1',schemaVersion:1,eventId:cashierSaleEventId,commandId:`cashier-sale-${randomUUID()}`,businessId:owner.businessId,shopId:owner.shopId,deviceId:staffDeviceId,baseRevision:1,payload:{...projectionDelta([{productId:'chai',quantity:4}]),orders:[{orderNumber:1,fulfillment:'GIVEN',payment:'STAFF_DECLARED',paidPaise:1000,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,salePosted:true,voided:false,revision:2,createdAtEpochMs:1000,lines:[{productId:'chai',quantity:1,deliveredQuantity:1,refundedQuantity:0,unitPricePaise:1000}] }],stockMovements:[{movementId:`cashier-move-${randomUUID()}`,productId:'chai',quantityDelta:-1,orderNumber:1}],paymentEntries:[{entryId:randomUUID(),orderNumber:1,customerId:null,amountPaise:1000,method:'cash',status:'staff_declared',kind:'order_collection',relatedEntryId:null}]}};
+    assert.equal((await service.submitEvents(staffActor,[cashierSale])).results[0].status,'accepted');
     await assert.rejects(service.shopStaffMembers(staffActor),(e)=>e instanceof ApiError&&e.status===403);
     await assert.rejects(service.createStaffInvitation(staffActor,{email:`another-${suffix}@example.test`,role:'cashier'}),(e)=>e instanceof ApiError&&e.status===403);
     const ownerMembers=await service.shopStaffMembers(ownerActor);
@@ -141,6 +150,8 @@ test('owner staff invitations create least-privilege memberships and removal rev
     const promoted=await service.setStaffMemberRole(ownerActor,staffUserId,'manager');
     assert.equal(promoted.role,'manager');
     assert.equal((await service.authenticate(accepted.token,owner.shopId)).role,'manager');
+    const managerExpense={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`manager-expense-${randomUUID()}`,businessId:owner.businessId,shopId:owner.shopId,deviceId:staffDeviceId,baseRevision:2,payload:{...projectionDelta([]),expenses:[{expenseId:'manager-expense',category:'transport',amountPaise:500,method:'cash',status:'staff_declared'}]}};
+    assert.equal((await service.submitEvents(await service.authenticate(accepted.token,owner.shopId),[managerExpense])).results[0].status,'accepted');
     existingAccount=await service.register({email:`existing-staff-${suffix}@example.test`,password:'Existing-Staff-Password-2026!',displayName:'Existing Account Owner',businessName:'Separate Business',shopName:'Separate Shop',deviceId:randomUUID(),deviceLabel:'Existing Account Device'});
     const existingInvite=await service.createStaffInvitation(ownerActor,{email:`existing-staff-${suffix}@example.test`,role:'cashier'});
     const targetDeviceId=randomUUID();
@@ -167,6 +178,13 @@ test('owner staff invitations create least-privilege memberships and removal rev
     assert.equal(audit.events.find(event=>event.action==='role_changed').previousRole,'cashier');
     assert.equal(audit.events.find(event=>event.action==='role_changed').nextRole,'manager');
     assert.equal(JSON.stringify(audit).includes(invitation.invitationToken),false);
+    const businessAudit=await service.shopAuditHistory(ownerActor,100);
+    const attributedSale=businessAudit.events.find((event)=>event.eventId===cashierSaleEventId);
+    assert.equal(attributedSale.actorUserId,staffUserId);
+    assert.equal(attributedSale.actorRole,'cashier');
+    assert.equal(attributedSale.actorDisplayName,'Synthetic Cashier');
+    const attributedManager=(await service.shopAuditHistory(ownerActor,100)).events.find((event)=>event.eventId===managerExpense.eventId);
+    assert.equal(attributedManager.actorRole,'manager');
     await assert.rejects(pool.query('DELETE FROM shop_staff_audit WHERE shop_id=$1',[owner.shopId]),(e)=>e.code==='42501');
     const revokedInvite=await service.createStaffInvitation(ownerActor,{email:`revoked-${suffix}@example.test`,role:'cashier'});
     const revokeResponse=await fetch(`${base}/v1/staff/invitations/${revokedInvite.invitationId}?shopId=${owner.shopId}`,{method:'DELETE',headers:{authorization:`Bearer ${owner.token}`}});

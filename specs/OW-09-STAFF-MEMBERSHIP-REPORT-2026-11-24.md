@@ -23,3 +23,5 @@ The backend suite exercises owner/staff authorization, invitation expiry/one-tim
 - Browser visual/usability qualification, independent security review, and production deployment remain separate gates.
 
 OW-09 is a partial owner membership workflow, not complete staff authorization or attendance/payroll. Next, connect accepted server identities to device-side access and apply explicit role permissions at each business-command boundary, with tests proving denied operations cannot mutate records.
+
+**Follow-up:** The server-side projection permissions and authenticated sync-submitter audit described in [OW-09B](OW-09B-ROLE-SCOPED-SYNC-REPORT-2026-11-24.md) have since been implemented. Offline actor linkage and per-command local enforcement remain open.

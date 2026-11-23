@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
+import { authorizeProjectionForRole } from '../src/service.mjs';
 import { createApiServer } from '../src/http.mjs';
 import { SyncService } from '../src/service.mjs';
 import { buildOwnerReportCsv } from '../../owner-web/report-export.mjs';
@@ -32,11 +33,14 @@ test('owner audit history returns newest accepted-event metadata without payload
     shopId: 'shop-1', shopName: 'Synthetic Tapri', serverRevision: 2, limit: 1,
     events: [
       { server_revision: 1, event_id: 'event-old', event_type: 'business.command.v1', base_revision: 0, received_at: new Date('2026-11-22T10:00:00Z'), envelope: { payload: { orders: [{ orderNumber: 1, lines: [{ productId: 'private-product', unitPricePaise: 1000 }] }] } } },
-      { server_revision: 2, event_id: 'event-new', event_type: 'business.command.v1', base_revision: 1, received_at: new Date('2026-11-22T10:01:00Z'), envelope: { payload: { paymentEntries: [{ amountPaise: 5000, customerId: 'private-customer' }], stockMovements: [{}], customerCredits: [{ amountPaise: 5000, customerId: 'private-customer' }], repayments: [{}], purchaseReceipts: [{}], supplierPayments: [{}], purchaseReturns: [{}], expenses: [{}] } } }
+      { server_revision: 2, event_id: 'event-new', event_type: 'business.command.v1', base_revision: 1, actor_user_id: 'staff-user', actor_display_name: 'Synthetic Cashier', actor_role: 'cashier', received_at: new Date('2026-11-22T10:01:00Z'), envelope: { payload: { paymentEntries: [{ amountPaise: 5000, customerId: 'private-customer' }], stockMovements: [{}], customerCredits: [{ amountPaise: 5000, customerId: 'private-customer' }], repayments: [{}], purchaseReceipts: [{}], supplierPayments: [{}], purchaseReturns: [{}], expenses: [{}] } } }
     ]
   });
   assert.equal(result.returnedEventCount, 1);
   assert.equal(result.events[0].eventId, 'event-new');
+  assert.equal(result.events[0].actorUserId, 'staff-user');
+  assert.equal(result.events[0].actorDisplayName, 'Synthetic Cashier');
+  assert.equal(result.events[0].actorRole, 'cashier');
   assert.equal(result.events[0].changeCounts.paymentEntries, 1);
   assert.equal(result.events[0].changeCounts.stockMovements, 1);
   assert.equal(result.events[0].changeCounts.customerCredits, 1);
@@ -49,6 +53,36 @@ test('owner audit history returns newest accepted-event metadata without payload
   assert.equal(JSON.stringify(result).includes('5000'), false);
   assert.match(result.evidence.limitation, /not a complete employee audit trail/);
   assert.throws(() => buildAuditHistory({ shopId: 'shop-1', shopName: 'Shop', serverRevision: 0, events: [], limit: 101 }), /invalid_audit_limit/);
+});
+
+test('cashier sync permits sale settlement and reconciled sale stock only', () => {
+  const order = { orderNumber: 1, fulfillment: 'GIVEN', payment: 'STAFF_DECLARED', paidPaise: 1000, creditPaise: 0,
+    refundedPaise: 0, cashRefundedPaise: 0, creditReversedPaise: 0, salePosted: true, voided: false, revision: 2,
+    createdAtEpochMs: 10, lines: [{ productId: 'chai', quantity: 1, deliveredQuantity: 1, refundedQuantity: 0, unitPricePaise: 1000 }] };
+  const payload = { ...empty, orders: [order], stock: [{ productId: 'chai', quantity: 4 }],
+    stockMovements: [{ movementId: 'move-1', productId: 'chai', quantityDelta: -1, orderNumber: 1 }],
+    paymentEntries: [{ entryId: 'payment-1', orderNumber: 1, customerId: null, amountPaise: 1000, method: 'cash', status: 'staff_declared', kind: 'order_collection', relatedEntryId: null }] };
+  assert.equal(authorizeProjectionForRole('cashier', payload, new Map([['chai', 5]])), true);
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...payload, expenses: [{ expenseId: 'e' }] }, new Map([['chai', 5]])),
+    (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_business_permission_denied');
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...empty, supplierPayments: [{ paymentId: 'p' }] }),
+    (error) => error instanceof ApiError && error.status === 403);
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...payload, stock: [{ productId: 'chai', quantity: 3 }] }, new Map([['chai', 5]])),
+    (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_stock_reconciliation_required');
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...payload,
+    stock: [{ productId: 'chai', quantity: 3 }],
+    stockMovements: [{ movementId: 'move-over', productId: 'chai', quantityDelta: -2, orderNumber: 1 }]
+  }, new Map([['chai', 5]])), (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_business_permission_denied');
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...empty, paymentEntries: [{ entryId: 'refund', orderNumber: 1, customerId: null,
+    amountPaise: 100, method: 'cash', status: 'staff_declared_refund', kind: 'cash_refund', relatedEntryId: 'sale' }] }),
+    (error) => error instanceof ApiError && error.status === 403);
+  const changedPrice = { ...order, revision: 3, lines: [{ ...order.lines[0], unitPricePaise: 1 }] };
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...empty, orders: [changedPrice] }, new Map(), new Map(), new Map([[1, order]])),
+    (error) => error instanceof ApiError && error.status === 403);
+  assert.throws(() => authorizeProjectionForRole('cashier', { ...empty, stock: [{ productId: 'chai', quantity: 3 }],
+    stockMovements: [{ movementId: 'adjustment', productId: 'chai', quantityDelta: -2, orderNumber: null }] }, new Map([['chai', 5]])),
+    (error) => error instanceof ApiError && error.status === 403);
+  assert.equal(authorizeProjectionForRole('manager', { ...empty, expenses: [{ expenseId: 'manager-expense' }] }), true);
 });
 
 test('owner overview derives latest delivered value and separate cash, UPI and pending totals', () => {

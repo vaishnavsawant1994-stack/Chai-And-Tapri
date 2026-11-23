@@ -481,11 +481,12 @@ import { buildOwnerReportCsv } from './report-export.mjs';
       const rows = data.events.map((event) => {
         const row = document.createElement('tr');
         const other = event.changeCounts.customerCredits + event.changeCounts.repayments + event.changeCounts.expenses + event.changeCounts.purchaseReceipts + event.changeCounts.supplierPayments + event.changeCounts.purchaseReturns;
-        const values = [String(event.serverRevision), event.receivedAt ? new Date(event.receivedAt).toLocaleString() : 'Timestamp unavailable', event.eventId, String(event.changeCounts.orders), String(event.changeCounts.stockMovements + event.changeCounts.stock), String(event.changeCounts.paymentEntries), String(other)];
+        const submitter = event.actorDisplayName ? `${event.actorDisplayName} · ${event.actorRole}` : 'Legacy/unattributed sync';
+        const values = [String(event.serverRevision), event.receivedAt ? new Date(event.receivedAt).toLocaleString() : 'Timestamp unavailable', submitter, event.eventId, String(event.changeCounts.orders), String(event.changeCounts.stockMovements + event.changeCounts.stock), String(event.changeCounts.paymentEntries), String(other)];
         for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
         return row;
       });
-      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 7; cell.className = 'empty-row'; cell.textContent = 'No server-accepted events are available yet.'; row.append(cell); rows.push(row); }
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 8; cell.className = 'empty-row'; cell.textContent = 'No server-accepted events are available yet.'; row.append(cell); rows.push(row); }
       $('audit-rows').replaceChildren(...rows);
       $('audit-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
       setStatus($('audit-status'), `${data.returnedEventCount} accepted events loaded through server revision ${data.serverRevision}.`, 'success');
