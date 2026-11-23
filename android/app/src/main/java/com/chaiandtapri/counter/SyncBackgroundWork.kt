@@ -130,8 +130,10 @@ class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : Corouti
             SyncBackgroundStatus.record(applicationContext, "retrying")
             return Result.retry()
         }
-        return try { doWorkWithBusinessPermit() }
-        finally { businessOperationPermit.close() }
+        return withContext(Dispatchers.IO + BusinessWriteBarrier.operationContext(businessOperationPermit)) {
+            try { doWorkWithBusinessPermit() }
+            finally { businessOperationPermit.close() }
+        }
     }
 
     private suspend fun doWorkWithBusinessPermit(): Result {

@@ -17,7 +17,8 @@ class InstrumentationConfigurationTest {
         val expected = listOf(
             "com.chaiandtapri.counter.LiveBackendSyncE2ETest",
             "com.chaiandtapri.counter.LiveBackgroundSyncRetryE2ETest",
-            "com.chaiandtapri.counter.LiveBackgroundSyncProcessRestartE2ETest"
+            "com.chaiandtapri.counter.LiveBackgroundSyncProcessRestartE2ETest",
+            "com.chaiandtapri.counter.LiveSyncMaintenanceBarrierE2ETest"
         ).joinToString(",")
         if (liveSyncOptIn) {
             assertFalse("live sync opt-in must leave backend classes runnable", exclusions.contains("LiveBackgroundSync"))

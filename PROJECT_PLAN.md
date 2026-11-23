@@ -2,7 +2,7 @@
 
 ## Latest continuation — CAT-051B recovery/sync write barrier — 23 November 2026
 
-Fixed the maintenance race between CAT-051B snapshots/restores and CAT-052 WorkManager sync. The process-wide barrier now closes admission before waiting for in-flight business operations; the worker holds a shared permit through network delivery and local acknowledgement, and retries when maintenance already owns or is requesting the barrier. Kotlin JVM 72/72; focused Android `SyncBackgroundWorkTest` 3/3; debug/test APKs and lint passed, 0 lint errors/176 warnings. CAT-051B remains partial: no real in-flight backend/restore race, physical key/storage/cross-device recovery, or independent security review is qualified. See `specs/CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md`.
+The process-wide barrier now closes admission before waiting for active business operations. Its leases are thread-independent and are carried across coroutine dispatcher switches; an already-admitted WorkManager sync may finish its local acknowledgment while new operations remain blocked. An isolated API 37 live E2E held an HTTPS response after PostgreSQL commit, requested maintenance, confirmed a competing worker retried without posting, then released the response and verified ordered outbox acknowledgments before maintenance entered. Focused live E2E 1/1; Kotlin JVM 59/59; APK build tasks pass. This is synthetic emulator qualification, not a full Android regression or production sync/recovery qualification. CAT-051B remains partial; physical key/storage/cross-device recovery and independent security review remain open. See `specs/CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md`.
 
 ## Latest continuation — CT-01/02/05/06 guided first sale — 23 November 2026
 

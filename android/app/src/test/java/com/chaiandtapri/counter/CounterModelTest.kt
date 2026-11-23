@@ -1,5 +1,8 @@
 ﻿package com.chaiandtapri.counter
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -204,6 +207,55 @@ class CounterModelTest {
             inFlight?.close()
             executor.shutdownNow()
             executor.awaitTermination(5, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test fun businessOperationLeaseCanCloseOnAnotherDispatcherThread() {
+        val maintenanceExecutor = Executors.newSingleThreadExecutor()
+        val releasingExecutor = Executors.newSingleThreadExecutor()
+        val maintenanceEntered = CountDownLatch(1)
+        var inFlight = BusinessWriteBarrier.tryBeginBusinessOperation()
+        assertNotNull("Expected a shared permit before recovery requests maintenance", inFlight)
+        try {
+            val maintenance = maintenanceExecutor.submit {
+                BusinessWriteBarrier.duringMaintenance("cross-dispatcher recovery") {
+                    maintenanceEntered.countDown()
+                    "snapshot complete"
+                }
+            }
+            assertFalse("Recovery must wait for the active operation", maintenanceEntered.await(100, TimeUnit.MILLISECONDS))
+
+            val admissionDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            var admissionClosed = false
+            while (!admissionClosed && System.nanoTime() < admissionDeadline) {
+                val probe = BusinessWriteBarrier.tryBeginBusinessOperation()
+                if (probe == null) admissionClosed = true else probe.close()
+                if (!admissionClosed) Thread.sleep(5)
+            }
+            assertTrue("New operations should be rejected after recovery is requested", admissionClosed)
+            assertNull("A standalone commit should also be rejected during maintenance", BusinessWriteBarrier.tryBeginCommit())
+            val admittedCommit = runBlocking {
+                withContext(Dispatchers.IO + BusinessWriteBarrier.operationContext(inFlight!!)) {
+                    BusinessWriteBarrier.tryBeginCommit()
+                }
+            }
+            assertNotNull("An already-admitted sync operation must persist its acknowledgment while recovery waits", admittedCommit)
+            admittedCommit!!.close()
+
+            // CoroutineWorker may acquire on its caller dispatcher and finish on Dispatchers.IO.
+            releasingExecutor.submit { inFlight!!.close() }.get(5, TimeUnit.SECONDS)
+            inFlight = null
+            assertTrue("Recovery must continue after a lease is released from another thread", maintenanceEntered.await(5, TimeUnit.SECONDS))
+            maintenance.get(5, TimeUnit.SECONDS)
+            val resumed = BusinessWriteBarrier.tryBeginBusinessOperation()
+            assertNotNull("Business operations should resume once recovery exits", resumed)
+            resumed!!.close()
+        } finally {
+            inFlight?.close()
+            maintenanceExecutor.shutdownNow()
+            releasingExecutor.shutdownNow()
+            maintenanceExecutor.awaitTermination(5, TimeUnit.SECONDS)
+            releasingExecutor.awaitTermination(5, TimeUnit.SECONDS)
         }
     }
 

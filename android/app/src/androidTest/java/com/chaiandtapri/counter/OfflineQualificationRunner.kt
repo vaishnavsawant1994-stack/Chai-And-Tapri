@@ -10,7 +10,8 @@ class OfflineQualificationRunner : AndroidJUnitRunner() {
             val excluded = linkedSetOf(
                 "com.chaiandtapri.counter.LiveBackendSyncE2ETest",
                 "com.chaiandtapri.counter.LiveBackgroundSyncRetryE2ETest",
-                "com.chaiandtapri.counter.LiveBackgroundSyncProcessRestartE2ETest"
+                "com.chaiandtapri.counter.LiveBackgroundSyncProcessRestartE2ETest",
+                "com.chaiandtapri.counter.LiveSyncMaintenanceBarrierE2ETest"
             )
             arguments.getString("notClass")
                 ?.split(',')
