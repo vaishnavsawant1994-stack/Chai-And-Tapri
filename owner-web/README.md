@@ -17,3 +17,7 @@ The **Export current report** action downloads a CSV snapshot of the currently d
 ## Additional current owner views
 
 The owner application also includes authenticated supplier balances (OW-07), customer balances (OW-08), recorded cashflow (OW-04), profit readiness (OW-03), and accepted event history (OW-12). OW-07 and OW-08 use privacy-minimized opaque identifiers and display only server-accepted, synchronized event projections. Recorded settlements are staff-declared, not provider-verified. These views do not constitute complete accounting, do not include unsynchronized local activity, and are not browser-visually qualified. See the corresponding CAT-052 and OW reports in specs/.
+
+## Owner cashflow update - 24 November 2026
+
+OW-04's recorded money movement projection now includes accepted, staff-declared supplier settlements as a separate daily outflow column and includes them in partial net recorded movement. Payment IDs are deduplicated. The UI states these are not bank-verified; they are not treated as purchase expense or cost of goods sold. PostgreSQL-backed/Android E2E for this added field and authorized visual review remain pending.

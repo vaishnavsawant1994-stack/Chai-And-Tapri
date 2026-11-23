@@ -209,11 +209,15 @@ test('daily sales activity diffs order states and groups declared tenders by ser
     ], expenses: [
       { expenseId: 'expense-rent', category: 'rent', amountPaise: 50000, method: 'upi', status: 'staff_declared' },
       { expenseId: 'expense-electricity', category: 'electricity', amountPaise: 3450, method: 'cash', status: 'staff_declared' }
+    ], supplierPayments: [
+      { paymentId: 'supplier-pay-1', supplierId: 'opaque-supplier', amountPaise: 8000, method: 'cash', status: 'staff_declared' }
     ] }, new Date('2026-11-02T18:30:00-05:00')),
     row(3, { ...empty, orders: [returned], paymentEntries: [
       payment('cash-1', 2000, 'cash', 'staff_declared'),
       payment('cash-refund-1', -500, 'cash', 'staff_declared_refund', 'cash_refund')
-    ], expenses: [{ expenseId: 'expense-rent', category: 'rent', amountPaise: 50000, method: 'upi', status: 'staff_declared' }] }, new Date('2026-11-03T01:00:00Z'))
+    ], expenses: [{ expenseId: 'expense-rent', category: 'rent', amountPaise: 50000, method: 'upi', status: 'staff_declared' }], supplierPayments: [
+      { paymentId: 'supplier-pay-1', supplierId: 'opaque-supplier', amountPaise: 8000, method: 'cash', status: 'staff_declared' }
+    ] }, new Date('2026-11-03T01:00:00Z'))
   ] });
 
   const november3 = result.daily.find((day) => day.date === '2026-11-03');
@@ -227,12 +231,14 @@ test('daily sales activity diffs order states and groups declared tenders by ser
   assert.equal(result.totals.staffDeclaredUpiPaise, 1000);
   assert.equal(result.totals.upiPendingAttemptsStartedPaise, 1500);
   assert.equal(result.totals.staffDeclaredExpensesPaise, 53450);
+  assert.equal(result.totals.staffDeclaredSupplierPaymentsPaise, 8000);
   assert.deepEqual(result.expenseCategories, [
     { category: 'rent', count: 1, amountPaise: 50000 },
     { category: 'electricity', count: 1, amountPaise: 3450 }
   ]);
   assert.equal(november2.staffDeclaredExpensesPaise, 53450);
   assert.equal(november3.staffDeclaredExpensesPaise, 0);
+  assert.equal(november3.staffDeclaredSupplierPaymentsPaise, 0);
   assert.equal(november3.netDeliveredItemValueChangePaise, -1000);
   assert.equal(november2.ordersWithSaleStarted, 1);
   assert.equal(november2.eventsAccepted, 1);
@@ -256,22 +262,27 @@ test('recorded money movement summary excludes pending UPI and checks paise aggr
     evidence: { scope: 'accepted only', dates: 'server UTC' },
     daily: [
       { date: '2026-11-02', staffDeclaredCashPaise: 2000, staffDeclaredUpiPaise: 1000,
-        staffDeclaredCashRefundPaise: 500, staffDeclaredExpensesPaise: 750, upiPendingAttemptsStartedPaise: 9000 },
+        staffDeclaredCashRefundPaise: 500, staffDeclaredExpensesPaise: 750, staffDeclaredSupplierPaymentsPaise: 600, upiPendingAttemptsStartedPaise: 9000 },
       { date: '2026-11-03', staffDeclaredCashPaise: 0, staffDeclaredUpiPaise: 0,
-        staffDeclaredCashRefundPaise: 0, staffDeclaredExpensesPaise: 0, upiPendingAttemptsStartedPaise: 0 }
+        staffDeclaredCashRefundPaise: 0, staffDeclaredExpensesPaise: 0, staffDeclaredSupplierPaymentsPaise: 0, upiPendingAttemptsStartedPaise: 0 }
     ]
   };
   const result = buildRecordedMoneyMovementSummary(activity);
   assert.equal(result.shopId, 's');
   assert.equal(result.serverRevision, 8);
   assert.equal(result.daily[0].recordedInflowPaise, 3000);
-  assert.equal(result.daily[0].recordedOutflowPaise, 1250);
-  assert.equal(result.daily[0].netRecordedMovementPaise, 1750);
-  assert.equal(result.totals.netRecordedMovementPaise, 1750);
+  assert.equal(result.daily[0].recordedSupplierPaymentsOutPaise, 600);
+  assert.equal(result.daily[0].recordedOutflowPaise, 1850);
+  assert.equal(result.daily[0].netRecordedMovementPaise, 1150);
+  assert.equal(result.totals.recordedSupplierPaymentsOutPaise, 600);
+  assert.equal(result.totals.netRecordedMovementPaise, 1150);
   assert.match(result.evidence.net, /not profit/);
   assert.match(result.evidence.exclusions, /UPI pending/);
   assert.throws(() => buildRecordedMoneyMovementSummary({ ...activity, daily: [
     { ...activity.daily[0], staffDeclaredCashPaise: Number.MAX_SAFE_INTEGER, staffDeclaredUpiPaise: 1 }
+  ] }) , (error) => error instanceof ApiError && error.status === 422);
+  assert.throws(() => buildRecordedMoneyMovementSummary({ ...activity, daily: [
+    { ...activity.daily[0], staffDeclaredSupplierPaymentsPaise: Number.MAX_SAFE_INTEGER, staffDeclaredExpensesPaise: 1 }
   ] }) , (error) => error instanceof ApiError && error.status === 422);
 });
 

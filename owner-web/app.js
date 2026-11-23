@@ -394,13 +394,13 @@ import { buildOwnerReportCsv } from './report-export.mjs';
       $('cashflow-metrics').replaceChildren(
         metric('Cash collections declared', money(totals.declaredCashInPaise), 'Staff-declared records'),
         metric('UPI receipts declared', money(totals.declaredUpiInPaise), 'Staff-declared; not provider-verified'),
-        metric('Recorded refunds and expenses', money(totals.recordedOutflowPaise), 'Only accepted declared outflow records'),
+        metric('Recorded refunds, expenses and supplier settlements', money(totals.recordedOutflowPaise), 'Supplier payments are staff-declared, not bank-verified'),
         metric('Net recorded movement*', money(totals.netRecordedMovementPaise), 'Partial event total; not a reconciled cash balance')
       );
       $('cashflow-rows').replaceChildren(...data.daily.map((day) => {
         const row = document.createElement('tr');
         [day.date, money(day.declaredCashInPaise), money(day.declaredUpiInPaise),
-          money(day.recordedCashRefundOutPaise), money(day.recordedExpensesOutPaise), money(day.netRecordedMovementPaise)]
+          money(day.recordedCashRefundOutPaise), money(day.recordedExpensesOutPaise), money(day.recordedSupplierPaymentsOutPaise), money(day.netRecordedMovementPaise)]
           .forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         return row;
       }));

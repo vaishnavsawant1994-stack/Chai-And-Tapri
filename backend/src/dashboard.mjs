@@ -281,7 +281,8 @@ function zeroActivityDay(date) {
     staffDeclaredCashRefundPaise: 0,
     staffDeclaredUpiPaise: 0,
     upiPendingAttemptsStartedPaise: 0,
-    staffDeclaredExpensesPaise: 0
+    staffDeclaredExpensesPaise: 0,
+    staffDeclaredSupplierPaymentsPaise: 0
   };
 }
 
@@ -332,6 +333,7 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
   const orders = new Map();
   const paymentIds = new Set();
   const expenseIds = new Set();
+  const supplierPaymentIds = new Set();
   const expenseCategories = new Map();
   for (const row of events) {
     const payload = row.envelope?.payload;
@@ -381,6 +383,14 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
       category.amountPaise = safeTotal([category.amountPaise, expense.amountPaise]);
       expenseCategories.set(expense.category, category);
     }
+
+    for (const payment of payload.supplierPayments ?? []) {
+      if (supplierPaymentIds.has(payment.paymentId)) continue;
+      supplierPaymentIds.add(payment.paymentId);
+      if (day && payment.status === 'staff_declared') {
+        day.staffDeclaredSupplierPaymentsPaise = safeTotal([day.staffDeclaredSupplierPaymentsPaise, payment.amountPaise]);
+      }
+    }
   }
 
   const daily = [...activity.values()];
@@ -392,7 +402,8 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
     staffDeclaredCashRefundPaise: safeTotal(daily.map((day) => day.staffDeclaredCashRefundPaise)),
     staffDeclaredUpiPaise: safeTotal(daily.map((day) => day.staffDeclaredUpiPaise)),
     upiPendingAttemptsStartedPaise: safeTotal(daily.map((day) => day.upiPendingAttemptsStartedPaise)),
-    staffDeclaredExpensesPaise: safeTotal(daily.map((day) => day.staffDeclaredExpensesPaise))
+    staffDeclaredExpensesPaise: safeTotal(daily.map((day) => day.staffDeclaredExpensesPaise)),
+    staffDeclaredSupplierPaymentsPaise: safeTotal(daily.map((day) => day.staffDeclaredSupplierPaymentsPaise))
   };
   return {
     shopId,
@@ -411,7 +422,8 @@ export function buildDailySalesActivity({ shopId, shopName, serverRevision, even
       collections: 'Cash and UPI receipts/refunds are staff-declared records. UPI provider verification is not asserted.',
       pending: 'UPI pending amount counts attempts started on that day; it is not the currently outstanding pending balance.',
       credit: 'Customer credit/repayment details are excluded from the current approved sync contract.',
-      expenses: 'Expense totals include accepted staff-declared records once per expense ID. Private notes and drawer links are excluded. These recorded outflows are not a profit calculation.'
+      expenses: 'Expense totals include accepted staff-declared records once per expense ID. Private notes and drawer links are excluded. These recorded outflows are not a profit calculation.',
+      supplierPayments: 'Supplier settlements include accepted staff-declared payments once per payment ID. They are not bank-verified and are not treated as purchase expense or cost of goods sold.'
     }
   };
 }
@@ -423,11 +435,12 @@ export function buildRecordedMoneyMovementSummary(activity) {
     const declaredUpiInPaise = day.staffDeclaredUpiPaise;
     const recordedCashRefundOutPaise = day.staffDeclaredCashRefundPaise;
     const recordedExpensesOutPaise = day.staffDeclaredExpensesPaise;
+    const recordedSupplierPaymentsOutPaise = day.staffDeclaredSupplierPaymentsPaise ?? 0;
     const recordedInflowPaise = safeTotal([declaredCashInPaise, declaredUpiInPaise]);
-    const recordedOutflowPaise = safeTotal([recordedCashRefundOutPaise, recordedExpensesOutPaise]);
+    const recordedOutflowPaise = safeTotal([recordedCashRefundOutPaise, recordedExpensesOutPaise, recordedSupplierPaymentsOutPaise]);
     const netRecordedMovementPaise = safeTotal([
       declaredCashInPaise, declaredUpiInPaise,
-      -recordedCashRefundOutPaise, -recordedExpensesOutPaise
+      -recordedCashRefundOutPaise, -recordedExpensesOutPaise, -recordedSupplierPaymentsOutPaise
     ]);
     return {
       date: day.date,
@@ -435,6 +448,7 @@ export function buildRecordedMoneyMovementSummary(activity) {
       declaredUpiInPaise,
       recordedCashRefundOutPaise,
       recordedExpensesOutPaise,
+      recordedSupplierPaymentsOutPaise,
       recordedInflowPaise,
       recordedOutflowPaise,
       netRecordedMovementPaise
@@ -445,6 +459,7 @@ export function buildRecordedMoneyMovementSummary(activity) {
     declaredUpiInPaise: safeTotal(daily.map((day) => day.declaredUpiInPaise)),
     recordedCashRefundOutPaise: safeTotal(daily.map((day) => day.recordedCashRefundOutPaise)),
     recordedExpensesOutPaise: safeTotal(daily.map((day) => day.recordedExpensesOutPaise)),
+    recordedSupplierPaymentsOutPaise: safeTotal(daily.map((day) => day.recordedSupplierPaymentsOutPaise)),
     recordedInflowPaise: safeTotal(daily.map((day) => day.recordedInflowPaise)),
     recordedOutflowPaise: safeTotal(daily.map((day) => day.recordedOutflowPaise)),
     netRecordedMovementPaise: safeTotal(daily.map((day) => day.netRecordedMovementPaise))
@@ -460,9 +475,9 @@ export function buildRecordedMoneyMovementSummary(activity) {
       scope: activity.evidence.scope,
       dates: activity.evidence.dates,
       inflows: 'Cash and UPI are accepted staff-declared receipt records. UPI provider verification is not asserted.',
-      outflows: 'Includes accepted staff-declared cash refunds and expenses once per recorded ID; it is not a complete outflow ledger.',
+      outflows: 'Includes accepted staff-declared cash refunds, expenses, and supplier settlements once per recorded ID. Supplier settlements are not bank-verified; this is not a complete outflow ledger.',
       net: 'Net recorded movement is the included declared inflows less included recorded outflows. It is not profit, a reconciled cash drawer, or a bank balance.',
-      exclusions: 'UPI pending attempts, customer credit and repayments, supplier payments and purchases, cash-in/out, opening/closing balances, and offline or unsynchronized activity are excluded.'
+      exclusions: 'UPI pending attempts, customer credit and repayments, purchase receipts, supplier returns, cash-in/out, opening/closing balances, and offline or unsynchronized activity are excluded.'
     }
   };
 }
