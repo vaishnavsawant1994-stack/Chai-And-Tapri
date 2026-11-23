@@ -25,3 +25,14 @@ The app used one owner bearer token to drain the complete local outbox. When a c
 This prevents the current owner session from uploading a queued event created by a different or unknown local operator. It does not yet provide Android invitation acceptance, authenticated staff PIN-to-cloud-account binding, or a staff sync-session UI. Those staff events remain safely queued at the outbox head and can block later events until the matching actor is linked. The local owner ID is a device-local identity, not a cryptographic proof that the local person and cloud account holder are the same human. Cloud authorization still comes from the server's authenticated membership role.
 
 This slice was not tested against the isolated backend endpoint or a full Android instrumentation regression. It does not qualify production synchronization, browser visual review, physical devices, independent security review, or field usage. OW-09/CAT-052 remain partial.
+
+## Post-commit re-verification — 24 November 2026
+
+- `android\\gradlew.bat testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug`: **PASS**, Kotlin JVM **78/78**, both APK tasks built, lint **0 errors / 179 warnings**.
+- `android\\gradlew.bat connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.chaiandtapri.counter.SyncOutboxActorAttributionTest`: **PASS 1/1** on the API 37 emulator.
+- The same focused instrumentation task for `SyncSessionVaultTest`: **PASS 6/6**.
+- `node.exe --test *.test.cjs` in `prototype`: **PASS 52/52**.
+- `npm.cmd test` in `backend`: **28 passed, 5 PostgreSQL-dependent tests skipped, 0 failed**. PostgreSQL integration was not run in this continuation.
+- The exact test XML for the last actor-attribution run is `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; the session-vault task subsequently overwrote this single generated XML, so its 6/6 result is recorded in the successful Gradle invocation rather than a retained per-run XML.
+
+These reruns validate the scoped change and nearby suites; they are not a full product regression, PostgreSQL integration run, or production qualification.
