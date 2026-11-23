@@ -619,3 +619,7 @@ Quick Sale’s actual activity-result callback and a focused internal result han
 ## CT-06 / CT-24 integrated split-sale repayment — 23 November 2026
 
 Added a connected Android UI test for Quick Sale → split cash/Udhar → Customer Credit repayment → persisted reconciliation. Focused API 37 instrumentation is 1/1 passed. It verifies ₹15 recorded sale, ₹9 staff-declared cash including repayment, ₹6 remaining receivable, one repayment ledger/audit record, and unchanged stock. Report: `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`. Scope remains one synthetic flow; full suites and broad module qualification were not run.
+
+## Android regression runner correction — 23 November 2026
+
+A broad run against the recovered API 37 AVD reported 93 tests and 37 failures; several UI failures showed SAF/launcher unresponsiveness, two live sync classes were not excluded although their endpoint prerequisites were absent, and Package Manager became unavailable during test teardown. A cold-restart focused rerun of the split-sale/repayment UI test passed 1/1. Updated `android/scripts/run-isolated-connected-tests.cmd` and README to exclude all three opt-in live-backend test classes from the general offline emulator suite. The updated wrapper has not been rerun as a full suite; do not treat this broad regression as qualified. See the CT-06 / CT-24 report.

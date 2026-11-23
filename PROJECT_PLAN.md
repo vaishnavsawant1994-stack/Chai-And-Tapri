@@ -998,3 +998,7 @@ Added privacy-minimized customer credit and repayment projection support on top 
 ## 23 November 2026 — Connected credit repayment slice
 
 The native Android test harness now covers a saved customer selected at checkout, split cash/Udhar sale, and cash repayment from Customer Credit. Focused API 37 instrumentation passed 1/1 and reconciled stored sales, declared cash, remaining receivable, repayment audit and stock. This is a test-backed workflow slice; not full qualification. See `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.
+
+## 23 November 2026 — Emulator suite recovery and runner scope
+
+The broad isolated Android suite ended with 93 tests / 37 failures after the API 37 AVD became unresponsive (SAF picker/launcher stalls, missing Package Manager at cleanup); the new repayment journey failed to locate its catalogue item in that stressed run. Cold-restart focused rerun passed 1/1. The runner now excludes all three endpoint-dependent live sync E2E classes, correcting an incomplete exclusion list. The updated wrapper still needs a broad rerun; full Android regression is not qualified. See `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.
