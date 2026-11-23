@@ -100,6 +100,11 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopAuditHistory(actor,limit));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/shifts') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopStaffShifts(actor));
+      }
       return json(res,404,{error:'not_found'});
     } catch(error) {
       const status=error instanceof ApiError?error.status:500;

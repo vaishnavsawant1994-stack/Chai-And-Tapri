@@ -340,6 +340,7 @@ test('sync service refuses dashboard access to non-owner roles before reading th
   await assert.rejects(service.shopRecordedMoneyMovements({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopProfitReadiness({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopAuditHistory({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopStaffShifts({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
 });
 
 test('supplier balances aggregate only opaque accepted financial identifiers and label declarations', () => {
@@ -394,7 +395,8 @@ test('owner overview route requires authentication and serves only owner static 
     async shopDailySalesActivity(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [] }; },
     async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
     async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; },
-    async shopAuditHistory(actor, limit) { return { ...fixture, shopId: actor.shop_id, limit, returnedEventCount: 0, events: [], evidence: { limitation: 'not a complete employee audit trail' } }; }
+    async shopAuditHistory(actor, limit) { return { ...fixture, shopId: actor.shop_id, limit, returnedEventCount: 0, events: [], evidence: { limitation: 'not a complete employee audit trail' } }; },
+    async shopStaffShifts(actor) { return { ...fixture, shopId: actor.shop_id, shiftCount: 0, shifts: [], evidence: { limitation: 'not attendance or payroll' } }; }
   };
   const server = createApiServer(service);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -424,6 +426,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /Profit readiness/);
   assert.match(pageText, /id="profit-missing-list"/);
   assert.match(pageText, /Accepted event history/);
+  assert.match(pageText, /Shift &amp; drawer sessions/);
+  assert.match(pageText, /id="shifts-rows"/);
   assert.match(pageText, /id="audit-rows"/);
   assert.match(pageText, /id="export-report-button"/);
   assert.match(pageText, /type="module"/);
@@ -439,6 +443,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
   assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
   assert.match(scriptText, /\/v1\/dashboard\/audit/);
+  assert.match(scriptText, /\/v1\/dashboard\/shifts/);
   assert.match(scriptText, /buildOwnerReportCsv/);
   const exporter = await fetch(`${base}/owner/report-export.mjs`);
   assert.equal(exporter.status, 200);
@@ -495,6 +500,11 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal((await audit.json()).limit, 5);
   const invalidAuditLimit = await fetch(`${base}/v1/dashboard/audit?shopId=shop-1&limit=101`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(invalidAuditLimit.status, 400);
-  assert.equal(calls.length, 16);
+  const shiftsDenied = await fetch(`${base}/v1/dashboard/shifts?shopId=shop-1`);
+  assert.equal(shiftsDenied.status, 401);
+  const shifts = await fetch(`${base}/v1/dashboard/shifts?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(shifts.status, 200);
+  assert.equal((await shifts.json()).shiftCount, 0);
+  assert.equal(calls.length, 18);
   assert.ok(calls.every((call) => call.shopId === 'shop-1'));
 });

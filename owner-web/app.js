@@ -50,7 +50,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     const cashflow = view === 'cashflow';
     const profit = view === 'profit';
     const audit = view === 'audit';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : 'Refresh event history';
+    const shifts = view === 'shifts';
+    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : 'Refresh shifts';
     $('overview-view').classList.toggle('hidden', !overview);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
@@ -60,6 +61,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('profit-view').classList.toggle('hidden', !profit);
     $('audit-view').classList.toggle('hidden', !audit);
+    $('shifts-view').classList.toggle('hidden', !shifts);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
@@ -78,6 +80,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('profit-tab').setAttribute('aria-current', profit ? 'page' : 'false');
     $('audit-tab').classList.toggle('active', audit);
     $('audit-tab').setAttribute('aria-current', audit ? 'page' : 'false');
+    $('shifts-tab').classList.toggle('active', shifts);
+    $('shifts-tab').setAttribute('aria-current', shifts ? 'page' : 'false');
   }
 
   function captureReport(view, title, scopeId, metricsId, evidenceIds) {
@@ -488,6 +492,33 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     } finally { $('refresh-button').disabled = false; }
   }
 
+  async function loadShifts() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    invalidateReport('shifts');
+    setStatus($('shifts-status'), 'Loading accepted shift summaries…');
+    try {
+      const data = await request(`/v1/dashboard/shifts?shopId=${encodeURIComponent(activeShopId)}`, { headers: { authorization: `Bearer ${session.token}` } });
+      $('shifts-scope').textContent = data.evidence.scope;
+      const rows = data.shifts.map((shift) => {
+        const row = document.createElement('tr');
+        const closed = shift.closedAtEpochMs !== null;
+        const variance = closed ? shift.closingCashPaise - shift.expectedCashPaise : null;
+        const values = [shift.shiftId, shift.sessionType === 'staff_shift' ? 'Staff shift (label unauthenticated)' : 'Cash drawer', new Date(shift.openedAtEpochMs).toLocaleString(), closed ? 'Closed' : 'Open', money(shift.openingCashPaise), money(shift.expectedCashPaise), closed ? money(shift.closingCashPaise) : 'Not counted', closed ? money(variance) : 'Not available'];
+        values.forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 8; cell.className = 'empty-row'; cell.textContent = 'No accepted shift sessions are available.'; row.append(cell); rows.push(row); }
+      $('shifts-rows').replaceChildren(...rows);
+      $('shifts-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+      setStatus($('shifts-status'), `${data.shiftCount} accepted session summaries loaded through server revision ${data.serverRevision}.`, 'success');
+      captureReport('shifts', 'Shift & drawer sessions', 'shifts-scope', null, ['shifts-evidence-list']);
+    } catch (error) {
+      setStatus($('shifts-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
@@ -541,6 +572,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
     else if (!$('audit-view').classList.contains('hidden')) loadAuditHistory();
+    else if (!$('shifts-view').classList.contains('hidden')) loadShifts();
     else loadOverview();
   });
   $('export-report-button').addEventListener('click', () => {
@@ -565,6 +597,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
+  $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
   $('activity-range').addEventListener('change', () => { if (!$('activity-view').classList.contains('hidden')) loadActivity(); });
   $('cashflow-range').addEventListener('change', () => { if (!$('cashflow-view').classList.contains('hidden')) loadCashflow(); });
   $('profit-range').addEventListener('change', () => { if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness(); });

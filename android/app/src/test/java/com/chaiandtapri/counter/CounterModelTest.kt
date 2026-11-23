@@ -450,6 +450,19 @@ class CounterModelTest {
         val costPayload = SyncOutboxPayloadEncoder.between(before, before.copy(orders = listOf(costedOrder)))
         assertTrue(costPayload.sendable)
         assertTrue(costPayload.json!!.contains("\"estimatedUnitCostPaise\":425"))
+
+        val privateShift = CashDrawerSession("local-session-private-id", 1000, 1, staffLabel = "Private Operator", handoverToLabel = "Private Handover", handoverNote = "Private note")
+        val shiftDelta = SyncOutboxPayloadEncoder.between(before, before.copy(cashDrawerSessions = listOf(privateShift)))
+        assertTrue(shiftDelta.sendable)
+        val shiftJson = shiftDelta.json!!
+        assertTrue(shiftJson.contains("\"staffShifts\":[{"))
+        assertTrue(shiftJson.contains("\"sessionType\":\"staff_shift\""))
+        listOf("local-session-private-id", "Private Operator", "Private Handover", "Private note").forEach { assertFalse(shiftJson.contains(it)) }
+        val shiftClose = SyncOutboxPayloadEncoder.between(before.copy(cashDrawerSessions = listOf(privateShift)), before.copy(
+            cashDrawerSessions = listOf(privateShift.copy(closingCashPaise = 900, closedAt = 2000))
+        ))
+        assertTrue(shiftClose.sendable)
+        assertTrue(shiftClose.json!!.contains("\"closingCashPaise\":900"))
     }
 
     @Test fun supplierFinancialProjectionUsesPersistedOpaqueIdsAndOmitsSupplierPii() {

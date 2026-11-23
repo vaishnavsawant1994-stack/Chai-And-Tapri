@@ -19,7 +19,7 @@ const enumIs = (value, values) => typeof value === 'string' && values.includes(v
 /** Validate the only Android payload contract currently eligible for upload. */
 export function validateProjectionDelta(payload) {
   const requiredTopKeys = ['kind','orders','stock','stockMovements','customerCredits','repayments','paymentEntries'];
-  const allowedTopKeys = [...requiredTopKeys, 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'];
+  const allowedTopKeys = [...requiredTopKeys, 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns', 'staffShifts'];
   if (!object(payload) || requiredTopKeys.some((key) => !Object.hasOwn(payload, key)) ||
     Object.keys(payload).some((key) => !allowedTopKeys.includes(key)) || payload.kind !== 'projection_delta.v1') throw new ApiError(400, 'invalid_projection_delta');
   for (const key of requiredTopKeys.slice(1)) if (!Array.isArray(payload[key]) || payload[key].length > 500) throw new ApiError(400, 'invalid_projection_delta');
@@ -27,8 +27,9 @@ export function validateProjectionDelta(payload) {
   const purchaseReceipts = payload.purchaseReceipts ?? [];
   const supplierPayments = payload.supplierPayments ?? [];
   const purchaseReturns = payload.purchaseReturns ?? [];
-  if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
-  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.customerCredits.length + payload.repayments.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length === 0) throw new ApiError(400, 'empty_projection_delta');
+  const staffShifts = payload.staffShifts ?? [];
+  if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns, staffShifts].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
+  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.customerCredits.length + payload.repayments.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length + staffShifts.length === 0) throw new ApiError(400, 'empty_projection_delta');
 
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
   const legacyLineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
@@ -97,6 +98,17 @@ export function validateProjectionDelta(payload) {
       if (idKey === 'returnId' && (!UUID.test(item.receiptId ?? '') || !isInt(item.amountPaise, { min: 1, max: 100_000_000 }))) throw new ApiError(400, 'invalid_projection_delta');
     }
   }
+  const shiftIds = new Set();
+  for (const shift of staffShifts) {
+    if (!hasExactKeys(shift, ['shiftId','sessionType','openedAtEpochMs','closedAtEpochMs','openingCashPaise','expectedCashPaise','closingCashPaise']) ||
+      !UUID.test(shift.shiftId ?? '') || shiftIds.has(shift.shiftId) || !enumIs(shift.sessionType, ['staff_shift','cash_drawer']) ||
+      !isInt(shift.openedAtEpochMs, { min: 1 }) || !isInt(shift.openingCashPaise, { min: 0, max: 100_000_000 }) ||
+      !isInt(shift.expectedCashPaise) ||
+      (shift.closedAtEpochMs !== null && (!isInt(shift.closedAtEpochMs, { min: 1 }) || shift.closedAtEpochMs <= shift.openedAtEpochMs)) ||
+      (shift.closingCashPaise !== null && !isInt(shift.closingCashPaise, { min: 0, max: 100_000_000 })) ||
+      ((shift.closedAtEpochMs === null) !== (shift.closingCashPaise === null))) throw new ApiError(400, 'invalid_projection_delta');
+    shiftIds.add(shift.shiftId);
+  }
   return true;
 }
 
@@ -153,6 +165,19 @@ function checkedAdd(left, right) {
 }
 
 export function emptySupplierLedger() { return { receipts: new Map(), totals: new Map(), eventIds: new Set() }; }
+
+export function emptyStaffShiftLedger() { return new Map(); }
+
+export function applyStaffShiftLedgerDelta(ledger, payload) {
+  for (const shift of payload.staffShifts ?? []) {
+    const previous = ledger.get(shift.shiftId);
+    if (previous) {
+      if (previous.sessionType !== shift.sessionType || previous.openedAtEpochMs !== shift.openedAtEpochMs || previous.openingCashPaise !== shift.openingCashPaise) throw new ApiError(409, 'staff_shift_identity_conflict');
+      if (previous.closedAtEpochMs !== null && JSON.stringify(previous) !== JSON.stringify(shift)) throw new ApiError(409, 'staff_shift_closed_identity_conflict');
+    }
+    ledger.set(shift.shiftId, shift);
+  }
+}
 
 export class SyncService {
   constructor(pool, { sessionHours = 8, maxEvents = 100, maxPayloadBytes = 64 * 1024 } = {}) {
@@ -342,6 +367,21 @@ export class SyncService {
     });
   }
 
+  async shopStaffShifts(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      const ledger = emptyStaffShiftLedger();
+      for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') applyStaffShiftLedgerDelta(ledger, row.envelope.payload);
+      const shifts = [...ledger.values()].sort((a, b) => b.openedAtEpochMs - a.openedAtEpochMs || a.shiftId.localeCompare(b.shiftId));
+      return { shopId: actor.shop_id, shopName: shop.rows[0].display_name, serverRevision: Number(shop.rows[0].server_revision), shiftCount: shifts.length, shifts,
+        evidence: { scope: 'Summaries from server-accepted device declarations only.', identity: 'Operator labels and notes are omitted; these records do not authenticate a staff member.', cash: 'Opening, expected and counted cash are device-reported and are not independently reconciled.', time: 'Shift times use the device clock and are not server-verified.', limitation: 'This is an operational shift summary, not attendance, payroll or a staff-performance report.' } };
+    });
+  }
+
   async submitEvents(actor, events) {
     if (!Array.isArray(events) || events.length < 1 || events.length > this.maxEvents) throw new ApiError(400, 'invalid_event_batch');
     return withTransaction(this.pool, async (c) => {
@@ -351,9 +391,11 @@ export class SyncService {
       const journal = await c.query('SELECT envelope FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
       const supplierLedger = emptySupplierLedger();
       const customerLedger = emptyCustomerLedger();
+      const staffShiftLedger = emptyStaffShiftLedger();
       for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') {
         applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
         applyCustomerLedgerDelta(customerLedger, row.envelope.payload);
+        applyStaffShiftLedgerDelta(staffShiftLedger, row.envelope.payload);
       }
       const results = [];
       for (const e of events) {
@@ -376,6 +418,7 @@ export class SyncService {
         }
         applySupplierLedgerDelta(supplierLedger, e.payload);
         applyCustomerLedgerDelta(customerLedger, e.payload);
+        applyStaffShiftLedgerDelta(staffShiftLedger, e.payload);
         const next = revision + 1;
         await c.query(`INSERT INTO sync_events(business_id,shop_id,server_revision,event_id,command_id,device_id,event_type,schema_version,base_revision,payload_hash,envelope)
           VALUES($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10)`, [actor.business_id,actor.shop_id,next,e.eventId,e.commandId,e.deviceId,e.type,e.baseRevision,payloadHash,e]);

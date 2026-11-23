@@ -8,8 +8,6 @@ data class SyncOutboxPayload(val version: Int?, val json: String?, val blockedRe
 object SyncOutboxPayloadEncoder {
     fun between(before: CounterSnapshot, after: CounterSnapshot): SyncOutboxPayload {
         val unsupported = before.suppliers != after.suppliers ||
-            before.cashDrawerSessions != after.cashDrawerSessions ||
-            before.cashDrawerMovements != after.cashDrawerMovements ||
             before.cashClosingReviews != after.cashClosingReviews
         if (unsupported) return SyncOutboxPayload(null, null, "entity_contract_pending")
 
@@ -24,6 +22,13 @@ object SyncOutboxPayloadEncoder {
         val receipts = after.purchaseReceipts.drop(before.purchaseReceipts.size)
         val supplierPayments = after.supplierPayments.drop(before.supplierPayments.size)
         val purchaseReturns = after.purchaseReturns.drop(before.purchaseReturns.size)
+        val previousShifts = before.cashDrawerSessions.associateBy(CashDrawerSession::sessionId)
+        val shifts = after.cashDrawerSessions.mapNotNull { session ->
+            val old = previousShifts[session.sessionId]
+            val oldExpected = old?.let { expectedCash(before, it.sessionId) }
+            val expected = expectedCash(after, session.sessionId) ?: return@mapNotNull null
+            if (old == session && (old.closedAt != null || oldExpected == expected)) null else session to expected
+        }
         val customerSyncIds = after.customerSyncIdentities
         if ((receipts.map { it.supplierId } + supplierPayments.map { it.supplierId } + purchaseReturns.map { it.supplierId })
                 .any { supplierId -> supplierSyncIds[supplierId]?.isOpaqueUuid() != true } ||
@@ -41,7 +46,7 @@ object SyncOutboxPayloadEncoder {
             credits.any { !it.syncId.isOpaqueUuid() } || repayments.any { !it.syncId.isOpaqueUuid() } || payments.any { !it.syncId.isOpaqueUuid() }) {
             return SyncOutboxPayload(null, null, "opaque_customer_sync_identity_required")
         }
-        if (orders.isEmpty() && stock.isEmpty() && movements.isEmpty() && credits.isEmpty() && repayments.isEmpty() && payments.isEmpty() && expenses.isEmpty() && receipts.isEmpty() && supplierPayments.isEmpty() && purchaseReturns.isEmpty()) {
+        if (orders.isEmpty() && stock.isEmpty() && movements.isEmpty() && credits.isEmpty() && repayments.isEmpty() && payments.isEmpty() && expenses.isEmpty() && receipts.isEmpty() && supplierPayments.isEmpty() && purchaseReturns.isEmpty() && shifts.isEmpty()) {
             return SyncOutboxPayload(null, null, "empty_delta")
         }
 
@@ -109,6 +114,14 @@ object SyncOutboxPayloadEncoder {
                 field("supplierId", supplierSyncIds.getValue(purchaseReturn.supplierId)); append(',')
                 field("receiptId", receiptSyncId); append(','); long("amountPaise", purchaseReturn.totalPaise); append('}')
             }
+            append(','); append("\"staffShifts\":"); array(shifts) { (session, expected) ->
+                val stableId = java.util.UUID.nameUUIDFromBytes(session.sessionId.toByteArray(Charsets.UTF_8)).toString()
+                append('{'); field("shiftId", stableId); append(',')
+                field("sessionType", if (session.staffLabel == null) "cash_drawer" else "staff_shift"); append(',')
+                long("openedAtEpochMs", session.openedAt); append(','); nullableLong("closedAtEpochMs", session.closedAt); append(',')
+                number("openingCashPaise", session.openingCashPaise); append(','); long("expectedCashPaise", expected); append(',')
+                nullableNumber("closingCashPaise", session.closingCashPaise); append('}')
+            }
             append('}')
         }
         return SyncOutboxPayload(version = 1, json = json, blockedReason = null)
@@ -127,10 +140,20 @@ object SyncOutboxPayloadEncoder {
     private fun StringBuilder.nullableField(name: String, value: String?) { append(quoted(name)).append(':').append(value?.let(::quoted) ?: "null") }
     private fun StringBuilder.number(name: String, value: Int) { append(quoted(name)).append(':').append(value) }
     private fun StringBuilder.long(name: String, value: Long) { append(quoted(name)).append(':').append(value) }
+    private fun StringBuilder.nullableLong(name: String, value: Long?) { append(quoted(name)).append(':').append(value?.toString() ?: "null") }
     private fun StringBuilder.nullableNumber(name: String, value: Int?) { append(quoted(name)).append(':').append(value?.toString() ?: "null") }
     private fun StringBuilder.bool(name: String, value: Boolean) { append(quoted(name)).append(':').append(value) }
 
     private fun String.isOpaqueUuid(): Boolean = runCatching { java.util.UUID.fromString(this).toString() == this }.getOrDefault(false)
+
+    private fun expectedCash(snapshot: CounterSnapshot, sessionId: String): Long? {
+        val session = snapshot.cashDrawerSessions.firstOrNull { it.sessionId == sessionId } ?: return null
+        val collections = snapshot.paymentEntries.filter { it.drawerSessionId == sessionId && it.method == "cash" && it.status in setOf("staff_declared", "staff_declared_refund") }.sumOf { it.amountPaise.toLong() }
+        val expenses = snapshot.expenses.filter { it.drawerSessionId == sessionId && it.method == "cash" && it.status == "staff_declared" }.sumOf { it.amountPaise.toLong() }
+        val supplierOut = snapshot.supplierPayments.filter { it.drawerSessionId == sessionId && it.method == "cash" && it.status == "staff_declared" }.sumOf { it.amountPaise.toLong() }
+        val adjustments = snapshot.cashDrawerMovements.filter { it.sessionId == sessionId }.sumOf { if (it.kind == "cash_in") it.amountPaise.toLong() else -it.amountPaise.toLong() }
+        return session.openingCashPaise.toLong() + collections - expenses - supplierOut + adjustments
+    }
 
     private fun quoted(value: String): String = buildString(value.length + 2) {
         append('"')

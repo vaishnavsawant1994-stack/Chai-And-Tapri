@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, applyCustomerLedgerDelta, applySupplierLedgerDelta, emptyCustomerLedger, emptySupplierLedger, validateProjectionDelta } from '../src/service.mjs';
+import { ApiError, applyCustomerLedgerDelta, applySupplierLedgerDelta, applyStaffShiftLedgerDelta, emptyCustomerLedger, emptySupplierLedger, emptyStaffShiftLedger, validateProjectionDelta } from '../src/service.mjs';
 
 const emptyDelta = () => ({
   kind:'projection_delta.v1',orders:[],stock:[],stockMovements:[],customerCredits:[],repayments:[],paymentEntries:[]
@@ -13,6 +13,22 @@ test('projection contract rejects empty deltas and accepts supported stock delta
   payload.stock.push({ productId:'tea', quantity:0 });
   payload.stockMovements.push({ movementId:'movement-1', productId:'tea', quantityDelta:-2, orderNumber:12 });
   assert.equal(validateProjectionDelta(payload), true);
+});
+
+test('staff shift projection is privacy-minimized, validated and immutable after close', () => {
+  const shift = { shiftId:'55555555-5555-4555-8555-555555555555', sessionType:'staff_shift', openedAtEpochMs:1000, closedAtEpochMs:null, openingCashPaise:500, expectedCashPaise:500, closingCashPaise:null };
+  assert.equal(validateProjectionDelta({ ...emptyDelta(), staffShifts:[shift] }), true);
+  assert.equal(validateProjectionDelta({ ...emptyDelta(), staffShifts:[{ ...shift, expectedCashPaise:-50 }] }), true);
+  invalid({ ...emptyDelta(), staffShifts:[{ ...shift, operatorName:'Private name' }] });
+  invalid({ ...emptyDelta(), staffShifts:[{ ...shift, closedAtEpochMs:2000 }] });
+  const ledger = emptyStaffShiftLedger();
+  applyStaffShiftLedgerDelta(ledger, { staffShifts:[shift] });
+  applyStaffShiftLedgerDelta(ledger, { staffShifts:[{ ...shift, expectedCashPaise:450 }] });
+  const closed = { ...shift, closedAtEpochMs:3000, expectedCashPaise:450, closingCashPaise:400 };
+  applyStaffShiftLedgerDelta(ledger, { staffShifts:[closed] });
+  applyStaffShiftLedgerDelta(ledger, { staffShifts:[closed] });
+  assert.throws(() => applyStaffShiftLedgerDelta(ledger, { staffShifts:[{ ...closed, closingCashPaise:420 }] }), (error) => error.code === 'staff_shift_closed_identity_conflict');
+  assert.throws(() => applyStaffShiftLedgerDelta(ledger, { staffShifts:[{ ...closed, openingCashPaise:600 }] }), (error) => error.code === 'staff_shift_identity_conflict');
 });
 
 test('projection contract rejects unknown payload kinds and unexpected fields', () => {
