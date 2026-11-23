@@ -9,6 +9,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import android.text.Editable
 import android.text.TextWatcher
 import java.util.Locale
@@ -24,7 +25,33 @@ class SalesHistoryActivity : ComponentActivity() {
     private var fromDateStartMillis: Long? = null
     private var throughDateEndMillis: Long? = null
     private lateinit var dateRangeStatus: TextView
+    private lateinit var exportButton: Button
+    private lateinit var exportStatus: TextView
+    private var exportCsv: String? = null
     private var model: CounterModel? = null
+
+    private val createHistoryLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        val csv = exportCsv
+        if (uri == null) {
+            exportStatus.text = "Sales history export cancelled. No business data was changed."
+        } else if (csv == null) {
+            exportStatus.text = "No matching sales are available to export."
+        } else {
+            exportStatus.text = "Writing the selected local history…"
+            RecoveryExecutor.executor.execute {
+                val result = runCatching {
+                    val output = contentResolver.openOutputStream(uri, "wt") ?: error("The selected destination could not be opened.")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(csv) }
+                }
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) exportStatus.text = result.fold(
+                        { "Sales history CSV exported. Tender statuses remain as recorded; UPI is not provider-verified." },
+                        { error -> "Export failed (${error.javaClass.simpleName}). No ledger records were changed." }
+                    )
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +88,10 @@ class SalesHistoryActivity : ComponentActivity() {
             content.addView(dateActions)
             dateRangeStatus = label("All order dates", 14f)
             content.addView(dateRangeStatus)
+            exportStatus = label("", 14f).also(content::addView)
+            exportButton = button("Export matching sales as CSV") {
+                createHistoryLauncher.launch("chai-tapri-sales-history.csv")
+            }.also(content::addView)
             orderList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             content.addView(orderList)
             if (orders.isEmpty()) orderList.addView(label("No orders recorded on this device.", 17f))
@@ -94,9 +125,14 @@ class SalesHistoryActivity : ComponentActivity() {
             textMatches && dateMatches
         }
         if (filtered.isEmpty()) {
+            exportCsv = null
+            if (::exportButton.isInitialized) exportButton.isEnabled = false
             orderList.addView(label(if (orders.isEmpty()) "No orders recorded on this device." else "No orders match the current filters. Legacy orders without a saved date are excluded from date filters.", 17f))
             return
         }
+        val paymentByOrder = payments.filter { it.orderNumber != null }.groupBy { it.orderNumber }
+        exportCsv = SalesHistoryCsv.render(filtered.map { order -> SalesHistoryCsvRow(order, paymentByOrder[order.number].orEmpty()) })
+        if (::exportButton.isInitialized) exportButton.isEnabled = true
         filtered.forEach { order ->
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 14, 12, 14) }
                 card.addView(label("Order #${order.number} · ${order.items}", 18f))

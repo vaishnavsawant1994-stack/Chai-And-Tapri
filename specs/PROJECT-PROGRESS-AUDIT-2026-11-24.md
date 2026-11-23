@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
 
+## Latest continuation — CT-11 filtered sales-history CSV export
+
+The Android Sales History screen exports the current search/date-filter result through SAF, with payment-evidence labels, customer-ID exclusion, CSV formula protection, and no ledger mutation. Kotlin JVM passed 75/75; focused API 37 UI test passed 1/1; APK build tasks passed; lint reports 0 errors / 176 warnings. See [CT-11 export report](CT-11-SALES-HISTORY-CSV-EXPORT-REPORT-2026-11-24.md). No full Android regression or browser visual review was run for this slice.
+
 This audit records the current verified continuation from the repository. Historical counts in prior progress reports are not evidence for this continuation.
 
 ## Latest continuation — OW-09B role-scoped sync

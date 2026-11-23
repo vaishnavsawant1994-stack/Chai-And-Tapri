@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-11 sales-history export — 24 November 2026
+
+Sales History can now export the currently filtered local orders as CSV through Android's SAF picker. The CSV includes order/payment states and evidence limitations, excludes customer identifiers, escapes formula-leading cells, and does not mutate the ledger. Kotlin JVM passed 75/75; focused API 37 UI export passed 1/1; debug and instrumentation APK builds plus lint passed (0 errors / 176 warnings). This is one synthetic emulator path only; CT-11, browser visual review, and the six-wave product remain partial. See `specs/CT-11-SALES-HISTORY-CSV-EXPORT-REPORT-2026-11-24.md`.
+
 ## Latest continuation — OW-09B role-scoped sync and submitter audit — 24 November 2026
 
 Authenticated sync now derives authorization from the live shop membership. Cashiers can submit supported sales, collections, customer credit/repayments, and shift projections; refunds, voids, manual stock adjustments, expenses and procurement require manager/owner role. Cashier stock movements must match previous server stock and delivered order quantities; order collection/credit events must match the order's balance changes. Newly accepted events record the authenticated submitter and role, visible in the owner accepted-event history. Disposable PostgreSQL 17 backend suite passed 33/33 with a restricted runtime role; prototype suite 52/52; syntax and diff checks passed. Offline actions are not tied to a cloud identity, prices are not validated against a synced server catalogue, and this is not production authorization or browser-visual qualification. See `specs/OW-09B-ROLE-SCOPED-SYNC-REPORT-2026-11-24.md`.
