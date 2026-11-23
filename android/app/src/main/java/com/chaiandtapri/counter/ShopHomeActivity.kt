@@ -39,9 +39,23 @@ class ShopHomeActivity : ComponentActivity() {
         try {
             model = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
             val summary = model!!.localBusinessSummary()
-            val shop = model!!.shopProfile().shopName.ifBlank { "Shop not set up" }
+            val profile = model!!.shopProfile()
+            val shop = profile.shopName.ifBlank { "Shop not set up" }
             content.addView(label("$shop · Shop Home", 25f))
             content.addView(label("Local encrypted records · lifetime totals on this device · sync not configured", 14f))
+            content.addView(label("First-sale setup", 18f))
+            content.addView(label("${if (profile.shopName.isNotBlank()) "✓" else "○"} Shop identity${if (profile.shopName.isNotBlank()) " · ${profile.businessType}" else " · needs setup"}", 14f))
+            content.addView(label("${if (summary.productCount > 0) "✓" else "○"} Sellable products · ${summary.productCount}", 14f))
+            content.addView(label("${if (summary.productCount > 0 && summary.stockConfirmedProductCount == summary.productCount) "✓" else "○"} Physical opening stock · ${summary.stockConfirmedProductCount}/${summary.productCount} products confirmed", 14f))
+            if (LocalSessionState.isOwner && profile.shopName.isBlank()) {
+                content.addView(button("Set up shop identity") { startActivity(Intent(this, ShopSetupActivity::class.java)) })
+            }
+            if (LocalSessionState.isOwner && summary.productCount == 0) {
+                content.addView(button("Add products and confirm prices") { startActivity(Intent(this, ProductCatalogueActivity::class.java)) })
+            }
+            if (LocalSessionState.isOwner && summary.productCount > summary.stockConfirmedProductCount) {
+                content.addView(button("Confirm physical opening stock") { startActivity(Intent(this, StockCountActivity::class.java)) })
+            }
             content.addView(metric("Recorded sales", money(summary.recordedSalesPaise), "Net of recorded refunds; not a daily total"))
             content.addView(metric("Cash recorded", money(summary.cashRecordedPaise), "Staff-declared cash events, net of recorded cash refunds"))
             content.addView(metric("UPI pending", money(summary.upiPendingPaise), "Expected collection only; never marked verified here"))

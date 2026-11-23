@@ -84,10 +84,11 @@ class ShopSetupActivity : Activity() {
         status = label("", 14f)
         column.addView(status)
         column.addView(button(if (isConfigured) "Save shop profile" else "Save shop setup") { save() })
-        column.addView(button("Back to counter") { finish() })
+        column.addView(button("Save and configure products") { save(continueToProducts = true) })
+        column.addView(button("Back to counter") { openCounter() })
     }
 
-    private fun save() {
+    private fun save(continueToProducts: Boolean = false) {
         if (saving) return
         val store = model ?: return
         val profile = ShopProfile(
@@ -105,10 +106,22 @@ class ShopSetupActivity : Activity() {
                 saving = false
                 if (destroyed || isFinishing || isDestroyed) return@runOnUiThread
                 columnButtonsEnabled(true)
-                status.text = result.getOrElse { "Shop settings could not be saved (${it.javaClass.simpleName})." }
-                status.setTextColor(if (result.getOrNull()?.startsWith("Shop setup saved") == true) 0xff1b5e20.toInt() else 0xffb71c1c.toInt())
+                val message = result.getOrElse { "Shop settings could not be saved (${it.javaClass.simpleName})." }
+                status.text = message
+                val saved = message.startsWith("Shop setup saved")
+                status.setTextColor(if (saved) 0xff1b5e20.toInt() else 0xffb71c1c.toInt())
+                if (saved && continueToProducts) {
+                    startActivity(android.content.Intent(this, ProductCatalogueActivity::class.java))
+                }
             }
         }
+    }
+
+    private fun openCounter() {
+        startActivity(android.content.Intent(this, MainActivity::class.java).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        })
+        finish()
     }
 
     private fun columnButtonsEnabled(enabled: Boolean) {

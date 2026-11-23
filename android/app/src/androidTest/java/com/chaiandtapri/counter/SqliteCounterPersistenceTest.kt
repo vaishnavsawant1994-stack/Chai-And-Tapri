@@ -147,6 +147,94 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun firstOwnerEnrollmentRoutesToShopSetup() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.clear()
+        val access = instrumentation.startActivitySync(Intent(context, LocalAccessActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val setupMonitor = instrumentation.addMonitor(ShopSetupActivity::class.java.name, null, false)
+        var setup: ShopSetupActivity? = null
+        try {
+            fun find(hint: String? = null, text: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if ((hint != null && node.hintText?.toString() == hint) ||
+                        (text != null && node.text?.toString()?.equals(text, true) == true)) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { found -> return found } }
+                    return null
+                }
+                return visit(root)
+            }
+            fun await(hint: String? = null, text: String? = null): AccessibilityNodeInfo {
+                repeat(120) { find(hint, text)?.let { return it }; Thread.sleep(100) }
+                throw AssertionError("Owner enrollment control not found: hint=$hint text=$text")
+            }
+            fun set(hint: String, value: String) {
+                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
+                assertTrue("Could not enter $hint", await(hint = hint).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args))
+            }
+            await(text = "Set up owner access")
+            set("Owner username", "firstshopowner")
+            set("Owner display name", "First Shop Owner")
+            set("Passphrase (12+ characters)", "Synthetic onboarding owner secret")
+            assertTrue(await(text = "Create owner account").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            setup = setupMonitor.waitForActivityWithTimeout(90_000) as? ShopSetupActivity
+            assertNotNull("First owner enrollment should continue into CT-02 Shop Setup", setup)
+            assertTrue(LocalSessionState.isOwner)
+            assertTrue("New owner access should persist", LocalOwnerAuth.hasOwner(context))
+        } finally {
+            instrumentation.removeMonitor(setupMonitor)
+            instrumentation.runOnMainSync { setup?.finish(); access.finish(); LocalSessionState.clear() }
+            Thread.sleep(300)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun shopHomeShowsMissingFirstSaleSetupAndRoutesToStockCount() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic setup owner")
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("setup_tea", "Setup Tea", "Chai", 1200, true, true, true)).startsWith("Product saved"))
+        }
+        val home = instrumentation.startActivitySync(Intent(context, ShopHomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val stockMonitor = instrumentation.addMonitor(StockCountActivity::class.java.name, null, false)
+        var stockCount: StockCountActivity? = null
+        try {
+            fun find(text: String): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if (node.text?.toString()?.contains(text, true) == true) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { found -> return found } }
+                    return null
+                }
+                return visit(root)
+            }
+            fun await(text: String): AccessibilityNodeInfo {
+                repeat(100) { find(text)?.let { return it }; Thread.sleep(100) }
+                throw AssertionError("Shop Home setup action not found: $text")
+            }
+            await("First-sale setup")
+            assertNotNull(find("Shop identity"))
+            assertNotNull(find("Sellable products"))
+            assertNotNull(find("Physical opening stock"))
+            val before = SqliteCounterPersistence(context).use { it.load() }
+            assertTrue(await("Confirm physical opening stock").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            stockCount = stockMonitor.waitForActivityWithTimeout(15_000) as? StockCountActivity
+            assertNotNull("The setup checklist should open the actual CT-16 stock count", stockCount)
+            val after = SqliteCounterPersistence(context).use { it.load() }
+            assertEquals("Opening the setup action must not mutate the ledger", before, after)
+        } finally {
+            instrumentation.removeMonitor(stockMonitor)
+            instrumentation.runOnMainSync { stockCount?.finish(); home.finish() }
+            Thread.sleep(300)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun localStaffPinAuthenticationRoleAndDisablePersist() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
@@ -1730,6 +1818,71 @@ class SqliteCounterPersistenceTest {
         }
         instrumentation.runOnMainSync { activity.finish() }
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+    }
+
+    @Test fun newShopSetupSavesProfileAndContinuesToProductCatalogue() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic onboarding owner")
+        val setup = instrumentation.startActivitySync(
+            Intent(context, ShopSetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        val catalogueMonitor = instrumentation.addMonitor(ProductCatalogueActivity::class.java.name, null, false)
+        var catalogue: ProductCatalogueActivity? = null
+        try {
+            fun find(textPrefix: String? = null, hint: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    val text = node.text?.toString().orEmpty()
+                    if ((textPrefix != null && text.startsWith(textPrefix, ignoreCase = true)) ||
+                        (hint != null && node.hintText?.toString() == hint)) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { found -> return found } }
+                    return null
+                }
+                return visit(root)
+            }
+            fun await(textPrefix: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(100) { find(textPrefix, hint)?.let { return it }; Thread.sleep(100) }
+                throw AssertionError("Shop setup control not found: text=$textPrefix hint=$hint")
+            }
+            fun tap(text: String) {
+                assertTrue("Could not activate $text", await(textPrefix = text).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            fun set(hint: String, value: String) {
+                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
+                assertTrue("Could not enter $hint", await(hint = hint).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args))
+            }
+
+            await(textPrefix = "Shop Setup")
+            set("For example, Shree Tea Corner", "First Tapri")
+            tap("Save and configure products")
+            catalogue = catalogueMonitor.waitForActivityWithTimeout(15_000) as? ProductCatalogueActivity
+            assertNotNull("Product catalogue activity should be resumed", catalogue)
+            var catalogueReady = false
+            repeat(100) {
+                instrumentation.runOnMainSync {
+                    fun hasAddProduct(view: View): Boolean =
+                        (view is Button && view.text.toString().startsWith("Add product", true)) ||
+                            (view is ViewGroup && (0 until view.childCount).any { index -> hasAddProduct(view.getChildAt(index)) })
+                    catalogueReady = catalogue?.window?.decorView?.let(::hasAddProduct) == true
+                }
+                if (catalogueReady) return@repeat
+                Thread.sleep(100)
+            }
+            assertTrue("Successful shop setup should open the real product catalogue", catalogueReady)
+            CounterModel(SqliteCounterPersistence(context)).use { model ->
+                assertEquals("First Tapri", model.shopProfile().shopName)
+                assertTrue("Guided setup must not fabricate orders", model.allOrders().isEmpty())
+                assertTrue("Guided setup must not fabricate payments", model.paymentHistory().isEmpty())
+                assertTrue("Guided setup must not fabricate stock movements", model.stockMovements().isEmpty())
+            }
+        } finally {
+            instrumentation.removeMonitor(catalogueMonitor)
+            instrumentation.runOnMainSync { catalogue?.finish(); setup.finish() }
+            Thread.sleep(300)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
     }
 
     @Test fun businessAlertsUseLocalRecordsAndDiscloseUnavailableAlertClasses() {

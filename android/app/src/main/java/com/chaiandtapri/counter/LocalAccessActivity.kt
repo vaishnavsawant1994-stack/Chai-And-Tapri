@@ -91,7 +91,8 @@ class LocalAccessActivity : Activity() {
                 result.fold({ auth ->
                     if (auth == AuthResult.ACCEPTED) {
                         status.text = if (LocalSessionState.isOwner) "Owner access unlocked." else "Staff access unlocked."
-                        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK))
+                        val destination = if (enrolling && LocalSessionState.isOwner) ShopSetupActivity::class.java else MainActivity::class.java
+                        startActivity(Intent(this, destination).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK))
                         finish()
                     } else status.text = if (auth == AuthResult.TEMPORARILY_LOCKED) "Access temporarily locked. Wait before trying again." else "Owner access could not be verified. Check the details and try again."
                     }, { error -> status.text = error.message?.takeIf { it.contains("12+") || it.contains("username") || it.contains("display name") } ?: "Local access could not be completed. Local data was preserved." })

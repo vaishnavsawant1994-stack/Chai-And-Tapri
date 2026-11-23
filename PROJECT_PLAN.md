@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CT-01/02/05 first-sale setup — 23 November 2026
+
+First owner enrollment now opens Shop Setup; successful profile save can continue into the actual product catalogue; Shop Home displays local setup status and routes owners to missing opening-stock count. Three focused API 37 journeys passed individually (1/1 each). Android JVM tests passed 69/69; `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` succeeded with 0 lint errors / 176 warnings. No full connected regression was run for this change; Node/backend suites were not rerun. Report and XML evidence: `specs/CT-01-02-05-FIRST-SALE-SETUP-REPORT-2026-11-23.md` and `test-evidence/2026-11-23/ct01-02-first-sale-onboarding/`. This advances onboarding only; the first sale still depends on owner-configured prices and a confirmed physical count. The six-wave product remains incomplete.
+
 ## Latest continuation — CT-28 busy-counter estimate capture — 23 November 2026
 
 Daily Closing now accepts an unitemized estimate with a reason and confirmation, saves it as an idempotent encrypted audit event, and displays it separately. It does not create actual sales, collections, stock, expense, cash or profit records. JVM test passed; focused API 37 UI test passed 1/1; Kotlin JVM 69/69; APK builds passed; lint 0 errors/176 warnings. The estimate is local-only and CT-28/Mode D remain partial. See `specs/CT-28-BUSY-COUNTER-ESTIMATE-REPORT-2026-11-23.md`.
@@ -1008,3 +1012,7 @@ The broad isolated Android suite ended with 93 tests / 37 failures after the API
 Corrected the instrumentation runner after evidence showed only one comma-separated `notClass` exclusion reached AndroidX. `OfflineQualificationRunner` now adds all three endpoint-dependent CAT-052 E2E exclusions by default; `-Pcat052LiveSyncE2e=true` opts in to backend tests when the required endpoint/phase arguments are provided. A runner-argument instrumentation guard was added. The corrected API 37 suite passed 117/117 with zero failures/errors/skips and included the Quick Sale split Udhar/repaid journey. Kotlin JVM 69/69, APK builds passed, lint 0 errors/176 warnings. Report: `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.
 
 The runner-argument guard was verified in explicit opt-in mode with the configuration-only instrumentation test, 1/1 passed. It did not run any endpoint-backed test. The three live sync E2Es remain separate qualification commands.
+
+## Emulator regression follow-up — CT-01/02/05 onboarding — 23 November 2026
+
+The default isolated API 37 regression suite was attempted after this slice: **120 tests, 82 passed, 38 failed, 0 errors, 0 skipped** in 39m55s. At least 16 failures explicitly show Android Files/DocumentUI “isn't responding” covering unrelated activity screens; other missing-control failures occurred during the same degraded run. The full-suite result is therefore not green and must not be reported as qualified. After rebooting only the emulator, focused rechecks passed: Payment History 1/1 and first-owner enrollment→CT-02 1/1; the 3 onboarding paths had also individually passed before the broad run. Archived XML/HTML and focused XML are under `test-evidence/2026-11-23/ct01-02-first-sale-onboarding/`. This narrows the diagnosis but does not convert the full regression to a pass.
