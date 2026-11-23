@@ -16,6 +16,7 @@
         <activity android:name=".LocalAccessActivity" android:exported="false" />
         <activity android:name=".StaffManagementActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".StaffCloudAccessActivity" android:exported="false" />
         <activity android:name=".ShopHomeActivity" android:exported="false" />
         <activity android:name=".SalesHistoryActivity" android:exported="false" />
         <activity android:name=".RefundCorrectionActivity" android:exported="false" />

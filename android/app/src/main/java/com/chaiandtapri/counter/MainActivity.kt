@@ -214,6 +214,9 @@ class MainActivity : ComponentActivity() {
             column.addView(button("Daily Closing · CT-28"){startActivity(android.content.Intent(this,DailyClosingActivity::class.java))})
             column.addView(button("Daily Reports · CT-29"){startActivity(android.content.Intent(this,DailyReportActivity::class.java))})
         }
+        if (LocalSessionState.authenticated && !LocalSessionState.isOwner) {
+            column.addView(button("Staff Cloud Access · CAT-052") { startActivity(android.content.Intent(this, StaffCloudAccessActivity::class.java)) })
+        }
         column.addView(button("Quick Sale · CT-06"){startActivity(android.content.Intent(this,QuickSaleActivity::class.java))})
         column.addView(button("Live Orders · CT-08/10"){startActivity(android.content.Intent(this,LiveOrdersActivity::class.java))})
         column.addView(button("Payments · CT-10"){startActivity(android.content.Intent(this,PaymentActivity::class.java))})

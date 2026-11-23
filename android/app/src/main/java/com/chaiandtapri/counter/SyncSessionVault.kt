@@ -45,6 +45,22 @@ internal object SyncOwnerPolicy {
     const val LOCAL_OWNER_ACTOR = "local-owner"
 }
 
+internal object SyncStaffPolicy {
+    fun roleForLocal(role: StaffRole): SyncAccountRole = when (role) {
+        StaffRole.MANAGER -> SyncAccountRole.MANAGER
+        StaffRole.CASHIER -> SyncAccountRole.CASHIER
+    }
+
+    fun mayBindCloudSession(session: SyncSession, activeLocalActorId: String?, activeLocalRole: StaffRole?): Boolean =
+        !activeLocalActorId.isNullOrBlank() && activeLocalActorId != SyncOwnerPolicy.LOCAL_OWNER_ACTOR &&
+            activeLocalRole != null && session.userId != null && session.localActorId == null && session.role == roleForLocal(activeLocalRole)
+
+    fun mayUpload(session: SyncSession, outboxActorId: String): Boolean =
+        outboxActorId.isNotBlank() && outboxActorId != SyncOwnerPolicy.LOCAL_OWNER_ACTOR &&
+            session.localActorId == outboxActorId && session.userId != null &&
+            (session.role == SyncAccountRole.CASHIER || session.role == SyncAccountRole.MANAGER)
+}
+
 /** Stores only a server-issued bearer session, encrypted with an app/device-bound Android Keystore key. */
 class SyncSessionVault(context: Context, private val keyNamespace: String = "default") {
     private val appContext = context.applicationContext

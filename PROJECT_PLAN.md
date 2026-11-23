@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CAT-052 staff account linking - 24 November 2026
+
+Added a native staff cloud-access screen for local cashiers/managers to accept an owner-issued one-time invite, bind a server role to the active local staff ID, re-authenticate, sync only that actor's contiguous outbox entries, and revoke a namespaced encrypted session. The background worker selects credentials by the actual outbox head actor and does not skip mixed-actor queue entries. Build, unit tests, APK packaging, instrumentation APK packaging and lint passed; focused emulator classes covered account client, encrypted session policy, background actor selection and local actor attribution. Staff UI was not walked through against a live invite/backend, and overall Android regression is not yet qualified. See `specs/CAT-052-STAFF-ACCOUNT-LINKING-REPORT-2026-11-24.md`.
+
 ## Latest continuation — CAT-052 local operator outbox scoping — 24 November 2026
 
 Manual and background sync now submit only contiguous outbox events whose local audit actor matches the local operator bound to the encrypted sync session. A mismatched or unattributed head stays queued rather than being sent under the owner token. The API 37 attribution test passed 1/1; the encrypted session vault suite passed 6/6; Kotlin JVM 78/78; APK builds passed; lint 0 errors / 179 warnings. Staff identity linking is still missing, so staff-created events remain queued and may block later events. This is not production-sync qualification. See `specs/CAT-052-LOCAL-OPERATOR-OUTBOX-SCOPING-REPORT-2026-11-24.md`.

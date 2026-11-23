@@ -17,14 +17,42 @@ import org.junit.runner.RunWith
 class SyncBackgroundWorkTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    @Test fun workerFailsClosedWithoutSavedOwnerSession() = runBlocking {
+    @Test fun workerIsIdleWithoutPendingBusinessEvents() = runBlocking {
         SyncSessionVault(context).clear()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         val result = TestListenableWorkerBuilder<SyncOutboxWorker>(context).build().doWork()
-        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-        assertEquals("session_required", result.outputData.getString(SyncOutboxWorker.OUTPUT_STATE))
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertEquals("idle", result.outputData.getString(SyncOutboxWorker.OUTPUT_STATE))
     }
 
-    @Test fun workerRejectsCloudStaffSessionBoundAsLocalOwnerBeforeNetworkAccess() = runBlocking {
+    @Test fun workerRequiresSessionForTheAttributedOutboxOperator(): Unit { runBlocking {
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        SyncSessionVault(context).clear()
+        LocalSessionState.establish("Synthetic owner")
+        SqliteCounterPersistence(context).use { persistence ->
+            CounterModel(persistence, requireConfiguredProducts = true).use { model ->
+                assertTrue(model.saveProduct(TapriProduct("sync_worker_tea", "Worker Tea", "Chai", 1000, priceConfirmed = true)).startsWith("Product saved"))
+                assertTrue(model.confirmOpeningStock("sync_worker_tea", 2, "synthetic worker test", "worker-opening-stock").startsWith("Opening stock confirmed"))
+            }
+        }
+        LocalSessionState.clear()
+        val result = TestListenableWorkerBuilder<SyncOutboxWorker>(context).build().doWork()
+        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+        assertEquals("operator_session_required", result.outputData.getString(SyncOutboxWorker.OUTPUT_STATE))
+        LocalSessionState.clear()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+    } }
+
+    @Test fun workerRejectsCloudStaffSessionBoundAsLocalOwnerBeforeNetworkAccess(): Unit { runBlocking {
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic owner")
+        SqliteCounterPersistence(context).use { persistence ->
+            CounterModel(persistence, requireConfiguredProducts = true).use { model ->
+                assertTrue(model.saveProduct(TapriProduct("sync_worker_owner", "Worker Owner Tea", "Chai", 1000, priceConfirmed = true)).startsWith("Product saved"))
+                assertTrue(model.confirmOpeningStock("sync_worker_owner", 2, "synthetic worker test", "worker-owner-opening-stock").startsWith("Opening stock confirmed"))
+            }
+        }
+        LocalSessionState.clear()
         SyncSessionVault(context).save(SyncSession(
             "https://sync.example.test",
             SyncEnvelopeIdentity(
@@ -43,8 +71,10 @@ class SyncBackgroundWorkTest {
             assertEquals("owner_identity_required", result.outputData.getString(SyncOutboxWorker.OUTPUT_STATE))
         } finally {
             SyncSessionVault(context).clear()
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         }
-    }
+    } }
 
     @Test fun schedulerUsesConnectedNetworkAndUniqueDurableRequests() {
         val manager = WorkManager.getInstance(context)

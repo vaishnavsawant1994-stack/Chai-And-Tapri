@@ -110,4 +110,17 @@ class SyncSessionVaultTest {
 
         SyncSessionVault(context).clear()
     }
+
+    @Test fun staffSessionBindingAndUploadRequireMatchingLocalAndServerRoles() {
+        val cashier = session.copy(userId = "44444444-4444-4444-8444-444444444444", role = SyncAccountRole.CASHIER)
+        assertTrue(SyncStaffPolicy.mayBindCloudSession(cashier, "cashier-01", StaffRole.CASHIER))
+        assertTrue(!SyncStaffPolicy.mayBindCloudSession(cashier, "cashier-01", StaffRole.MANAGER))
+        assertTrue(!SyncStaffPolicy.mayBindCloudSession(cashier, "local-owner", StaffRole.CASHIER))
+        assertTrue(SyncStaffPolicy.mayUpload(cashier.copy(localActorId = "cashier-01"), "cashier-01"))
+        assertTrue(!SyncStaffPolicy.mayUpload(cashier.copy(localActorId = "cashier-01"), "manager-01"))
+        assertTrue(!SyncStaffPolicy.mayUpload(cashier.copy(localActorId = "cashier-01"), "local-owner"))
+        val manager = cashier.copy(role = SyncAccountRole.MANAGER)
+        assertTrue(SyncStaffPolicy.mayBindCloudSession(manager, "manager-01", StaffRole.MANAGER))
+        assertTrue(!SyncStaffPolicy.mayBindCloudSession(manager, "manager-01", StaffRole.CASHIER))
+    }
 }

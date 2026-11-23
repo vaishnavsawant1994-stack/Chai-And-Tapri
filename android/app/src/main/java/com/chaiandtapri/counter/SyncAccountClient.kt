@@ -16,9 +16,21 @@ data class SyncRegistration(
 
 data class SyncLogin(val email: String, val password: String, val shopId: String, val deviceId: String)
 
+data class StaffInvitationAcceptance(
+    val invitationToken: String,
+    val displayName: String,
+    val password: String,
+    val deviceId: String,
+    val deviceLabel: String
+)
+
 /** Non-secret local identity needed to renew this device's session after server logout/expiry. */
-class SyncDeviceIdentityStore(context: android.content.Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("chai_tapri_sync_device_identity_v1", android.content.Context.MODE_PRIVATE)
+class SyncDeviceIdentityStore(context: android.content.Context, private val namespace: String = "default") {
+    init { require(namespace == "default" || namespace.matches(Regex("[A-Za-z0-9_.-]{1,64}"))) }
+    private val prefs = context.applicationContext.getSharedPreferences(
+        if (namespace == "default") "chai_tapri_sync_device_identity_v1" else "chai_tapri_sync_device_identity_v1.$namespace",
+        android.content.Context.MODE_PRIVATE
+    )
 
     fun save(session: SyncSession) {
         check(prefs.edit().putString("business_id", session.identity.businessId)
@@ -49,6 +61,34 @@ class SyncAuthenticationException(val statusCode: Int, val serverCode: String?) 
 
 /** HTTPS-only client for the existing registration, login and revocation API contract. */
 class SyncAccountClient(private val transport: SyncHttpTransport) {
+    fun acceptStaffInvitation(endpointBase: String, request: StaffInvitationAcceptance): SyncSession {
+        require(request.invitationToken.matches(Regex("[A-Za-z0-9_-]{43}"))) { "Staff invitation secret is invalid." }
+        require(request.displayName.trim().length in 2..100) { "Enter a display name with 2 to 100 characters." }
+        require(request.password.length in 12..256) { "Staff account password must contain 12 to 256 characters." }
+        require(request.deviceId.isUuid()) { "Device identity is invalid." }
+        require(request.deviceLabel.trim().isNotEmpty() && request.deviceLabel.trim().length <= 80) { "Device label is invalid." }
+        val response = transport.post(apiEndpoint(endpointBase, "staff/accept-invitation"), "", JSONObject()
+            .put("invitationToken", request.invitationToken)
+            .put("displayName", request.displayName.trim())
+            .put("password", request.password)
+            .put("deviceId", request.deviceId.lowercase())
+            .put("deviceLabel", request.deviceLabel.trim())
+            .toString())
+        if (response.statusCode != 201) throw apiError(response)
+        val body = parseBody(response.body)
+        val role = SyncAccountRole.parse(body.getString("role"))
+        require(role == SyncAccountRole.MANAGER || role == SyncAccountRole.CASHIER) { "Invitation did not grant a staff role." }
+        val session = SyncSession(
+            endpointBase.trim().trimEnd('/'),
+            SyncEnvelopeIdentity(body.getString("businessId"), body.getString("shopId"), request.deviceId.lowercase()),
+            body.getString("token"),
+            userId = body.getString("userId"),
+            role = role
+        )
+        validateSession(session)
+        return session
+    }
+
     fun register(endpointBase: String, request: SyncRegistration): SyncSession {
         validateRegistration(request)
         val response = transport.post(apiEndpoint(endpointBase, "register"), "", JSONObject()

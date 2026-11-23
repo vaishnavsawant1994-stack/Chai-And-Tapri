@@ -62,6 +62,44 @@ class SyncAccountClientTest {
         assertTrue(runCatching { client.login("https://sync.example.test", SyncLogin("a@b.test", "password", shopId, deviceId)) }.isFailure)
     }
 
+    @Test fun staffInvitationUsesExactContractAndReturnsServerIssuedStaffIdentity() {
+        var capturedEndpoint = ""
+        var capturedToken = ""
+        var capturedBody = ""
+        val client = SyncAccountClient(SyncHttpTransport { endpoint, token, body ->
+            capturedEndpoint = endpoint
+            capturedToken = token
+            capturedBody = body
+            SyncHttpResponse(201, JSONObject().put("userId", "44444444-4444-4444-8444-444444444444")
+                .put("displayName", "Synthetic Cashier").put("businessId", businessId).put("shopId", shopId)
+                .put("role", "cashier").put("token", "synthetic-staff-token").toString())
+        })
+        val session = client.acceptStaffInvitation("https://sync.example.test", StaffInvitationAcceptance(
+            "A".repeat(43), "Synthetic Cashier", "synthetic-password-123", deviceId, "Android Emulator"
+        ))
+        assertEquals("https://sync.example.test/v1/staff/accept-invitation", capturedEndpoint)
+        assertEquals("", capturedToken)
+        val requestBody = JSONObject(capturedBody)
+        assertEquals(5, requestBody.length())
+        assertTrue(listOf("invitationToken", "displayName", "password", "deviceId", "deviceLabel").all(requestBody::has))
+        assertEquals(SyncAccountRole.CASHIER, session.role)
+        assertEquals("44444444-4444-4444-8444-444444444444", session.userId)
+        assertEquals(SyncEnvelopeIdentity(businessId, shopId, deviceId), session.identity)
+    }
+
+    @Test fun staffInvitationRejectsOwnerRoleAndMalformedSecretBeforeSavingAnything() {
+        var calls = 0
+        val ownerRoleClient = SyncAccountClient(SyncHttpTransport { _, _, _ ->
+            calls++
+            SyncHttpResponse(201, JSONObject().put("userId", "44444444-4444-4444-8444-444444444444")
+                .put("businessId", businessId).put("shopId", shopId).put("role", "owner").put("token", "synthetic-token").toString())
+        })
+        val request = StaffInvitationAcceptance("A".repeat(43), "Synthetic Cashier", "synthetic-password-123", deviceId, "Emulator")
+        assertTrue(runCatching { ownerRoleClient.acceptStaffInvitation("https://sync.example.test", request) }.isFailure)
+        assertTrue(runCatching { ownerRoleClient.acceptStaffInvitation("https://sync.example.test", request.copy(invitationToken = "bad")) }.isFailure)
+        assertEquals(1, calls)
+    }
+
     @Test fun logoutRequiresServerRevocationConfirmation() {
         val session = SyncSession("https://sync.example.test", SyncEnvelopeIdentity(businessId, shopId, deviceId), "session-token")
         val client = SyncAccountClient(SyncHttpTransport { endpoint, token, _ ->

@@ -1,4 +1,7 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
+## Latest continuation - CAT-052 Android staff account linking - 24 November 2026
+
+Added staff invitation acceptance and matching-role local binding, distinct encrypted session/device-identity namespaces per staff ID, manual staff-scoped sync, revocation, and actor-aware WorkManager delivery that preserves global outbox order. Android build, JVM, APK packaging, instrumentation APK packaging, and lint tasks passed. Focused emulator classes passed individually (23 tests total). Prototype Node passed 52/52; backend without PostgreSQL passed 28/28 with 5 integration tests skipped. A full unfiltered instrumentation run did not complete and remains unqualified. Live UI invite acceptance and production sync are not qualified. See [report](CAT-052-STAFF-ACCOUNT-LINKING-REPORT-2026-11-24.md).
 
 ## Latest continuation — local operator-scoped sync outbox
 
