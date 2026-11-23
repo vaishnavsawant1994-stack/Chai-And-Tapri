@@ -987,7 +987,17 @@ class SqliteCounterPersistence internal constructor(
     }
 
     override fun commit(snapshot: CounterSnapshot, commandId: String, result: String, event: String, actorId: String?, movements: List<StockMovement>, repayments: List<CreditRepayment>, paymentEntries: List<PaymentEntry>, syncPayload: SyncOutboxPayload): Boolean {
-        if (event.substringAfter(' ', "").startsWith("remove #")) requireManagerMutation("correct an order")
+        val eventPrefix = "$commandId "
+        if (LocalSessionState.authenticated && !event.startsWith(eventPrefix)) {
+            throw SecurityException("Authenticated business commits require command-bound audit attribution.")
+        }
+        LocalBusinessMutationPolicy.requireAllowed(
+            LocalSessionState.authenticated,
+            LocalSessionState.actorId,
+            LocalSessionState.role,
+            actorId,
+            event.removePrefix(eventPrefix)
+        )
         val permit = BusinessWriteBarrier.tryBeginCommit() ?: throw BusinessMaintenanceException()
         try {
         val db = writableDatabase

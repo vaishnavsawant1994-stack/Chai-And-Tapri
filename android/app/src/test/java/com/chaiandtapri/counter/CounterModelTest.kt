@@ -19,6 +19,25 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class CounterModelTest {
+    @Test fun localMutationPolicyBindsActorAndRestrictsCashierFinancialCorrections() {
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "sale.refund #12 amount=500p")
+        }.exceptionOrNull() is SecurityException)
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "owner", "order.cancelled #12 reason=test")
+        }.exceptionOrNull() is SecurityException)
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "expense.recorded amount=500p")
+        }.exceptionOrNull() is SecurityException)
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "stock.physical_count products=tea")
+        }.exceptionOrNull() is SecurityException)
+        LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "quick_sale #12 total=1000p")
+        LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "stock.opening_count product_id=tea counted=4")
+        LocalBusinessMutationPolicy.requireAllowed(true, "manager-01", StaffRole.MANAGER, "manager-01", "sale.refund #12 amount=500p")
+        LocalBusinessMutationPolicy.requireAllowed(false, null, null, null, "sale.refund #12 amount=500p")
+    }
+
     @Test fun estimatedUnitCostRejectsNegativeAndOutOfRangeValues() {
         val model = CounterModel()
         assertTrue(model.saveProduct(TapriProduct("bad_cost", "Bad Cost", "Test", 1000, estimatedUnitCostPaise = -1)).contains("Estimated unit cost"))

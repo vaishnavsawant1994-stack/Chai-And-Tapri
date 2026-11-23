@@ -702,3 +702,6 @@ Android sync sessions now preserve server user ID and membership role under Keys
 ## Current continuation - CAT-052 Android staff identity link - 24 November 2026
 
 Staff can now accept a server-issued manager/cashier invitation after local PIN login; the app verifies role equality, binds the server user ID/role to the local actor, stores credentials in an actor-specific Keystore-encrypted vault and exposes manual sync/revoke. The worker resolves the first pending event's actor and uses only its matching session; foreign/unattributed events are not skipped. Focused emulator classes and build/lint tasks passed (see the [implementation report](CAT-052-STAFF-ACCOUNT-LINKING-REPORT-2026-11-24.md)). Live UI invite acceptance, full instrumentation regression, production authorization, offline identity proof, and physical/device trials remain unqualified.
+## Latest continuation - CAT-052 local mutation role enforcement - 24 November 2026
+
+Authenticated SQLite commits bind the audit actor to the active local operator and deny selected cashier manager-level mutations. JVM 81/81, APK build tasks passed, focused API 37 persistence authorization test passed 1/1. Lint completed with 0 errors / 182 warnings; full instrumentation remains unqualified. See [report](CAT-052-LOCAL-MUTATION-ROLE-ENFORCEMENT-REPORT-2026-11-24.md).

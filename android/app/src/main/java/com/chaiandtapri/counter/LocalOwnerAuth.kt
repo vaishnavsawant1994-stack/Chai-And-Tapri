@@ -43,6 +43,42 @@ object SessionAccessGate {
     }
 }
 
+/** Defense in depth for financial mutations; screen visibility is not the authorization boundary. */
+internal object LocalBusinessMutationPolicy {
+    fun requireAllowed(
+        authenticated: Boolean,
+        activeActorId: String?,
+        activeRole: StaffRole?,
+        recordedActorId: String?,
+        auditEvent: String
+    ) {
+        // Isolated model/persistence fixtures intentionally run without an app session.
+        if (!authenticated) return
+        if (activeActorId.isNullOrBlank() || recordedActorId != activeActorId) {
+            throw SecurityException("Business mutation actor does not match the authenticated local operator.")
+        }
+        if (activeRole == StaffRole.CASHIER && managerOnlyEvent(auditEvent)) {
+            throw SecurityException("Manager access is required for this business mutation.")
+        }
+    }
+
+    private fun managerOnlyEvent(event: String): Boolean =
+        event.startsWith("remove #") ||
+            event.startsWith("order.cancelled") ||
+            event.startsWith("sale.refund") ||
+            event.startsWith("purchase.") ||
+            event.startsWith("purchase_order.") ||
+            event.startsWith("supplier.") ||
+            event.startsWith("expense.") ||
+            event.startsWith("cash_drawer.") ||
+            event.startsWith("cash_closing.") ||
+            event.startsWith("staff_shift.") ||
+            event.startsWith("busy_counter.estimate") ||
+            event.startsWith("customer.credit_repaid") ||
+            event.startsWith("stock.physical_count") ||
+            event.startsWith("stock.manual_adjustment")
+}
+
 object LocalOwnerAuth {
     private const val ITERATIONS = 600_000
     private const val LOCK_MS = 60_000L

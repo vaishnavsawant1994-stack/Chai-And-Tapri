@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CAT-052 local mutation role enforcement - 24 November 2026
+
+Encrypted SQLite commits now verify that an authenticated audit actor matches the active local operator and enforce cashier restrictions for refunds/cancellations, expense/procurement, cash register/closing, credit repayments and physical stock counts. Cashier sales and the existing opening-stock workflow remain allowed. JVM 81/81, debug/instrumentation APK build tasks passed, focused API 37 persistence authorization test passed 1/1, and lint reports 0 errors / 182 warnings. The full Android instrumentation suite remains unqualified after the earlier runner stall. See `specs/CAT-052-LOCAL-MUTATION-ROLE-ENFORCEMENT-REPORT-2026-11-24.md`.
+
 ## Latest continuation - CAT-052 staff account linking - 24 November 2026
 
 Added a native staff cloud-access screen for local cashiers/managers to accept an owner-issued one-time invite, bind a server role to the active local staff ID, re-authenticate, sync only that actor's contiguous outbox entries, and revoke a namespaced encrypted session. The background worker selects credentials by the actual outbox head actor and does not skip mixed-actor queue entries. Build, unit tests, APK packaging, instrumentation APK packaging and lint passed; focused emulator classes covered account client, encrypted session policy, background actor selection and local actor attribution. Staff UI was not walked through against a live invite/backend, and overall Android regression is not yet qualified. See `specs/CAT-052-STAFF-ACCOUNT-LINKING-REPORT-2026-11-24.md`.
