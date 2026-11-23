@@ -13,3 +13,7 @@ Persisted assertions: original sale ₹15; cash collections ₹9 (₹5 sale cash
 ## Scope and remaining work
 
 This is one synthetic UI journey, not full CT-06/CT-21/CT-24 qualification. No full Android suite, Kotlin JVM suite, APK build, lint, PostgreSQL suite, real customer data, physical device, browser visual review or production workflow was run for this test-only change. Customer selection, multi-credit allocation, repayment reversal, refunds after repayment, concurrency and offline/background operation require separate coverage. Full customer management and all six project waves remain incomplete.
+
+## Post-change Android regression — 23 November 2026
+
+After the focused UI test, `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` completed with **BUILD SUCCESSFUL**. Kotlin JVM reports **69 tests, 0 failures**. Debug and instrumentation APK tasks passed; lint reports **0 errors, 176 warnings**. This command did not rerun connected instrumentation, Node/prototype/backend suites, or PostgreSQL integration. The connected UI evidence remains the focused 1/1 test above.
