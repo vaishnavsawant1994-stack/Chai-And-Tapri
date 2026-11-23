@@ -994,3 +994,7 @@ This is a synthetic isolated integration qualification only. Expense sync in liv
 ## CAT-052 / OW-08 customer credit projection — 23 November 2026
 
 Added privacy-minimized customer credit and repayment projection support on top of the authenticated Android outbox. SQLCipher schema v29 adds opaque stable UUIDs for credit/repayment records plus a local-only customer identity map; the v28→v29 migration backfills existing records. Backend validation rejects local customer identifiers and enforces stable credit/repayment identities and repayment-versus-settled-credit invariants. Owner-only OW-08 displays accepted customer receivables by opaque ID and exports the current report. Customer names, phone numbers and local customer IDs remain on device. See `specs/CAT-052-CUSTOMER-CREDIT-SYNC-REPORT-2026-11-23.md`. Emulator/PostgreSQL end-to-end qualification and full regression results are pending; this does not complete CAT-052 or the six-wave product plan.
+
+## 23 November 2026 — Connected credit repayment slice
+
+The native Android test harness now covers a saved customer selected at checkout, split cash/Udhar sale, and cash repayment from Customer Credit. Focused API 37 instrumentation passed 1/1 and reconciled stored sales, declared cash, remaining receivable, repayment audit and stock. This is a test-backed workflow slice; not full qualification. See `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`.

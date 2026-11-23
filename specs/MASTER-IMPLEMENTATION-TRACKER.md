@@ -615,3 +615,7 @@ Implementation is present: Android v29 opaque customer, credit, repayment, and p
 ## 23 November 2026 — Mode C camera result to Quick Sale
 
 Quick Sale’s actual activity-result callback and a focused internal result handler now use the configured catalogue resolver. Current API 37 test passes 1/1: a known code stages the correct synthetic product, an unknown code preserves the draft, and neither scan mutates orders/stock before checkout. Kotlin JVM 68/68; debug/test APK assembly and lint pass (0 errors, 175 warnings). This is synthetic result-path qualification only; camera image decoding, permission interaction on a supported physical device, scan latency/accuracy and noisy-shop use remain open. CT-06 and Mode C remain partial; see `specs/CT-06-NATIVE-QUICK-SALE-REPORT.md`.
+
+## CT-06 / CT-24 integrated split-sale repayment — 23 November 2026
+
+Added a connected Android UI test for Quick Sale → split cash/Udhar → Customer Credit repayment → persisted reconciliation. Focused API 37 instrumentation is 1/1 passed. It verifies ₹15 recorded sale, ₹9 staff-declared cash including repayment, ₹6 remaining receivable, one repayment ledger/audit record, and unchanged stock. Report: `specs/CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md`. Scope remains one synthetic flow; full suites and broad module qualification were not run.

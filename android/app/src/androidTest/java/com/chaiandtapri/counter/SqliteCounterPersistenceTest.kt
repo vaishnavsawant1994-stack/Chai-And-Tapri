@@ -4341,7 +4341,7 @@ class SqliteCounterPersistenceTest {
         }
     }
 
-    @Test fun quickSaleUiRecordsSplitCashAndUdharInOneAtomicSale() {
+    @Test fun quickSaleSplitTenderFlowsThroughCustomerRepaymentAndReconcilesBalance() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
@@ -4395,6 +4395,61 @@ class SqliteCounterPersistenceTest {
             assertEquals("receivable", reopened.paymentHistory().single { it.method == "udhar" }.status)
             assertEquals(2, reopened.stockLevels()["split_ui_tea"])
             reopened.close()
+
+            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.waitForIdleSync()
+            val customerActivity = instrumentation.startActivitySync(Intent(context, CustomerCreditActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            try {
+                fun awaitCustomerNode(prefix: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                    repeat(100) {
+                        val root = instrumentation.uiAutomation.rootInActiveWindow
+                        fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                            if (node == null) return null
+                            if ((prefix == null || node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) &&
+                                (hint == null || node.hintText?.toString()?.startsWith(hint, ignoreCase = true) == true)) return node
+                            for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                            return null
+                        }
+                        find(root)?.let { return it }
+                        Thread.sleep(100)
+                    }
+                    throw AssertionError("Customer repayment control not found: ${prefix ?: hint}")
+                }
+                fun clickCustomer(prefix: String) = assertTrue("Could not tap $prefix", awaitCustomerNode(prefix = prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                clickCustomer("Record cash repayment")
+                val repaymentAmount = awaitCustomerNode(hint = "Cash amount in rupees")
+                assertTrue("Repayment amount should accept entry", repaymentAmount.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                assertTrue("Repayment amount should save text", repaymentAmount.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "4.00")
+                }))
+                clickCustomer("Record repayment")
+
+                var afterRepayment: CounterModel? = null
+                for (attempt in 0 until 100) {
+                    val current = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+                    if (current.creditBalance("split_ui_ravi") == 600 && current.paymentHistory().count { it.kind == "customer_repayment" } == 1) {
+                        afterRepayment = current
+                        break
+                    }
+                    current.close()
+                    Thread.sleep(100)
+                }
+                assertNotNull("Customer repayment should be persisted after the UI confirms it", afterRepayment)
+                val reconciled = afterRepayment!!
+                val settledOrder = reconciled.allOrders().single()
+                assertEquals("Order credit tracks the outstanding receivable after repayment", 600, settledOrder.creditPaise)
+                assertEquals(0, settledOrder.duePaise)
+                assertEquals(600, reconciled.creditBalance("split_ui_ravi"))
+                assertEquals(2, reconciled.stockLevels()["split_ui_tea"])
+                assertEquals(1500L, reconciled.localBusinessSummary().recordedSalesPaise)
+                assertEquals(900L, reconciled.localBusinessSummary().cashRecordedPaise)
+                assertEquals(600L, reconciled.localBusinessSummary().customerReceivablePaise)
+                assertEquals(1, reconciled.paymentHistory().count { it.kind == "customer_repayment" && it.customerId == "split_ui_ravi" && it.amountPaise == 400 && it.method == "cash" && it.status == "staff_declared" })
+                assertTrue(reconciled.auditEvents().any { it.contains("customer.credit_repaid split_ui_ravi 400p") })
+                reconciled.close()
+            } finally {
+                instrumentation.runOnMainSync { customerActivity.finish() }
+            }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

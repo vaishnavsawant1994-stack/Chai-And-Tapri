@@ -66,3 +66,7 @@ Implemented a v29 SQLCipher migration for persistent opaque customer/credit/repa
 ## Current continuation — Wave 5 Mode C Quick Sale handoff
 
 Added current-source instrumentation for a camera scan result flowing through Quick Sale's catalogue resolver. A configured opaque product code stages one product; an unknown code preserves the draft and no-match feedback; neither path commits an order or changes stock before checkout. Focused API 37 instrumentation passed 1/1. Kotlin JVM passed 68/68; debug and instrumentation APK builds passed; lint 0 errors / 175 warnings. This tests the intent-to-cart contract, not camera frame decoding or physical scan reliability. Mode C and Wave 5 remain partial; browser visual, supported-device and real-shop qualification remain open. See [`CT-06 native Quick Sale report`](CT-06-NATIVE-QUICK-SALE-REPORT.md).
+
+## CT-06 / CT-24 split-sale repayment continuation — 23 November 2026
+
+A focused API 37 emulator UI test now covers a saved-customer ₹15 Quick Sale split into ₹5 staff-declared cash and ₹10 Udhar, followed by a ₹4 cash repayment through Customer Credit. Persisted reconciliation passed: sales ₹15, cash ₹9 (including the repayment), receivable/outstanding order credit ₹6, due ₹0, one declared repayment event and unchanged expected stock. Focused instrumentation passed 1/1; no full regression suite was run for this Android-test-only change. See [`CT-06 / CT-24 report`](CT-06-24-SPLIT-TENDER-REPAYMENT-REPORT-2026-11-23.md). This is a synthetic connected workflow, not complete module or production qualification.
