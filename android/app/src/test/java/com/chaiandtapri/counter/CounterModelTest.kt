@@ -162,6 +162,51 @@ class CounterModelTest {
         }
     }
 
+    @Test fun maintenanceClosesAdmissionBeforeWaitingForAnInFlightBusinessOperation() {
+        val executor = Executors.newSingleThreadExecutor()
+        val maintenanceStarted = CountDownLatch(1)
+        val maintenanceEntered = CountDownLatch(1)
+        val releaseMaintenance = CountDownLatch(1)
+        var inFlight = BusinessWriteBarrier.tryBeginBusinessOperation()
+        assertNotNull("Expected a shared permit for the in-flight sync operation", inFlight)
+        try {
+            val maintenance = executor.submit {
+                maintenanceStarted.countDown()
+                BusinessWriteBarrier.duringMaintenance("encrypted restore") {
+                    maintenanceEntered.countDown()
+                    check(releaseMaintenance.await(5, TimeUnit.SECONDS))
+                }
+            }
+            assertTrue("Maintenance task did not start", maintenanceStarted.await(5, TimeUnit.SECONDS))
+
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            var admissionClosed = false
+            while (!admissionClosed && System.nanoTime() < deadline) {
+                val probe = BusinessWriteBarrier.tryBeginBusinessOperation()
+                if (probe == null) admissionClosed = true else probe.close()
+                if (!admissionClosed) Thread.sleep(5)
+            }
+            assertTrue("A queued restore must prevent new background sync operations", admissionClosed)
+            assertFalse("Restore must wait for the active network/journal operation", maintenanceEntered.await(100, TimeUnit.MILLISECONDS))
+
+            inFlight!!.close()
+            inFlight = null
+            assertTrue("Restore did not acquire the exclusive barrier after sync released", maintenanceEntered.await(5, TimeUnit.SECONDS))
+            assertEquals("encrypted restore", BusinessWriteBarrier.currentMaintenance())
+            assertNull(BusinessWriteBarrier.tryBeginBusinessOperation())
+            releaseMaintenance.countDown()
+            maintenance.get(5, TimeUnit.SECONDS)
+            val after = BusinessWriteBarrier.tryBeginBusinessOperation()
+            assertNotNull("New business operations must resume after restore", after)
+            after!!.close()
+        } finally {
+            releaseMaintenance.countDown()
+            inFlight?.close()
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS)
+        }
+    }
+
     private class MemoryPersistence : CounterPersistence {
         var state: CounterSnapshot? = null
         var failNext = false

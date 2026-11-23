@@ -1,5 +1,11 @@
 # CAT-051B - Backup, Restore, Recovery UI and Failure Qualification
 
+## CAT-051B maintenance-barrier integration follow-up — 23 November 2026
+
+The WorkManager sync worker now holds a shared `BusinessWriteBarrier` permit through session loading, outbox transport, and local acknowledgement. The barrier closes admission when backup/restore is requested, before waiting for active operations, so a new worker retries and an in-flight sync drains before the encrypted snapshot/cutover. A deterministic JVM race test passed; focused `SyncBackgroundWorkTest` passed 3/3 on API 37. Kotlin JVM 72/72; APK tasks passed; lint 0 errors/176 warnings. Evidence and scope: [follow-up report](CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md) and ignored XML under `../test-evidence/2026-11-23/cat051b-sync-write-barrier/`.
+
+This corrects the older statement below that no sync worker existed. It verifies the local process barrier/worker contract, not a real in-flight server request racing a restore, production synchronization, or cross-device recovery. CAT-051B remains partial; physical storage exhaustion, hardware Keystore invalidation, second-device/person recovery, and independent security review remain open.
+
 ## Current-source UI recovery replay - 23 November 2026
 
 Re-ran the functional UI paths on the dedicated `CAT052_Worker_Synthetic` API 37 AVD with Gradle task reruns forced, so the evidence is not an up-to-date result. First, `ownerBackupMenuCreatesEncryptedSyntheticBackupThroughSafUi` passed 1/1 in 67.740 seconds. It seeded only synthetic records, exported with Android's CreateDocument picker, selected the exported file using OpenDocument, authenticated the recovery secret, confirmed replacement, and asserted restored sale/refund/credit/repayment/stock and idempotency state.
@@ -79,10 +85,10 @@ Reproduction package: use the source at this workspace, API 37 AVD, the Gradle c
 - A second-person recovery drill is not done.
 - Fault-injected output failure is tested, but real storage exhaustion is not. Some interruption points are injected; hard process kill/power loss is not tested.
 - Missing Keystore key is simulated; hardware-backed key invalidation and reinstall recovery are not qualified.
-- No sync worker currently exists, so future sync mutation pause behavior is not exercised.
+- CAT-052 WorkManager sync is now present. The 23 November follow-up above verifies its local barrier permit/retry behavior, but does not qualify a live server request racing a restore or production synchronization.
 - Independent security review, real customer/shop data, production security, and production backup support are out of scope.
 
-Therefore CAT-051B completion gate is **not met**. Continue with synthetic data only. Do not start CAT-052 until actual SAF export/restore, clean-install recovery and remaining functional failure tests have acceptable evidence. Independent security review remains its own gate before real shop data.
+Therefore CAT-051B production/release completion gate is **not met**. Continue with synthetic data only. The older recommendation to defer CAT-052 is superseded by the ongoing CAT-052 implementation; CAT-051B recovery and security gates remain separately open. Independent security review remains its own gate before real shop data.
 
 ## Next executable work
 

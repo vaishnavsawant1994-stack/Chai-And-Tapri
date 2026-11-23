@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation — CAT-051B recovery/sync write barrier — 23 November 2026
+
+Fixed the maintenance race between CAT-051B snapshots/restores and CAT-052 WorkManager sync. The process-wide barrier now closes admission before waiting for in-flight business operations; the worker holds a shared permit through network delivery and local acknowledgement, and retries when maintenance already owns or is requesting the barrier. Kotlin JVM 72/72; focused Android `SyncBackgroundWorkTest` 3/3; debug/test APKs and lint passed, 0 lint errors/176 warnings. CAT-051B remains partial: no real in-flight backend/restore race, physical key/storage/cross-device recovery, or independent security review is qualified. See `specs/CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md`.
+
 ## Latest continuation — CT-01/02/05/06 guided first sale — 23 November 2026
 
 Shop Home now selects the owner's next setup action from persisted shop identity, configured products, and physically confirmed stock; once all prerequisites are complete it routes to Quick Sale. A connected synthetic Android UI test covered profile → confirmed-price product → physical count → ₹15 staff-declared cash sale. API 37 focused instrumentation passed 1/1; Kotlin JVM 71/71; debug/JVM/instrumentation APK build and lint task group succeeded; lint 0 errors/176 warnings. Persisted state verified one order, one cash event, stock 8→7, and exactly one linked sale movement. This is focused workflow evidence only; the prior 120-test broad run (82 pass/38 fail) remains failed. Details: `specs/CT-01-06-GUIDED-FIRST-SALE-REPORT-2026-11-23.md`.

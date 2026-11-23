@@ -125,11 +125,16 @@ internal object SyncBackgroundStatus {
 
 class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
-        if (BusinessWriteBarrier.currentMaintenance() != null) {
+        val businessOperationPermit = BusinessWriteBarrier.tryBeginBusinessOperation()
+        if (businessOperationPermit == null) {
             SyncBackgroundStatus.record(applicationContext, "retrying")
             return Result.retry()
         }
+        return try { doWorkWithBusinessPermit() }
+        finally { businessOperationPermit.close() }
+    }
 
+    private suspend fun doWorkWithBusinessPermit(): Result {
         val availableSession = try {
             SyncSessionVault(applicationContext).load()
         } catch (_: SyncSessionUnavailableException) {

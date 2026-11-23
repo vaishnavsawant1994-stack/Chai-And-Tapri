@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Current continuation - CAT-051B recovery/sync barrier - 23 November 2026
+
+Fixed a race where WorkManager could pass the recovery-state check, then begin transport while an encrypted backup/restore was acquiring the exclusive barrier. New maintenance requests now close shared-operation admission before waiting for active work. `SyncOutboxWorker` holds a shared permit across session load, event delivery, and local acknowledgement; blocked workers return retry. Verification: Kotlin JVM 72/72; focused API 37 `SyncBackgroundWorkTest` 3/3; `assembleDebug`, `assembleDebugAndroidTest`, `lintDebug` pass (0 errors/176 warnings). No live backend request/restore race or full Android regression was run for this change; the earlier broad 82/120 run remains failed. See [report](CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md).
+
 ## Current continuation - CT-01/02/05/06 guided first-sale flow - 23 November 2026
 
 CT-05 now presents the owner's next prerequisite based on local setup state and offers Quick Sale only after shop identity, a sellable catalogue, and physical stock confirmation are present. A connected API 37 synthetic UI test passed 1/1 through shop profile, confirmed-price product creation, eight-unit opening count, and a ₹15 cash sale. Persisted encrypted state asserts a staff-declared cash entry, stock 8→7, one order, and one linked stock movement. Kotlin JVM 71/71; build/JVM/instrumentation APK and lint tasks succeeded; lint 0 errors/176 warnings. Early harness issues (active notification shade and ambiguous selector) were corrected; final focused rerun passed. Previous broad Android result 82/120 remains failed and is not qualified. See [workflow report](CT-01-06-GUIDED-FIRST-SALE-REPORT-2026-11-23.md) and ignored JUnit evidence at `../test-evidence/2026-11-23/first-sale-guided-workflow/`.
