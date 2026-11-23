@@ -107,3 +107,9 @@ The two UI-control failures in the 121-test default run were non-clickable text 
 ## Superseding Android regression result — 24 November 2026
 
 The fixed API 37 full default instrumentation run passed 121/121 (0 failed, 0 errors, 0 skipped), superseding the 119/121 run and subsequent stalled/SAF-failing investigations documented above. The test fix was in the SAF instrumentation helper: set a unique filename through the actual picker EditText, use exact Save matching and a correctly timed tap, and verify picker dismissal. The real synthetic UI export/restore assertions then passed. Current cross-suite check: Kotlin JVM 59/59, prototype Node 52/52, backend Node 26 passed / 4 PostgreSQL-dependent skipped, APK tasks PASS, lint 0 errors/176 warnings. Evidence and caveats are in `specs/CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md`. Emulator-only qualification does not close physical device/field, independent security, hard power-loss, production, or full six-wave product gates.
+
+## Superseding status - 24 November 2026
+
+The current-source API 37 instrumentation regression is 121/121 passed with 0 failures, errors, or skipped tests. This supersedes the prior 119/121 snapshot. Kotlin JVM 59/59; prototype Node 52/52; backend dependency-free Node 26 passed / 4 PostgreSQL-dependent skipped; APK tasks passed; lint 0 errors / 176 warnings. See `CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md` for evidence and remaining recovery gates.
+
+OW-07 supplier balances and OW-08 customer balances are partial implementations with restricted PostgreSQL and focused Android-to-backend evidence, not absent views. They remain accepted-event projections without full accounting or browser visual qualification. The OW-12 accepted-event summary now counts procurement and customer-credit records without returning sensitive event payloads.

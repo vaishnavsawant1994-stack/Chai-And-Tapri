@@ -32,13 +32,19 @@ test('owner audit history returns newest accepted-event metadata without payload
     shopId: 'shop-1', shopName: 'Synthetic Tapri', serverRevision: 2, limit: 1,
     events: [
       { server_revision: 1, event_id: 'event-old', event_type: 'business.command.v1', base_revision: 0, received_at: new Date('2026-11-22T10:00:00Z'), envelope: { payload: { orders: [{ orderNumber: 1, lines: [{ productId: 'private-product', unitPricePaise: 1000 }] }] } } },
-      { server_revision: 2, event_id: 'event-new', event_type: 'business.command.v1', base_revision: 1, received_at: new Date('2026-11-22T10:01:00Z'), envelope: { payload: { paymentEntries: [{ amountPaise: 5000, customerId: 'private-customer' }], stockMovements: [{}] } } }
+      { server_revision: 2, event_id: 'event-new', event_type: 'business.command.v1', base_revision: 1, received_at: new Date('2026-11-22T10:01:00Z'), envelope: { payload: { paymentEntries: [{ amountPaise: 5000, customerId: 'private-customer' }], stockMovements: [{}], customerCredits: [{ amountPaise: 5000, customerId: 'private-customer' }], repayments: [{}], purchaseReceipts: [{}], supplierPayments: [{}], purchaseReturns: [{}], expenses: [{}] } } }
     ]
   });
   assert.equal(result.returnedEventCount, 1);
   assert.equal(result.events[0].eventId, 'event-new');
   assert.equal(result.events[0].changeCounts.paymentEntries, 1);
   assert.equal(result.events[0].changeCounts.stockMovements, 1);
+  assert.equal(result.events[0].changeCounts.customerCredits, 1);
+  assert.equal(result.events[0].changeCounts.repayments, 1);
+  assert.equal(result.events[0].changeCounts.purchaseReceipts, 1);
+  assert.equal(result.events[0].changeCounts.supplierPayments, 1);
+  assert.equal(result.events[0].changeCounts.purchaseReturns, 1);
+  assert.equal(result.events[0].changeCounts.expenses, 1);
   assert.equal(JSON.stringify(result).includes('private-customer'), false);
   assert.equal(JSON.stringify(result).includes('5000'), false);
   assert.match(result.evidence.limitation, /not a complete employee audit trail/);

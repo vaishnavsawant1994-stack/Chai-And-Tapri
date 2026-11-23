@@ -23,3 +23,9 @@
 ## Limits
 
 The view summarizes server-accepted synchronization envelopes. The current contract lacks staff actor attribution and complete audit actions, so the UI explicitly does not present this as employee accountability or proof of business activity. It excludes offline and unsynchronized records. OW-12 remains partial pending a richer, reviewed audit event contract and authorized visual/usability qualification.
+
+## Follow-up - 24 November 2026
+
+Expanded metadata-only change counts to include accepted purchase receipts, supplier settlements, purchase returns, customer credits, repayments, and expenses. The owner table now labels that combined count clearly. No payload values, IDs, or amounts are returned. The focused dashboard fixture test asserts all added counts and continues checking that customer IDs and amounts are absent.
+
+Current verification: backend Node suite 26 passed / 4 PostgreSQL-dependent skipped; prototype suite 52/52 passed; owner JavaScript syntax check passed. The PostgreSQL-dependent tests were skipped because this run had no configured test database. Earlier PostgreSQL integration evidence above remains historical evidence for its tested source revision; no fresh PostgreSQL route qualification is claimed for this change. Browser visual review remains pending.

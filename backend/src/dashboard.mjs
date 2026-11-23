@@ -505,7 +505,11 @@ export function buildProfitReadiness(activity) {
 /** Return a privacy-limited summary of accepted event metadata for an owner. */
 export function buildAuditHistory({ shopId, shopName, serverRevision, events, limit = 100 }) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('invalid_audit_limit');
-  const fields = ['orders', 'stock', 'stockMovements', 'customerCredits', 'repayments', 'paymentEntries', 'expenses'];
+  // Count every accepted projection family without returning business payloads.
+  const fields = [
+    'orders', 'stock', 'stockMovements', 'customerCredits', 'repayments',
+    'paymentEntries', 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'
+  ];
   const rows = events.slice(-limit).reverse().map((row) => {
     const envelope = row.envelope && typeof row.envelope === 'object' ? row.envelope : {};
     const payload = envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
