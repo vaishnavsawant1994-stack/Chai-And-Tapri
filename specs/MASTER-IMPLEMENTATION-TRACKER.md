@@ -671,3 +671,7 @@ Added accepted staff-declared supplier settlements to the owner recorded-money-m
 ## OW-04 supplier settlement end-to-end - 24 November 2026
 
 The added supplier-settlement money-movement path passed the complete backend suite against fresh disposable PostgreSQL 17 with restricted runtime credentials: 30/30 passed, 0 failed/skipped. The authenticated synthetic HTTPS/API flow verified the settlement in owner cashflow, updated net recorded movement, preserved exact-event retry idempotency and showed the not-bank-verified limitation. Evidence: `../test-evidence/2026-11-24/ow04-supplier-cashflow/postgres-backend-suite.log`. No owner browser visual review or production deployment was performed. This supersedes the OW-04 supplier-payment integration test pending note above.
+
+## OW-04 Android sync projection qualification - 24 November 2026
+
+The supplier finance Android outbox E2E now fetches owner cashflow after sync and verifies the separately reported staff-declared settlement. Focused API 37 instrumentation: 1/1 passed; restricted-role PostgreSQL backend suite: 30/30 passed. Evidence is under `../test-evidence/2026-11-24/ow04-supplier-cashflow/`. This supersedes the preceding pending Android E2E line above. Synthetic local-only; no production, browser visual, physical-device, or field qualification.

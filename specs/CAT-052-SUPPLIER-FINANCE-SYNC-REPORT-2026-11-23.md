@@ -33,3 +33,9 @@ Evidence: `../test-evidence/2026-11-23/cat052-android-supplier-finance-e2e.txt`.
 
 This is an isolated synthetic emulator-to-local-test-server flow, not production sync or accounting qualification. It does not qualify owner browser visuals, full CAT-052, cloud deployment, real shop activity, Bluetooth, physical devices, or independent security review. Supplier profiles remain local and backend totals are reconstructed from accepted events.
 
+
+## Android outbox to OW-04 cashflow E2E - 24 November 2026
+
+Extended `LiveBackendSyncE2ETest.androidSupplierExpenseAndCustomerFinanceOutboxesReachOwnerProjections` to read authenticated OW-04 cashflow after syncing the synthetic SQLCipher outbox. API 37 focused instrumentation passed **1/1**, asserting that the staff-declared supplier settlement arrives as 200 paise in `recordedSupplierPaymentsOutPaise` and that evidence explicitly says it is not bank-verified. The complete backend suite against disposable restricted-role PostgreSQL 17 passed **30/30**. The test created seven accepted server events; exact retry was already covered by the backend HTTP integration and no outbox data was exposed as supplier/customer PII. Evidence: `../test-evidence/2026-11-24/ow04-supplier-cashflow/android-supplier-owner-cashflow-e2e.xml`, `android-test-runner.log`, and `postgres-backend-suite.log`.
+
+This is synthetic local emulator/PostgreSQL qualification only. It is not production sync, owner browser visual sign-off, physical-device, shop-field, or payment-provider qualification.
