@@ -69,6 +69,25 @@ class SyncSessionVaultTest {
         assertEquals(bound.copy(endpointBase = bound.endpointBase.trimEnd('/')), SyncSessionVault(context).load())
     }
 
+    @Test fun serverAccountIdentityAndMembershipRoleSurviveEncryptedVaultReopen() {
+        SyncSessionVault.resetForTests(context)
+        val authenticated = session.copy(
+            userId = "44444444-4444-4444-8444-444444444444",
+            role = SyncAccountRole.OWNER,
+            localActorId = "local-owner"
+        )
+        SyncSessionVault(context).save(authenticated)
+        assertEquals(authenticated.copy(endpointBase = authenticated.endpointBase.trimEnd('/')), SyncSessionVault(context).load())
+    }
+
+    @Test fun incompleteServerAccountIdentityIsRejectedBeforePersistence() {
+        SyncSessionVault.resetForTests(context)
+        val vault = SyncSessionVault(context)
+        assertTrue(runCatching { vault.save(session.copy(userId = "44444444-4444-4444-8444-444444444444")) }.isFailure)
+        assertTrue(runCatching { vault.save(session.copy(role = SyncAccountRole.CASHIER)) }.isFailure)
+        assertTrue(SyncSessionVault.encryptedEnvelopeForTests(context).values.all { it == null })
+    }
+
     @Test fun malformedLocalOperatorBindingIsRejected() {
         SyncSessionVault.resetForTests(context)
         assertTrue(runCatching { SyncSessionVault(context).save(session.copy(localActorId = "  ")) }.isFailure)

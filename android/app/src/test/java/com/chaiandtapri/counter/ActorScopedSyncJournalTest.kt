@@ -42,6 +42,34 @@ class ActorScopedSyncJournalTest {
         assertTrue(scoped.blockedByActor)
     }
 
+    @Test fun ownerCloudBindingRequiresServerOwnerRoleAndLocalOwner() {
+        val owner = ownerSession()
+        assertTrue(SyncOwnerPolicy.mayBindCloudSession(owner, "local-owner"))
+        assertFalse(SyncOwnerPolicy.mayBindCloudSession(owner.copy(role = SyncAccountRole.CASHIER), "local-owner"))
+        assertFalse(SyncOwnerPolicy.mayBindCloudSession(owner, "cashier-1"))
+        assertFalse(SyncOwnerPolicy.mayBindCloudSession(owner.copy(userId = null), "local-owner"))
+    }
+
+    @Test fun ownerUploadRequiresServerOwnerAndMatchingLocalOwnerBinding() {
+        val owner = ownerSession().copy(localActorId = "local-owner")
+        assertTrue(SyncOwnerPolicy.mayUpload(owner))
+        assertFalse(SyncOwnerPolicy.mayUpload(owner.copy(role = SyncAccountRole.MANAGER)))
+        assertFalse(SyncOwnerPolicy.mayUpload(owner.copy(localActorId = "cashier-1")))
+        assertFalse(SyncOwnerPolicy.mayUpload(owner.copy(userId = null)))
+    }
+
+    private fun ownerSession() = SyncSession(
+        "https://sync.example.test",
+        SyncEnvelopeIdentity(
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+            "33333333-3333-4333-8333-333333333333"
+        ),
+        "synthetic-token",
+        userId = "44444444-4444-4444-8444-444444444444",
+        role = SyncAccountRole.OWNER
+    )
+
     private fun event(id: String, actorId: String?) = SyncOutboxEvent(uuid(id.hashCode().toLong()), id, 1,
         """{"kind":"projection_delta.v1","orders":[],"stock":[],"stockMovements":[],"customerCredits":[],"repayments":[],"paymentEntries":[],"expenses":[],"purchaseReceipts":[],"supplierPayments":[],"purchaseReturns":[],"staffShifts":[]}""", actorId)
 

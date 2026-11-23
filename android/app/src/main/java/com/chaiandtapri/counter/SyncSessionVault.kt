@@ -15,7 +15,35 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class SyncSession(val endpointBase: String, val identity: SyncEnvelopeIdentity, val bearerToken: String, val localActorId: String? = null)
+enum class SyncAccountRole(val wireValue: String) {
+    OWNER("owner"), MANAGER("manager"), CASHIER("cashier");
+
+    companion object {
+        fun parse(value: String): SyncAccountRole = entries.firstOrNull { it.wireValue == value }
+            ?: throw SyncProtocolException("Sync account returned an unsupported role.")
+    }
+}
+
+data class SyncSession(
+    val endpointBase: String,
+    val identity: SyncEnvelopeIdentity,
+    val bearerToken: String,
+    val localActorId: String? = null,
+    val userId: String? = null,
+    val role: SyncAccountRole? = null
+)
+
+internal object SyncOwnerPolicy {
+    fun isLocalOwner(actorId: String?): Boolean = actorId == LOCAL_OWNER_ACTOR
+
+    fun mayBindCloudSession(session: SyncSession, activeLocalActorId: String?): Boolean =
+        isLocalOwner(activeLocalActorId) && session.userId != null && session.role == SyncAccountRole.OWNER
+
+    fun mayUpload(session: SyncSession): Boolean =
+        isLocalOwner(session.localActorId) && session.userId != null && session.role == SyncAccountRole.OWNER
+
+    const val LOCAL_OWNER_ACTOR = "local-owner"
+}
 
 /** Stores only a server-issued bearer session, encrypted with an app/device-bound Android Keystore key. */
 class SyncSessionVault(context: Context, private val keyNamespace: String = "default") {
@@ -35,6 +63,8 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
             .put("shopId", session.identity.shopId)
             .put("deviceId", session.identity.deviceId)
             .put("localActorId", session.localActorId)
+            .put("userId", session.userId)
+            .put("role", session.role?.wireValue)
             .put("bearerToken", session.bearerToken)
             .toString().toByteArray(Charsets.UTF_8)
         try {
@@ -74,7 +104,9 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
                 endpointBase = json.getString("endpointBase"),
                 identity = SyncEnvelopeIdentity(json.getString("businessId"), json.getString("shopId"), json.getString("deviceId")),
                 bearerToken = json.getString("bearerToken"),
-                localActorId = if (json.has("localActorId") && !json.isNull("localActorId")) json.getString("localActorId") else null
+                localActorId = if (json.has("localActorId") && !json.isNull("localActorId")) json.getString("localActorId") else null,
+                userId = if (json.has("userId") && !json.isNull("userId")) json.getString("userId") else null,
+                role = if (json.has("role") && !json.isNull("role")) SyncAccountRole.parse(json.getString("role")) else null
             ).also(::validate)
         } catch (error: Exception) {
             throw SyncSessionUnavailableException("Stored sync-session data is malformed; encrypted data was preserved.", error)
@@ -106,6 +138,8 @@ class SyncSessionVault(context: Context, private val keyNamespace: String = "def
         require(session.localActorId == null || session.localActorId.matches(Regex("[A-Za-z0-9][A-Za-z0-9._ -]{1,59}"))) {
             "Sync session local-operator binding is invalid."
         }
+        require(session.userId == null || session.userId.isUuid()) { "Sync session account identifier is invalid." }
+        require((session.userId == null) == (session.role == null)) { "Sync session account identity is incomplete." }
     }
 
     private fun loadOrCreateKey(): SecretKey = loadExistingKey() ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE).run {

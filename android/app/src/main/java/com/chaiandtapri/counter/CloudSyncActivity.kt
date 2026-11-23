@@ -88,6 +88,11 @@ class CloudSyncActivity : Activity() {
 
     private fun register() {
         if (busy) return
+        val operatorAtStart = LocalSessionState.actorId
+        if (!LocalSessionState.isOwner || !SyncOwnerPolicy.isLocalOwner(operatorAtStart)) {
+            status.text = "Only the authenticated local owner can register this device for cloud sync."
+            return
+        }
         val base = endpoint.text.toString().trim()
         val emailValue = email.text.toString().trim()
         val passwordValue = password.text.toString()
@@ -103,7 +108,9 @@ class CloudSyncActivity : Activity() {
                     SyncAccountClient(HttpsSyncHttpTransport()).register(base, SyncRegistration(
                         emailValue, passwordValue, displayValue, businessValue, shopValue, deviceId, Build.MODEL.take(80).ifBlank { "Android device" }
                     )).also { session ->
-                        val bound = session.copy(localActorId = LocalSessionState.actorId)
+                        check(SyncOwnerPolicy.mayBindCloudSession(session, operatorAtStart)) { "Cloud registration did not return an owner account." }
+                        check(LocalSessionState.isOwner && LocalSessionState.actorId == operatorAtStart) { "Local owner session changed during account registration. Sign in again; no session was saved." }
+                        val bound = session.copy(localActorId = operatorAtStart)
                         SyncSessionVault(this).save(bound)
                         SyncDeviceIdentityStore(this).save(bound)
                     }
@@ -125,6 +132,11 @@ class CloudSyncActivity : Activity() {
 
     private fun login() {
         if (busy) return
+        val operatorAtStart = LocalSessionState.actorId
+        if (!LocalSessionState.isOwner || !SyncOwnerPolicy.isLocalOwner(operatorAtStart)) {
+            status.text = "Only the authenticated local owner can connect this device to cloud sync."
+            return
+        }
         val identity = SyncDeviceIdentityStore(this).load()
         if (identity == null) {
             status.text = "This device has no saved shop identity. An existing shop must authorize/register this device before it can sign in."
@@ -143,7 +155,9 @@ class CloudSyncActivity : Activity() {
                         SyncLogin(emailValue, passwordValue, identity.identity.shopId, identity.identity.deviceId)
                     ).also { session ->
                         require(session.identity.businessId == identity.identity.businessId) { "The returned business identity changed." }
-                        val bound = session.copy(localActorId = LocalSessionState.actorId)
+                        require(SyncOwnerPolicy.mayBindCloudSession(session, operatorAtStart)) { "This cloud account is not an owner. No owner sync session was saved." }
+                        check(LocalSessionState.isOwner && LocalSessionState.actorId == operatorAtStart) { "Local owner session changed during sign-in. Sign in again; no session was saved." }
+                        val bound = session.copy(localActorId = operatorAtStart)
                         SyncSessionVault(this).save(bound)
                         SyncDeviceIdentityStore(this).save(bound)
                     }
@@ -170,6 +184,9 @@ class CloudSyncActivity : Activity() {
             val outcome = runCatching {
                 SyncOperationLock.withLock {
                     val session = SyncSessionVault(this).load() ?: error("No saved session. Create an account first.")
+                    check(SyncOwnerPolicy.mayUpload(session)) {
+                        "The saved cloud session is not bound to the local owner. Owner sign-in is required before sync."
+                    }
                     val actorId = session.localActorId ?: error("This saved session has no local operator binding. Sign in again while authenticated as the local owner before syncing.")
                     SqliteCounterPersistence(this).use { persistence ->
                         val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)

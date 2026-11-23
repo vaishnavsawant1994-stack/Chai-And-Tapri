@@ -20,7 +20,7 @@ class SyncAccountClientTest {
             capturedEndpoint = endpoint
             assertEquals("", token)
             capturedBody = body
-            SyncHttpResponse(201, JSONObject().put("businessId", businessId).put("shopId", shopId).put("userId", "u1").put("token", "synthetic-server-token").toString())
+            SyncHttpResponse(201, JSONObject().put("businessId", businessId).put("shopId", shopId).put("userId", "44444444-4444-4444-8444-444444444444").put("token", "synthetic-server-token").toString())
         })
 
         val session = client.register("https://sync.example.test", SyncRegistration(
@@ -32,6 +32,8 @@ class SyncAccountClientTest {
         assertEquals("synthetic-long-password", JSONObject(capturedBody).getString("password"))
         assertEquals(SyncEnvelopeIdentity(businessId, shopId, deviceId), session.identity)
         assertEquals("synthetic-server-token", session.bearerToken)
+        assertEquals("44444444-4444-4444-8444-444444444444", session.userId)
+        assertEquals(SyncAccountRole.OWNER, session.role)
     }
 
     @Test fun loginRequiresSameRegisteredShopAndUsesKnownDeviceIdentity() {
@@ -40,7 +42,7 @@ class SyncAccountClientTest {
             capturedEndpoint = endpoint
             assertEquals("", token)
             assertEquals(shopId, JSONObject(body).getString("shopId"))
-            SyncHttpResponse(200, JSONObject().put("businessId", businessId).put("shopId", shopId).put("userId", "u1").put("role", "owner").put("token", "rotated-token").toString())
+            SyncHttpResponse(200, JSONObject().put("businessId", businessId).put("shopId", shopId).put("userId", "44444444-4444-4444-8444-444444444444").put("role", "cashier").put("token", "rotated-token").toString())
         })
 
         val session = client.login("https://sync.example.test/api", SyncLogin("owner@example.test", "synthetic-password", shopId, deviceId))
@@ -48,6 +50,16 @@ class SyncAccountClientTest {
         assertEquals("https://sync.example.test/api/v1/login", capturedEndpoint)
         assertEquals(shopId, session.identity.shopId)
         assertEquals("rotated-token", session.bearerToken)
+        assertEquals("44444444-4444-4444-8444-444444444444", session.userId)
+        assertEquals(SyncAccountRole.CASHIER, session.role)
+    }
+
+    @Test fun loginRejectsUnknownOrMissingServerRole() {
+        val client = SyncAccountClient(SyncHttpTransport { _, _, _ ->
+            SyncHttpResponse(200, JSONObject().put("businessId", businessId).put("shopId", shopId)
+                .put("userId", "44444444-4444-4444-8444-444444444444").put("role", "superuser").put("token", "token").toString())
+        })
+        assertTrue(runCatching { client.login("https://sync.example.test", SyncLogin("a@b.test", "password", shopId, deviceId)) }.isFailure)
     }
 
     @Test fun logoutRequiresServerRevocationConfirmation() {

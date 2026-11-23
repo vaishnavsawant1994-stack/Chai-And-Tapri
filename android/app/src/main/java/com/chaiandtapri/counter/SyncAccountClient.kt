@@ -62,10 +62,12 @@ class SyncAccountClient(private val transport: SyncHttpTransport) {
             .toString())
         if (response.statusCode != 201) throw apiError(response)
         val body = parseBody(response.body)
+        val userId = body.getString("userId")
         val businessId = body.getString("businessId")
         val shopId = body.getString("shopId")
         val token = body.getString("token")
-        val session = SyncSession(endpointBase.trim().trimEnd('/'), SyncEnvelopeIdentity(businessId, shopId, request.deviceId.lowercase()), token)
+        val session = SyncSession(endpointBase.trim().trimEnd('/'), SyncEnvelopeIdentity(businessId, shopId, request.deviceId.lowercase()), token,
+            userId = userId, role = SyncAccountRole.OWNER)
         validateSession(session)
         return session
     }
@@ -85,7 +87,9 @@ class SyncAccountClient(private val transport: SyncHttpTransport) {
         val session = SyncSession(
             endpointBase.trim().trimEnd('/'),
             SyncEnvelopeIdentity(body.getString("businessId"), body.getString("shopId"), request.deviceId.lowercase()),
-            body.getString("token")
+            body.getString("token"),
+            userId = body.getString("userId"),
+            role = SyncAccountRole.parse(body.getString("role"))
         )
         require(session.identity.shopId.equals(request.shopId, ignoreCase = true)) { "Server returned a different shop identity." }
         validateSession(session)
@@ -93,7 +97,7 @@ class SyncAccountClient(private val transport: SyncHttpTransport) {
     }
 
     fun logout(session: SyncSession) {
-        validateSession(session)
+        validateSession(session, requireAccountIdentity = false)
         val response = transport.post(apiEndpoint(session.endpointBase, "logout"), session.bearerToken, "{}")
         if (response.statusCode !in 200..299) throw apiError(response)
         val body = parseBody(response.body)
@@ -110,10 +114,13 @@ class SyncAccountClient(private val transport: SyncHttpTransport) {
         require(request.deviceId.isUuid()) { "Device identity is invalid." }
     }
 
-    private fun validateSession(session: SyncSession) {
+    private fun validateSession(session: SyncSession, requireAccountIdentity: Boolean = true) {
         val endpoint = apiEndpoint(session.endpointBase, "sync/events")
         check(endpoint.startsWith("https://"))
         require(session.identity.businessId.isUuid() && session.identity.shopId.isUuid() && session.identity.deviceId.isUuid())
+        if (requireAccountIdentity) require(session.userId?.isUuid() == true && session.role != null) {
+            "Sync account response is missing the authenticated account identity or role."
+        }
         require(session.bearerToken.isNotBlank() && session.bearerToken.length <= 4096 && session.bearerToken.none { it.isWhitespace() })
     }
 

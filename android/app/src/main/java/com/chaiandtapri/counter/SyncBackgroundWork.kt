@@ -92,7 +92,7 @@ internal object SyncBackgroundStatus {
     private const val UPDATED_AT = "updated_at"
 
     fun record(context: Context, state: String, acknowledged: Int = 0, revision: Long = 0L) {
-        require(state in setOf("synced", "idle", "conflict", "session_required", "session_unavailable", "server_rejected", "retrying", "attention_required", "actor_binding_required", "actor_mismatch"))
+        require(state in setOf("synced", "idle", "conflict", "session_required", "session_unavailable", "server_rejected", "retrying", "attention_required", "actor_binding_required", "actor_mismatch", "owner_identity_required"))
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(STATE, state)
             .putInt(ACKNOWLEDGED, acknowledged.coerceAtLeast(0))
@@ -113,6 +113,7 @@ internal object SyncBackgroundStatus {
             "session_unavailable" -> "Saved sync session is unavailable. Encrypted session data was preserved."
             "actor_binding_required" -> "Background sync paused because the session needs a trusted local-operator binding. Sign in again as the owner."
             "actor_mismatch" -> "Background sync paused. The next queued action belongs to another or unlinked local operator; it was not uploaded under this account."
+            "owner_identity_required" -> "Background sync paused because this saved cloud account is not verified as the local shop owner. Sign in with the owner account."
             "server_rejected" -> "Server rejected the sync session or request. Review account access."
             "retrying" -> "Background sync will retry when its network and backoff conditions allow."
             else -> "Background sync needs attention. Local records remain on this device."
@@ -156,6 +157,10 @@ class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : Corouti
             SyncBackgroundStatus.record(applicationContext, "actor_binding_required")
             return Result.failure(output("actor_binding_required"))
         }
+        if (!SyncOwnerPolicy.mayUpload(availableSession)) {
+            SyncBackgroundStatus.record(applicationContext, "owner_identity_required")
+            return Result.failure(output("owner_identity_required"))
+        }
 
         return try {
             val result = withContext(Dispatchers.IO) {
@@ -163,6 +168,9 @@ class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : Corouti
                     if (isStopped || BusinessWriteBarrier.currentMaintenance() != null) throw BusinessMaintenanceException()
                     val session = SyncSessionVault(applicationContext).load() ?: throw SyncSessionUnavailableException("No session.")
                     val actorId = session.localActorId ?: throw SyncSessionUnavailableException("Sync session has no local operator binding.")
+                    if (!SyncOwnerPolicy.mayUpload(session)) {
+                        throw SyncSessionUnavailableException("Saved cloud account is not bound to the local owner.")
+                    }
                     SqliteCounterPersistence(applicationContext).use { persistence ->
                         val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)
                         val run = SyncRunner(journal, HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 7_000))
