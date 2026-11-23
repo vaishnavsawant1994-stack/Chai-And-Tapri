@@ -1,6 +1,7 @@
 # OW-09B — Role-Scoped Sync and Submitter Audit
 
-**Date:** 24 November 2026  
+**Date:** 24 November 2026
+
 **Status:** Implemented and integration-tested for the current projection contract; not production-qualified.
 
 ## Delivered
