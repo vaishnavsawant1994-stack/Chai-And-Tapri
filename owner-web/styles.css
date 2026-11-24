@@ -67,6 +67,13 @@ tbody tr:last-child td { border-bottom: 0; }
 .metric-card h3 { margin: 0 0 12px; font-size: .88rem; }
 .metric-value { color: var(--tea); font-size: clamp(1.25rem, 3vw, 1.75rem); font-weight: 800; overflow-wrap: anywhere; margin: 0 0 7px; }
 .metric-note { font-size: .8rem; margin: 0; }
+.insight-list { display: grid; gap: 12px; }
+.insight-card { display: flex; justify-content: space-between; align-items: center; gap: 18px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--copper); border-radius: 13px; padding: 16px; }
+.insight-card[data-severity="review"] { border-left-color: #b36b2c; }
+.insight-card h3 { margin: 0 0 6px; }
+.insight-card p { margin: 0; color: var(--muted); }
+.insight-amount { margin-top: 8px !important; color: var(--tea-dark) !important; font-weight: 750; }
+@media (max-width: 560px) { .insight-card { align-items: flex-start; flex-direction: column; } }
 .evidence-panel { margin-top: 18px; }
 .invite-result { margin-top: 16px; padding: 15px; border: 1px solid #c9ddce; border-radius: 12px; background: #f1f8f1; display: grid; gap: 10px; }
 .invite-result code { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; background: white; user-select: all; }

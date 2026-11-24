@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { authorizeProjectionForRole } from '../src/service.mjs';
 import { createApiServer } from '../src/http.mjs';
@@ -53,6 +53,34 @@ test('owner audit history returns newest accepted-event metadata without payload
   assert.equal(JSON.stringify(result).includes('5000'), false);
   assert.match(result.evidence.limitation, /not a complete employee audit trail/);
   assert.throws(() => buildAuditHistory({ shopId: 'shop-1', shopName: 'Shop', serverRevision: 0, events: [], limit: 101 }), /invalid_audit_limit/);
+});
+
+test('owner insights are deterministic, source-linked, and omit customer and supplier identities', () => {
+  const events = [row(1, { ...empty,
+    orders: [{ orderNumber: 8, salePosted: true, voided: false, fulfillment: 'TAKEN', lines: [{ productId: 'tea', deliveredQuantity: 0, refundedQuantity: 0, unitPricePaise: 1500 }] }],
+    paymentEntries: [{ entryId: 'pending-1', orderNumber: 8, customerId: null, amountPaise: 1500, method: 'upi', status: 'pending', kind: 'payment_attempt', relatedEntryId: null }],
+    customerCredits: [{ creditId: 'c-1', customerId: 'private-customer-id', amountPaise: 900, repaidPaise: 0, reversedPaise: 0 }],
+    purchaseReceipts: [{ receiptId: 'r-1', supplierId: 'private-supplier-id', totalPaise: 2000 }]
+  })];
+  const result = buildOwnerInsights({ shopId: 'shop-1', shopName: 'Tapri', serverRevision: 1, events });
+  assert.deepEqual(result.insights.map((item) => item.id), ['open_orders', 'upi_pending', 'customer_receivables', 'supplier_payables']);
+  assert.equal(result.insights[1].amountPaise, 1500);
+  assert.equal(result.insights[2].amountPaise, 900);
+  assert.equal(result.insights[3].amountPaise, 2000);
+  assert.equal(result.insights.every((item) => ['overview', 'customers', 'suppliers', 'profit'].includes(item.sourceView)), true);
+  assert.equal(JSON.stringify(result).includes('private-customer-id'), false);
+  assert.equal(JSON.stringify(result).includes('private-supplier-id'), false);
+  assert.match(result.evidence.meaning, /not AI advice/);
+});
+
+test('owner insights avoid asserting profit when costs are absent and return a clear empty state', () => {
+  const order = { orderNumber: 1, salePosted: true, voided: false, fulfillment: 'GIVEN', lines: [{ productId: 'tea', deliveredQuantity: 1, refundedQuantity: 0, unitPricePaise: 1000 }] };
+  const result = buildOwnerInsights({ shopId: 'shop-1', shopName: 'Tapri', serverRevision: 1, events: [row(1, { ...empty, orders: [order] })] });
+  assert.deepEqual(result.insights.map((item) => item.id), ['profit_cost_coverage']);
+  assert.match(result.insights[0].summary, /lack an accepted unit-cost estimate/);
+  const blank = buildOwnerInsights({ shopId: 'shop-1', shopName: 'Tapri', serverRevision: 0, events: [] });
+  assert.equal(blank.insightCount, 0);
+  assert.match(blank.emptyState, /No recorded follow-ups/);
 });
 
 test('cashier sync permits sale settlement and reconciled sale stock only', () => {
@@ -375,6 +403,7 @@ test('sync service refuses dashboard access to non-owner roles before reading th
   await assert.rejects(service.shopProfitReadiness({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopAuditHistory({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
   await assert.rejects(service.shopStaffShifts({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
+  await assert.rejects(service.shopOwnerInsights({ role: 'staff' }), (error) => error instanceof ApiError && error.status === 403 && error.code === 'owner_access_required');
 });
 
 test('supplier balances aggregate only opaque accepted financial identifiers and label declarations', () => {
@@ -422,6 +451,7 @@ test('owner overview route requires authentication and serves only owner static 
       return { role: 'owner', shop_id: shopId, business_id: 'business-1' };
     },
     async shopOverview(actor) { return { ...fixture, shopId: actor.shop_id }; },
+    async shopOwnerInsights(actor) { return { ...fixture, shopId: actor.shop_id, insightCount: 0, insights: [], emptyState: 'No follow-ups' }; },
     async shopProductPerformance(actor) { return { ...fixture, shopId: actor.shop_id, products: [] }; },
     async shopInventorySnapshot(actor) { return { ...fixture, shopId: actor.shop_id, products: [], recentMovements: [] }; },
     async shopSupplierBalances(actor) { return { ...fixture, shopId: actor.shop_id, suppliers: [] }; },
@@ -453,6 +483,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   const pageText = await page.text();
   assert.match(pageText, /Owner Overview/);
+  assert.match(pageText, /Owner insights/);
   assert.match(pageText, /Product performance/);
   assert.match(pageText, /id="product-rows"/);
   assert.match(pageText, /Inventory snapshot/);
@@ -475,12 +506,16 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /id="staff-audit-rows"/);
   assert.match(pageText, /id="audit-rows"/);
   assert.match(pageText, /id="export-report-button"/);
+  assert.match(pageText, /id="insights-view"/);
+  assert.match(pageText, /id="insights-list"/);
   assert.match(pageText, /type="module"/);
   const script = await fetch(`${base}/owner/app.js`);
   assert.equal(script.status, 200);
   const scriptText = await script.text();
   assert.match(scriptText, /not save your password|session = result|sessionStorage/i);
   assert.match(scriptText, /\/v1\/dashboard\/products/);
+  assert.match(scriptText, /\/v1\/dashboard\/insights/);
+  assert.match(scriptText, /dataset\.sourceView/);
   assert.match(scriptText, /\/v1\/dashboard\/inventory/);
   assert.match(scriptText, /\/v1\/dashboard\/suppliers/);
   assert.match(scriptText, /\/v1\/dashboard\/customers/);
@@ -503,6 +538,10 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(denied.status, 401);
   const deniedActivity = await fetch(`${base}/v1/dashboard/activity?shopId=shop-1&days=7`);
   assert.equal(deniedActivity.status, 401);
+  assert.equal((await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`)).status, 401);
+  const insights = await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(insights.status, 200);
+  assert.equal((await insights.json()).insightCount, 0);
   const allowed = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(allowed.status, 200);
   assert.equal((await allowed.json()).shopId, 'shop-1');
@@ -563,6 +602,6 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal((await createdInvite.json()).invitationToken.length, 43);
   const invalidInviteShape = await fetch(`${base}/v1/staff/invitations`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', email: 'staff@example.test', role: 'owner', permission: 'all' }) });
   assert.equal(invalidInviteShape.status, 400);
-  assert.equal(calls.length, 23);
+  assert.equal(calls.length, 25);
   assert.ok(calls.every((call) => call.shopId === 'shop-1'));
 });

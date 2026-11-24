@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -548,6 +548,17 @@ export class SyncService {
         serverRevision: Number(shop.rows[0].server_revision),
         events: journal.rows
       });
+    });
+  }
+
+  async shopOwnerInsights(actor) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildOwnerInsights({ shopId: actor.shop_id, shopName: shop.rows[0].display_name, serverRevision: Number(shop.rows[0].server_revision), events: journal.rows });
     });
   }
 

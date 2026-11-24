@@ -15,6 +15,34 @@ function safeMultiply(left, right) {
   return value;
 }
 
+/** Deterministic owner follow-ups. These are record-based prompts, not predictions. */
+export function buildOwnerInsights({ shopId, shopName, serverRevision, events }) {
+  const overview = buildShopOverview({ shopId, shopName, serverRevision, events });
+  const suppliers = buildSupplierBalances({ shopId, shopName, serverRevision, events });
+  const customers = buildCustomerBalances({ shopId, shopName, serverRevision, events });
+  const coverage = currentAcceptedCostCoverage(events);
+  const insights = [];
+  const add = (id, severity, title, summary, sourceView, amountPaise = null) => insights.push({ id, severity, title, summary, sourceView, amountPaise });
+
+  if (overview.openOrderCount > 0) add('open_orders', 'info', 'Open orders recorded', `${overview.openOrderCount} accepted order(s) are not marked given or cancelled.`, 'overview');
+  if (overview.upiPendingPaise > 0) add('upi_pending', 'review', 'UPI attempts are pending', 'Review the pending attempts; these are not verified collections and may include attempts whose outcome is not yet known.', 'overview', overview.upiPendingPaise);
+  if (customers.netReceivablePaise > 0) add('customer_receivables', 'review', 'Customer balances recorded', 'Review the aggregate recorded receivable in customer balances. No customer identity is included here.', 'customers', customers.netReceivablePaise);
+  if (suppliers.netPayablePaise > 0) add('supplier_payables', 'review', 'Supplier payable recorded', 'Review the aggregate payable from accepted receipt, payment and return records.', 'suppliers', suppliers.netPayablePaise);
+  if (coverage.netDeliveredSaleLines > 0 && !coverage.complete) add('profit_cost_coverage', 'info', 'Profit is not fully calculable', `${coverage.uncostedNetDeliveredSaleLines} of ${coverage.netDeliveredSaleLines} delivered sale line(s) lack an accepted unit-cost estimate.`, 'profit');
+
+  return {
+    shopId, shopName, serverRevision, generatedFrom: 'accepted_server_events',
+    insightCount: insights.length, insights,
+    emptyState: insights.length === 0 ? 'No recorded follow-ups from the accepted events in this snapshot.' : null,
+    evidence: {
+      scope: 'Derived only from server-accepted events at this revision. Offline, blocked and unsynchronized activity is excluded.',
+      meaning: 'These are deterministic operational reminders, not AI advice, predictions, verified bank/cash facts, or a complete accounting statement.',
+      privacy: 'Customer and supplier identities are not included in insight records.',
+      money: 'Amounts are integer paise. UPI attempts and staff-declared settlements remain unverified unless a separate authorized provider integration supplies evidence.'
+    }
+  };
+}
+
 /** Supplier payable view uses opaque device-issued IDs and accepted declared events only. */
 export function buildSupplierBalances({ shopId, shopName, serverRevision, events }) {
   const suppliers = new Map();

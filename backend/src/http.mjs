@@ -93,6 +93,11 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopOverview(actor));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/insights') {
+        const shopId=url.searchParams.get('shopId');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopOwnerInsights(actor));
+      }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/products') {
         const shopId=url.searchParams.get('shopId');
         const actor=await service.authenticate(token,shopId);

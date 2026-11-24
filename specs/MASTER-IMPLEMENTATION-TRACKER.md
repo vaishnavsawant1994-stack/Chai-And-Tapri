@@ -731,3 +731,7 @@ The actual `StaffCloudAccessActivity` passed a focused API 37 test against the i
 ## CAT-051B fresh-install SAF recovery - 24 November 2026
 
 On a newly created disposable API 37 AVD, native SAF export and restore were run in separate instrumentation invocations. Export passed **1/1**; the target app was installed again before the restore invocation, and the encrypted backup persisted in Downloads. Restore passed **1/1**, validating restored synthetic order/payment/refund/credit/repayment/stock/audit/outbox state and duplicate-command rejection. This is same-emulator fresh-app-install evidence, not cross-device recovery. Evidence/report: [CAT-051B SAF qualification](CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md); local ignored artifact at `../test-evidence/2026-11-24/cat051b-clean-install/`. Physical key invalidation, low storage, abrupt power loss, second-person recovery and independent security review remain open.
+
+## Current continuation - OW-13 deterministic owner insights - 24 November 2026
+
+Implemented a source-linked owner insights API and dashboard view. Follow-ups use accepted-event projections only; they flag open orders, pending UPI, aggregate credit/payable balances, and incomplete cost coverage. They are not AI forecasts or profit claims. Tests: backend 30 passed, 5 PostgreSQL integration cases skipped, 0 failed; owner-web JS syntax passed. Browser visual and PostgreSQL E2E remain unverified. Report: [`OW-13-OWNER-INSIGHTS-REPORT-2026-11-24.md`](OW-13-OWNER-INSIGHTS-REPORT-2026-11-24.md).

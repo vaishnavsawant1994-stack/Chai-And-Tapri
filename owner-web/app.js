@@ -42,6 +42,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     activeView = view;
     $('export-report-button').disabled = !reportSnapshots.has(view);
     const overview = view === 'overview';
+    const insights = view === 'insights';
     const products = view === 'products';
     const inventory = view === 'inventory';
     const suppliers = view === 'suppliers';
@@ -52,8 +53,9 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     const audit = view === 'audit';
     const shifts = view === 'shifts';
     const staff = view === 'staff';
-    $('refresh-button').textContent = overview ? 'Refresh' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : shifts ? 'Refresh shifts' : 'Refresh staff access';
+    $('refresh-button').textContent = overview ? 'Refresh' : insights ? 'Refresh insights' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : shifts ? 'Refresh shifts' : 'Refresh staff access';
     $('overview-view').classList.toggle('hidden', !overview);
+    $('insights-view').classList.toggle('hidden', !insights);
     $('products-view').classList.toggle('hidden', !products);
     $('inventory-view').classList.toggle('hidden', !inventory);
     $('suppliers-view').classList.toggle('hidden', !suppliers);
@@ -66,6 +68,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     $('staff-view').classList.toggle('hidden', !staff);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
+    $('insights-tab').classList.toggle('active', insights);
+    $('insights-tab').setAttribute('aria-current', insights ? 'page' : 'false');
     $('products-tab').classList.toggle('active', products);
     $('products-tab').setAttribute('aria-current', products ? 'page' : 'false');
     $('inventory-tab').classList.toggle('active', inventory);
@@ -105,6 +109,13 @@ import { buildOwnerReportCsv } from './report-export.mjs';
           : values;
       })
     })).filter((section) => section.headers.length);
+    if (view === 'insights') {
+      const rows = [...container.querySelectorAll('.insight-card')].map((card) => {
+        const text = [...card.querySelectorAll('h3, p')].map((node) => node.textContent.trim());
+        return [card.dataset.severity ?? '', text[0] ?? '', text[1] ?? '', text[2] ?? ''];
+      });
+      if (rows.length) sections.push({ title: 'Follow-ups', headers: ['Priority', 'Title', 'Summary', 'Recorded amount'], rows });
+    }
     const evidence = evidenceIds.flatMap((id) => [...$(id).querySelectorAll('li')].map((item) => item.textContent.trim()));
     reportSnapshots.set(view, {
       title,
@@ -166,6 +177,37 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     } finally {
       $('refresh-button').disabled = false;
     }
+  }
+
+  async function loadInsights() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    invalidateReport('insights');
+    setStatus($('insights-status'), 'Loading record-based follow-ups…');
+    try {
+      const data = await request(`/v1/dashboard/insights?shopId=${encodeURIComponent(activeShopId)}`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      $('insights-scope').textContent = `Server revision ${data.serverRevision} · ${data.insightCount} follow-up(s)`;
+      const cards = data.insights.map((insight) => {
+        const card = document.createElement('article'); card.className = 'insight-card'; card.dataset.severity = insight.severity;
+        const content = document.createElement('div');
+        const heading = document.createElement('h3'); heading.textContent = insight.title;
+        const summary = document.createElement('p'); summary.textContent = insight.summary;
+        content.append(heading, summary);
+        if (insight.amountPaise !== null) { const amount = document.createElement('p'); amount.className = 'insight-amount'; amount.textContent = `Recorded amount: ${money(insight.amountPaise)}`; content.append(amount); }
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary'; button.textContent = `Review ${insight.sourceView}`; button.dataset.sourceView = insight.sourceView;
+        card.append(content, button); return card;
+      });
+      if (!cards.length) { const empty = document.createElement('p'); empty.className = 'scope-note'; empty.textContent = data.emptyState; cards.push(empty); }
+      $('insights-list').replaceChildren(...cards);
+      $('insights-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const li = document.createElement('li'); li.textContent = text; return li; }));
+      setStatus($('insights-status'), 'Insights refreshed from accepted server events.', 'success');
+      captureReport('insights', 'Owner insights', 'insights-scope', null, ['insights-evidence-list']);
+    } catch (error) {
+      setStatus($('insights-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
   }
 
   async function loadProducts() {
@@ -653,7 +695,8 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     }
   });
   $('refresh-button').addEventListener('click', () => {
-    if (!$('products-view').classList.contains('hidden')) loadProducts();
+    if (!$('insights-view').classList.contains('hidden')) loadInsights();
+    else if (!$('products-view').classList.contains('hidden')) loadProducts();
     else if (!$('inventory-view').classList.contains('hidden')) loadInventory();
     else if (!$('suppliers-view').classList.contains('hidden')) loadSuppliers();
     else if (!$('customers-view').classList.contains('hidden')) loadCustomers();
@@ -679,6 +722,13 @@ import { buildOwnerReportCsv } from './report-export.mjs';
     setStatus($(statusId), 'Exported the currently displayed accepted-server report as CSV.', 'success');
   });
   $('overview-tab').addEventListener('click', () => setView('overview'));
+  $('insights-tab').addEventListener('click', () => { setView('insights'); loadInsights(); });
+  $('insights-list').addEventListener('click', (event) => {
+    const view = event.target.closest('[data-source-view]')?.dataset.sourceView;
+    if (!view) return;
+    setView(view);
+    ({ overview: loadOverview, products: loadProducts, inventory: loadInventory, suppliers: loadSuppliers, customers: loadCustomers, activity: loadActivity, cashflow: loadCashflow, profit: loadProfitReadiness })[view]?.();
+  });
   $('products-tab').addEventListener('click', () => { setView('products'); loadProducts(); });
   $('inventory-tab').addEventListener('click', () => { setView('inventory'); loadInventory(); });
   $('suppliers-tab').addEventListener('click', () => { setView('suppliers'); loadSuppliers(); });

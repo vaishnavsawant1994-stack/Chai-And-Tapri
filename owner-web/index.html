@@ -55,6 +55,7 @@
         <p id="data-scope" class="scope-note"></p>
         <nav class="dashboard-nav" aria-label="Owner dashboard sections">
           <button id="overview-tab" class="nav-tab active" type="button" aria-current="page">Overview</button>
+          <button id="insights-tab" class="nav-tab" type="button" aria-current="false">Owner insights</button>
           <button id="products-tab" class="nav-tab" type="button" aria-current="false">Product performance</button>
           <button id="inventory-tab" class="nav-tab" type="button" aria-current="false">Inventory snapshot</button>
           <button id="suppliers-tab" class="nav-tab" type="button" aria-current="false">Supplier balances</button>
@@ -78,6 +79,13 @@
           </dl>
         </section>
         <p id="dashboard-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="insights-view" class="hidden" aria-labelledby="insights-heading">
+          <div class="section-heading"><div><p class="eyebrow">DETERMINISTIC FOLLOW-UPS</p><h2 id="insights-heading">Owner insights</h2></div></div>
+          <p id="insights-scope" class="scope-note"></p>
+          <div id="insights-list" class="insight-list" aria-live="polite"></div>
+          <section class="panel evidence-panel" aria-labelledby="insights-evidence-heading"><h3 id="insights-evidence-heading">Evidence and limits</h3><ul id="insights-evidence-list"></ul></section>
+          <p id="insights-status" class="status" role="status" aria-live="polite"></p>
         </section>
         <section id="products-view" class="hidden" aria-labelledby="products-heading">
           <div class="section-heading">
