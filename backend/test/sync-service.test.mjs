@@ -229,17 +229,29 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
       orderNumber:12,fulfillment:'GIVEN',payment:'STAFF_DECLARED',paidPaise:2000,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,
       salePosted:true,voided:false,revision:1,createdAtEpochMs:1000,
       lines:[{productId:'chai',quantity:2,deliveredQuantity:2,refundedQuantity:0,unitPricePaise:1000,estimatedUnitCostPaise:400}]
+    },{
+      orderNumber:13,fulfillment:'TAKEN',payment:'UPI_PENDING',paidPaise:0,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,creditReversedPaise:0,
+      salePosted:false,voided:false,revision:1,createdAtEpochMs:2000,
+      lines:[{productId:'water',quantity:1,deliveredQuantity:0,refundedQuantity:0,unitPricePaise:1700,estimatedUnitCostPaise:800}]
     }],customerCredits:[{creditId,customerId:opaqueCustomerId,amountPaise:500,repaidPaise:200,reversedPaise:0}],
       repayments:[{repaymentId,customerId:opaqueCustomerId,amountPaise:200}],
       paymentEntries:[{entryId:randomUUID(),orderNumber:12,customerId:null,amountPaise:2000,method:'cash',status:'staff_declared',kind:'order_collection',relatedEntryId:null},
-        {entryId:randomUUID(),orderNumber:null,customerId:opaqueCustomerId,amountPaise:200,method:'cash',status:'staff_declared',kind:'customer_repayment',relatedEntryId:null}]}};
+        {entryId:randomUUID(),orderNumber:null,customerId:opaqueCustomerId,amountPaise:200,method:'cash',status:'staff_declared',kind:'customer_repayment',relatedEntryId:null},
+        {entryId:randomUUID(),orderNumber:13,customerId:null,amountPaise:1700,method:'upi',status:'pending',kind:'payment_attempt',relatedEntryId:null}]}};
     const sync=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(sync.status,200); assert.equal((await sync.json()).results[0].status,'accepted');
     const overview=await fetch(`${base}/v1/dashboard/overview?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(overview.status,200); const summary=await overview.json();
-    assert.equal(summary.shopId,enrollment.shopId); assert.equal(summary.recordedOrderCount,1);
+    assert.equal(summary.shopId,enrollment.shopId); assert.equal(summary.recordedOrderCount,2); assert.equal(summary.openOrderCount,1);
     assert.equal(summary.netDeliveredItemValuePaise,2000); assert.equal(summary.cashCollectedPaise,2200);
     assert.equal(summary.trackedProductCount,1); assert.match(summary.evidence.cash,/Staff-declared/);
+    const insightsResponse=await fetch(`${base}/v1/dashboard/insights?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(insightsResponse.status,200); const insights=await insightsResponse.json();
+    assert.deepEqual(insights.insights.map(item=>item.id),['open_orders','upi_pending','customer_receivables','supplier_payables']);
+    assert.equal(insights.insights[1].amountPaise,1700); assert.equal(insights.insights[2].amountPaise,300); assert.equal(insights.insights[3].amountPaise,3500);
+    assert.equal(JSON.stringify(insights).includes(opaqueCustomerId),false); assert.equal(JSON.stringify(insights).includes(supplierId),false);
+    const insightsWrongShop=await fetch(`${base}/v1/dashboard/insights?shopId=${randomUUID()}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(insightsWrongShop.status,401);
     const products=await fetch(`${base}/v1/dashboard/products?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(products.status,200); const performance=await products.json();
     assert.equal(performance.shopId,enrollment.shopId); assert.equal(performance.productCount,1);
