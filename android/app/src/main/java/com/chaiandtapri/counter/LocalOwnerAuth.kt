@@ -57,13 +57,15 @@ internal object LocalBusinessMutationPolicy {
         if (activeActorId.isNullOrBlank() || recordedActorId != activeActorId) {
             throw SecurityException("Business mutation actor does not match the authenticated local operator.")
         }
-        if (activeRole == StaffRole.CASHIER && managerOnlyEvent(auditEvent)) {
+        if (activeRole == StaffRole.CASHIER && managerOnlyEvent(auditEvent, activeActorId)) {
             throw SecurityException("Manager access is required for this business mutation.")
         }
     }
 
-    private fun managerOnlyEvent(event: String): Boolean =
-        event.startsWith("remove #") ||
+    private fun managerOnlyEvent(event: String, actorId: String?): Boolean {
+        if (event.startsWith("staff_shift.started") && event.contains("staff_actor_id=$actorId")) return false
+        if (event.startsWith("staff_shift.ended") && event.contains("staff_actor_id=$actorId")) return false
+        return event.startsWith("remove #") ||
             event.startsWith("order.cancelled") ||
             event.startsWith("sale.refund") ||
             event.startsWith("purchase.") ||
@@ -77,6 +79,7 @@ internal object LocalBusinessMutationPolicy {
             event.startsWith("customer.credit_repaid") ||
             event.startsWith("stock.physical_count") ||
             event.startsWith("stock.manual_adjustment")
+    }
 }
 
 object LocalOwnerAuth {

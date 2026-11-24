@@ -171,7 +171,8 @@ class SqliteCounterPersistence internal constructor(
         }
         if (oldVersion < 28) migrateOpaqueProcurementSyncIds(db)
         if (oldVersion < 29) migrateOpaqueCustomerSyncIds(db)
-        if (newVersion > DATABASE_VERSION || oldVersion > 28) {
+        if (oldVersion < 30 && !hasColumn(db, "cash_drawer_sessions", "staff_actor_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_actor_id TEXT")
+        if (newVersion > DATABASE_VERSION || oldVersion > 29) {
             throw IllegalStateException("No migration is defined from database version $oldVersion to $newVersion")
         }
     }
@@ -972,8 +973,8 @@ class SqliteCounterPersistence internal constructor(
                 if (c.isNull(6)) null else c.getString(6), c.getLong(7).takeIf { it > 0 })
         }
         val drawerSessions = mutableListOf<CashDrawerSession>()
-        db.rawQuery("SELECT session_id,opening_cash_paise,opened_at,closing_cash_paise,closed_at,staff_label,handover_to_label,handover_note FROM cash_drawer_sessions ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) drawerSessions += CashDrawerSession(c.getString(0), c.getInt(1), c.getLong(2), if (c.isNull(3)) null else c.getInt(3), if (c.isNull(4)) null else c.getLong(4), if (c.isNull(5)) null else c.getString(5), if (c.isNull(6)) null else c.getString(6), c.getString(7))
+        db.rawQuery("SELECT session_id,opening_cash_paise,opened_at,closing_cash_paise,closed_at,staff_label,handover_to_label,handover_note,staff_actor_id FROM cash_drawer_sessions ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) drawerSessions += CashDrawerSession(c.getString(0), c.getInt(1), c.getLong(2), if (c.isNull(3)) null else c.getInt(3), if (c.isNull(4)) null else c.getLong(4), if (c.isNull(5)) null else c.getString(5), if (c.isNull(6)) null else c.getString(6), c.getString(7), if (c.isNull(8)) null else c.getString(8))
         }
         val drawerMovements = mutableListOf<CashDrawerMovement>()
         db.rawQuery("SELECT movement_id,session_id,kind,amount_paise,note FROM cash_drawer_movements ORDER BY created_at,movement_id", null).use { c ->
@@ -1093,7 +1094,7 @@ class SqliteCounterPersistence internal constructor(
                 val values = ContentValues().apply {
                 put("session_id", session.sessionId); put("opening_cash_paise", session.openingCashPaise); put("opened_at", session.openedAt)
                 put("closing_cash_paise", session.closingCashPaise); put("closed_at", session.closedAt); put("staff_label", session.staffLabel)
-                put("handover_to_label", session.handoverToLabel); put("handover_note", session.handoverNote)
+                put("handover_to_label", session.handoverToLabel); put("handover_note", session.handoverNote); put("staff_actor_id", session.staffActorId)
                 }
                 val updated = db.update("cash_drawer_sessions", values, "session_id=?", arrayOf(session.sessionId))
                 if (updated == 0) db.insertOrThrow("cash_drawer_sessions", null, values)
@@ -1123,7 +1124,7 @@ class SqliteCounterPersistence internal constructor(
 
     companion object {
         internal const val DATABASE_NAME = "chai_tapri_counter.db"
-        internal const val DATABASE_VERSION = 29
+        internal const val DATABASE_VERSION = 30
         internal const val STORE_IDENTITY_KEY = "shop_identity"
 
         internal fun locallyBoundShopIdentity(context: Context, databaseName: String, keyNamespace: String): String? =
@@ -1193,6 +1194,7 @@ class SqliteCounterPersistence internal constructor(
         db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_label TEXT")
         db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_to_label TEXT")
         db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_note TEXT NOT NULL DEFAULT ''")
+        if (!hasColumn(db, "cash_drawer_sessions", "staff_actor_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_actor_id TEXT")
     }
 
     private fun createCashClosingReviewTable(db: CipherDatabase) {

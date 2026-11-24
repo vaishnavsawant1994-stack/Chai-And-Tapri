@@ -32,6 +32,14 @@ class CounterModelTest {
         assertTrue(runCatching {
             LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "stock.physical_count products=tea")
         }.exceptionOrNull() is SecurityException)
+        LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "staff_shift.started staff_actor_id=cashier-01")
+        LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "staff_shift.ended staff_actor_id=cashier-01")
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "staff_shift.ended staff_actor_id=another-staff")
+        }.exceptionOrNull() is SecurityException)
+        assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "cash_drawer.cash_in amount=500p")
+        }.exceptionOrNull() is SecurityException)
         LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "quick_sale #12 total=1000p")
         LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "stock.opening_count product_id=tea counted=4")
         LocalBusinessMutationPolicy.requireAllowed(true, "manager-01", StaffRole.MANAGER, "manager-01", "sale.refund #12 amount=500p")
@@ -470,13 +478,13 @@ class CounterModelTest {
         assertTrue(costPayload.sendable)
         assertTrue(costPayload.json!!.contains("\"estimatedUnitCostPaise\":425"))
 
-        val privateShift = CashDrawerSession("local-session-private-id", 1000, 1, staffLabel = "Private Operator", handoverToLabel = "Private Handover", handoverNote = "Private note")
+        val privateShift = CashDrawerSession("local-session-private-id", 1000, 1, staffLabel = "Private Operator", handoverToLabel = "Private Handover", handoverNote = "Private note", staffActorId = "local-private-actor-id")
         val shiftDelta = SyncOutboxPayloadEncoder.between(before, before.copy(cashDrawerSessions = listOf(privateShift)))
         assertTrue(shiftDelta.sendable)
         val shiftJson = shiftDelta.json!!
         assertTrue(shiftJson.contains("\"staffShifts\":[{"))
         assertTrue(shiftJson.contains("\"sessionType\":\"staff_shift\""))
-        listOf("local-session-private-id", "Private Operator", "Private Handover", "Private note").forEach { assertFalse(shiftJson.contains(it)) }
+        listOf("local-session-private-id", "Private Operator", "Private Handover", "Private note", "local-private-actor-id").forEach { assertFalse(shiftJson.contains(it)) }
         val shiftClose = SyncOutboxPayloadEncoder.between(before.copy(cashDrawerSessions = listOf(privateShift)), before.copy(
             cashDrawerSessions = listOf(privateShift.copy(closingCashPaise = 900, closedAt = 2000))
         ))

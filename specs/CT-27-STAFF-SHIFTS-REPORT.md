@@ -1,5 +1,7 @@
 # CT-27 — Staff Shifts (local prototype slice)
 
+> Historical implementation report. Its operator-entered identity model was superseded on 24 November 2026 by the authenticated local shift ownership update in [CT-27 authenticated shift report](CT-27-AUTHENTICATED-LOCAL-STAFF-SHIFTS-REPORT-2026-11-24.md). Earlier test counts below describe that historical snapshot.
+
 **Status:** Implemented and emulator-tested for operator-entered shift labels, cash handover, and restart persistence. This is not authenticated staff access or full employee accountability.
 
 ## Delivered

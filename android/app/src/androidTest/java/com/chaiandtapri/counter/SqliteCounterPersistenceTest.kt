@@ -333,7 +333,7 @@ class SqliteCounterPersistenceTest {
         prior.close()
 
         SqliteCounterPersistence(context).use { upgraded ->
-            assertEquals(29, upgraded.readableDatabase.version)
+            assertEquals(30, upgraded.readableDatabase.version)
             val record = upgraded.loadAuditRecords().single { it.eventId == "legacy-audit" }
             assertEquals("legacy.event", record.event)
             assertNull(record.actorId)
@@ -2931,9 +2931,14 @@ class SqliteCounterPersistenceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.deleteDatabase("chai_tapri_counter.db")
+        LocalSessionState.establishStaff("shift-owner-local-id", "Morning operator", StaffRole.CASHIER)
         var model = CounterModel(SqliteCounterPersistence(context))
         assertTrue(model.confirmOpeningStock("chai", 10, "synthetic shift test stock", "shift-stock-ui").contains("10 units"))
-        assertTrue(model.startStaffShift("Morning operator", 5_000, "shift-open-ui").contains("Shift started"))
+        assertTrue(model.startAuthenticatedStaffShift(5_000, "shift-open-ui").contains("signed-in local account"))
+        LocalSessionState.establishStaff("another-cashier-id", "Another Cashier", StaffRole.CASHIER)
+        assertTrue(model.endStaffShift(5_000, "Evening operator", "unauthorized attempt", "shift-end-denied-ui").contains("Only the shift owner or a manager"))
+        assertEquals(null, model.activeCashDrawer()?.closedAt)
+        LocalSessionState.establishStaff("shift-owner-local-id", "Morning operator", StaffRole.CASHIER)
         assertTrue(model.quickSale(listOf("chai" to 1), "cash", commandId = "shift-sale-ui").startsWith("Quick sale"))
         assertTrue(model.endStaffShift(6_500, "Evening operator", "Till counted together", "shift-end-ui").contains("matched"))
         model.close()
@@ -2942,6 +2947,7 @@ class SqliteCounterPersistenceTest {
         assertEquals("Morning operator", shift.staffLabel)
         assertEquals("Evening operator", shift.handoverToLabel)
         assertEquals("Till counted together", shift.handoverNote)
+        assertEquals("shift-owner-local-id", shift.staffActorId)
         assertEquals(6_500L, model.expectedCashPaise(shift.sessionId))
         assertTrue(model.auditEvents().any { it.contains("staff_shift.started") && it.contains("Morning operator") })
         assertTrue(model.auditEvents().any { it.contains("staff_shift.ended") && it.contains("Evening operator") })
@@ -2956,6 +2962,37 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("variance") && it.contains("65.00") })
         instrumentation.runOnMainSync { activity.finish() }
         context.deleteDatabase("chai_tapri_counter.db")
+        LocalSessionState.establish("Test Owner")
+    }
+
+    @Test fun schemaV29AddsShiftActorIdWithoutChangingExistingShiftRecords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.clear()
+        var model = CounterModel(SqliteCounterPersistence(context))
+        assertTrue(model.startStaffShift("Legacy Shift Label", 4_500, "legacy-v29-shift-open").contains("Shift started"))
+        assertTrue(model.endStaffShift(4_500, "Receiver Label", "legacy shift note", "legacy-v29-shift-close").contains("matched"))
+        val original = model.cashDrawerHistory().single()
+        model.close()
+
+        val legacy = SqliteCounterPersistence(context)
+        legacy.writableDatabase.execSQL("ALTER TABLE cash_drawer_sessions DROP COLUMN staff_actor_id")
+        legacy.writableDatabase.version = 29
+        legacy.close()
+
+        model = CounterModel(SqliteCounterPersistence(context))
+        val restored = model.cashDrawerHistory().single()
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(original.sessionId, restored.sessionId)
+        assertEquals(original.staffLabel, restored.staffLabel)
+        assertEquals(original.openingCashPaise, restored.openingCashPaise)
+        assertEquals(original.closingCashPaise, restored.closingCashPaise)
+        assertEquals(original.handoverToLabel, restored.handoverToLabel)
+        assertEquals(original.handoverNote, restored.handoverNote)
+        assertNull(restored.staffActorId)
+        assertEquals(4_500L, model.expectedCashPaise(restored.sessionId))
+        model.close()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
     }
 
     @Test fun expenseRecordIsAuditedAndPersistsAcrossEncryptedDatabaseReopenAndScreenLaunch() {
@@ -2996,11 +3033,12 @@ class SqliteCounterPersistenceTest {
     @Test fun cashDrawerSessionAndReconciliationPersistAndRenderOnScreen() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        LocalSessionState.establish("Private Operator")
         context.deleteDatabase("chai_tapri_counter.db")
         val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
         assertTrue(model.saveProduct(TapriProduct("drawer_chai", "Drawer Chai", "Chai", 1500, true, false, true)).startsWith("Product saved"))
         assertTrue(model.confirmOpeningStock("drawer_chai", 5, "synthetic drawer test", "drawer-stock").contains("5 units"))
-        assertTrue(model.openCashDrawer(5_000, "drawer-ui-open", staffLabel = "Private Operator").contains("Shift started"))
+        assertTrue(model.startAuthenticatedStaffShift(5_000, "drawer-ui-open").contains("Shift started"))
         val openedShiftEvent = SqliteCounterPersistence(context).use { persistence -> persistence.loadPendingSyncEvents(100).single { it.commandId == "drawer-ui-open" } }
         assertTrue(openedShiftEvent.payloadJson!!.contains("\"sessionType\":\"staff_shift\""))
         assertTrue(openedShiftEvent.payloadJson!!.contains("\"openingCashPaise\":5000"))
@@ -3294,7 +3332,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.purchaseHistory().size)
         assertEquals(null, model.purchaseHistory().single().supplierInvoiceReference)
         assertEquals(3, model.stockLevels()["invoice_migration_tea"])
@@ -3356,7 +3394,7 @@ class SqliteCounterPersistenceTest {
         assertEquals(expectedPayable, model.supplierPayablePaise("local_supplier_777"))
         model.close()
         val upgraded = SqliteCounterPersistence(context)
-        assertEquals(29, upgraded.readableDatabase.version)
+        assertEquals(30, upgraded.readableDatabase.version)
         val migrated = upgraded.load()!!
         assertTrue(uuid.matches(migrated.customerCredits.single().syncId))
         assertTrue(uuid.matches(migrated.creditRepayments.single().syncId))
@@ -3387,7 +3425,7 @@ class SqliteCounterPersistenceTest {
         simulatedV20.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(4, model.stockLevels()["tea_order_migration"])
         assertEquals(500L, model.supplierPayablePaise("po_migration_supplier"))
         assertEquals(1, model.purchaseHistory().size)
@@ -4047,7 +4085,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(null, model.products().single { it.productId == "migration_tea" }.reorderThreshold)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
@@ -4078,7 +4116,7 @@ class SqliteCounterPersistenceTest {
         oldStore.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
         assertEquals(2400, model.creditBalance("legacy-account"))
@@ -5422,8 +5460,8 @@ class SqliteCounterPersistenceTest {
         old.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence.DATABASE_VERSION)
-        assertEquals(29, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(30, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(30, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "scan_migration_tea" }.scanCode)
         assertEquals(1, model.allOrders().size)
         assertEquals(1500, model.allOrders().single().salePaise)
@@ -6176,6 +6214,7 @@ class SqliteCounterPersistenceTest {
     }
 
     @Test fun verifiedBackupRestoresSyntheticFinancialHistoryIntoSeparateStoreWithNewLocalKey() {
+        LocalSessionState.establish("Synthetic morning")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val sourceContext = instrumentation.targetContext
         val isolatedContext = sourceContext
@@ -6201,7 +6240,7 @@ class SqliteCounterPersistenceTest {
         source.apply("clean-ready-2", ProposedCommand("ready", secondOrder, "ready", expectedRevision = source.allOrders().first().revision))
         source.apply("clean-given-2", ProposedCommand("given", secondOrder, "given", expectedRevision = source.allOrders().first().revision))
         source.apply("clean-upi-pending-2", ProposedCommand("upi", secondOrder, "UPI pending", expectedRevision = source.allOrders().first().revision))
-        assertTrue(source.startStaffShift("Synthetic morning", 5_000, "clean-drawer-open").contains("Shift started"))
+        assertTrue(source.startAuthenticatedStaffShift(5_000, "clean-drawer-open").contains("Shift started"))
         assertTrue(source.quickSale(listOf("chai" to 1), "cash", commandId = "clean-drawer-sale").startsWith("Quick sale"))
         assertTrue(source.endStaffShift(6_200, "Synthetic evening", "synthetic recount follow-up", "clean-drawer-close").contains("unresolved variance"))
         assertTrue(source.recordCashClosingReview("clean-drawer-open", "synthetic recount follow-up", "clean-drawer-review").contains("review recorded"))
@@ -6256,6 +6295,7 @@ class SqliteCounterPersistenceTest {
         assertEquals(6_500L, restored.expectedCashPaise("clean-drawer-open"))
         assertEquals(6_200, restored.cashDrawerHistory().first().closingCashPaise)
         assertEquals("Synthetic morning", restored.cashDrawerHistory().first().staffLabel)
+        assertEquals(LocalSessionState.actorId, restored.cashDrawerHistory().first().staffActorId)
         assertEquals("Synthetic evening", restored.cashDrawerHistory().first().handoverToLabel)
         assertEquals("synthetic recount follow-up", restored.cashDrawerHistory().first().handoverNote)
         assertEquals("synthetic recount follow-up", restored.closingReview("clean-drawer-open")?.note)
@@ -6427,7 +6467,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(29, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(30, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "cost_test_tea" }.estimatedUnitCostPaise)
         assertNull(model.allOrders().single().lines.single().estimatedUnitCostPaise)
         assertEquals(3000, model.allOrders().single().salePaise)

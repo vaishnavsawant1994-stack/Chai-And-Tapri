@@ -11,14 +11,14 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import java.util.Locale
 
-/** CT-27 prototype: operator-entered staff labels tied to counted cash-drawer sessions; no staff authentication. */
+/** CT-27 local shift tracking; authenticated local staff IDs stay encrypted and are not synchronized. */
 class StaffShiftsActivity : ComponentActivity() {
     private var model: CounterModel? = null
     private lateinit var content: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!SessionAccessGate.requireManager(this)) return
+        if (!SessionAccessGate.requireCounterAccess(this)) return
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 28, 24, 24) }
         setContentView(ScrollView(this).apply { addView(content) })
         render()
@@ -31,22 +31,26 @@ class StaffShiftsActivity : ComponentActivity() {
         try {
             val current = CounterModel(SqliteCounterPersistence(this)); model = current
             content.addView(label("Staff Shifts | CT-27", 24f))
-            content.addView(label("Shift labels are entered by the operator and are not authenticated staff identities. The cash summary includes only records linked to this drawer session; it does not attribute every order or action to a person.", 14f))
+            content.addView(label("New shifts use the signed-in local account. Legacy labels and handover recipient labels are not verified. Cash activity includes only records linked to this drawer session; this is not a complete action or attendance record.", 14f))
             val active = current.activeCashDrawer()?.takeIf { it.staffLabel != null }
             if (active == null) {
                 content.addView(label("No active staff shift.", 18f))
                 if (current.activeCashDrawer() != null) content.addView(label("A non-shift cash drawer session is open. Close it in Cash Register before starting a staff shift.", 14f))
-                else content.addView(button("Start staff shift") { startDialog() })
+                else content.addView(button("Start shift for ${LocalSessionState.ownerDisplayName}") { startDialog() })
             } else {
-                val expected = current.expectedCashPaise(active.sessionId) ?: 0L
-                content.addView(label("Operator label: ${active.staffLabel}", 19f))
-                content.addView(label("Started: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(active.openedAt))}", 14f))
-                content.addView(label("Opening cash: ${money(active.openingCashPaise.toLong())}\nExpected session cash: ${money(expected)}", 18f))
-                content.addView(label("Linked cash collections: ${money(current.sessionPaymentEntries(active.sessionId).filter { it.method == "cash" && it.kind == "order_collection" }.sumOf { it.amountPaise.toLong() })}\nCash expenses: ${money(current.sessionCashExpenses(active.sessionId).sumOf { it.amountPaise.toLong() })}\nSupplier cash settlements: ${money(current.sessionCashSupplierPayments(active.sessionId).sumOf { it.amountPaise.toLong() })}", 15f))
-                content.addView(button("End shift and record handover") { endDialog(active.sessionId, expected) })
+                val ownShift = active.staffActorId == LocalSessionState.actorId
+                if (ownShift || LocalSessionState.isManager) {
+                    val expected = current.expectedCashPaise(active.sessionId) ?: 0L
+                    val identity = if (active.staffActorId == null) "Legacy label (unverified)" else "Signed-in local account"
+                    content.addView(label("${active.staffLabel} · $identity", 19f))
+                    content.addView(label("Started: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(active.openedAt))}", 14f))
+                    content.addView(label("Opening cash: ${money(active.openingCashPaise.toLong())}\nExpected session cash: ${money(expected)}", 18f))
+                    content.addView(label("Linked cash collections: ${money(current.sessionPaymentEntries(active.sessionId).filter { it.method == "cash" && it.kind == "order_collection" }.sumOf { it.amountPaise.toLong() })}\nCash expenses: ${money(current.sessionCashExpenses(active.sessionId).sumOf { it.amountPaise.toLong() })}\nSupplier cash settlements: ${money(current.sessionCashSupplierPayments(active.sessionId).sumOf { it.amountPaise.toLong() })}", 15f))
+                    content.addView(button("End shift and record handover") { endDialog(active.sessionId, expected) })
+                } else content.addView(label("An active shift belongs to another local account. Ask a manager to review it.", 16f))
             }
             content.addView(label("Recent shift sessions", 19f))
-            val history = current.cashDrawerHistory().filter { it.staffLabel != null }.take(20)
+            val history = current.cashDrawerHistory().filter { it.staffLabel != null && (LocalSessionState.isManager || it.staffActorId == LocalSessionState.actorId) }.take(20)
             if (history.isEmpty()) content.addView(label("No staff shift sessions recorded.", 14f))
             history.forEach { shift ->
                 val expected = current.expectedCashPaise(shift.sessionId) ?: 0L
@@ -65,14 +69,13 @@ class StaffShiftsActivity : ComponentActivity() {
 
     private fun startDialog() {
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 8, 18, 8) }
-        val staff = EditText(this).apply { hint = "Staff label (2 to 60 characters)"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS; setSingleLine(true) }
         val opening = EditText(this).apply { hint = "Counted opening cash in rupees"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
-        form.addView(staff); form.addView(opening)
+        form.addView(label("Shift identity: ${LocalSessionState.ownerDisplayName}", 16f)); form.addView(opening)
         AlertDialog.Builder(this).setTitle("Start staff shift").setView(form).setNegativeButton("Cancel", null).setPositiveButton("Start", null).create().also { dialog ->
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val amount = toPaise(opening.text.toString())
-                if (staff.text.toString().trim().length !in 2..60 || amount == null) { staff.error = if (staff.text.toString().trim().length !in 2..60) "Enter a staff label" else null; opening.error = if (amount == null) "Enter a valid cash count" else null; return@setOnClickListener }
-                val result = model?.startStaffShift(staff.text.toString(), amount) ?: "Local storage is unavailable."
+                if (amount == null) { opening.error = "Enter a valid cash count"; return@setOnClickListener }
+                val result = model?.startAuthenticatedStaffShift(amount) ?: "Local storage is unavailable."
                 dialog.dismiss(); android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show(); render()
             } }
             dialog.show()
