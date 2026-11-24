@@ -6,7 +6,7 @@ The real SAF backup export and restore UI each passed 1/1 in separate instrument
 
 ## Latest continuation - CT-22 profile edit entry point - 24 November 2026
 
-The owner can now add or edit a profile from CT-22 Customer Details using the existing encrypted, consent-aware profile operations. Focused API 37 instrumentation passed 1/1 for navigation, editor opening, and cancel/no-mutation assertions over persisted profile, credit, order, and stock. This narrow result does not qualify the profile save/revocation UI or the full customer module. See [CT-22 report](CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
+The owner can now add or edit a profile from CT-22 Customer Details using the existing encrypted, consent-aware profile operations. Four focused API 37 instrumentation cases passed across separate invocations: edit/save with phone-consent revocation and financial/stock preservation; editor cancel/no-mutation; add-profile without collecting contact consent or changing existing credit/stock; and manager restriction of the owner-only editor. This qualifies only those UI paths, not the full customer module. See [CT-22 report](CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
 
 ## Latest continuation - release variant packaging
 

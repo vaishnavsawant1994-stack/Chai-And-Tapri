@@ -10,11 +10,13 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import java.util.Locale
 import java.util.UUID
 
 /** CT-22 local account detail backed only by persisted credit and payment events. */
 class CustomerDetailsActivity : Activity() {
+    @VisibleForTesting var profileEditorDialog: AlertDialog? = null
     private var model: CounterModel? = null
     private lateinit var content: LinearLayout
     private lateinit var customerId: String
@@ -161,7 +163,10 @@ class CustomerDetailsActivity : Activity() {
             )
             val result = if (profile == null) model?.saveCustomerProfile(updated) else model?.updateCustomerProfile(updated)
             render(result ?: "Customer profile could not be saved.")
-        }.show()
+        }
+        profileEditorDialog = builder.show().also { dialog ->
+            dialog.setOnDismissListener { profileEditorDialog = null }
+        }
     }
 
     private fun money(paise: Int) = String.format(Locale.ROOT, "₹%.2f", paise / 100.0)

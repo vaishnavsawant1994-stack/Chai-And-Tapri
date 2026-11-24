@@ -2,7 +2,7 @@
 
 ## Latest continuation - CT-22 customer profile editing - 24 November 2026
 
-Added an owner-only add/edit profile entry point inside customer details, reusing encrypted local storage and consent-safe profile APIs. Focused API 37 instrumentation passed 1/1 for CT-21→CT-22 navigation, editor launch and cancellation with unchanged profile, credit, order and stock records. The save and consent-revocation UI paths still need dedicated screen tests; CT-22 remains partial. See [CT-22 report](specs/CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
+Added an owner-only add/edit profile entry point inside customer details, reusing encrypted local storage and consent-safe profile APIs. Four focused API 37 instrumentation cases pass across separate invocations: opening/canceling without mutation, editing while revoking phone consent and preserving credit/order/stock, adding an optional profile without collecting contact consent or changing financial/stock state, and hiding the owner-only editor from a manager. CT-22 remains partial. See [CT-22 report](specs/CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
 
 ## Latest continuation - CAT-051B fresh-install recovery - 24 November 2026
 

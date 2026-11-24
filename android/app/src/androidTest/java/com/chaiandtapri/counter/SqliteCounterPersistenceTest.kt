@@ -3751,6 +3751,166 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun customerDetailsEditRevokesConsentThroughUiWithoutChangingCreditOrStock() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("ct22_edit_tea", "Edit Tea", "Chai", 1200, true, true, true)).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("ct22_edit_tea", 6, "synthetic CT-22 editor fixture", "ct22-edit-stock").contains("6 units"))
+        assertTrue(model.quickSale(listOf("ct22_edit_tea" to 2), "udhar", "ct22-edit-customer", "ct22-edit-credit").startsWith("Quick sale"))
+        assertTrue(model.saveCustomerProfile(CustomerProfile("ct22-edit-customer", "Asha Rao", "+919900112233", true)).contains("saved"))
+        model.close()
+
+        val activity = instrumentation.startActivitySync(
+            Intent(context, CustomerDetailsActivity::class.java)
+                .putExtra(CustomerDetailsActivity.EXTRA_CUSTOMER_ID, "ct22-edit-customer")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ) as CustomerDetailsActivity
+        try {
+            var editButton: Button? = null
+            instrumentation.runOnMainSync {
+                fun find(view: View) {
+                    if (view is Button && view.text.toString() == "Edit customer profile") editButton = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(activity.findViewById(android.R.id.content))
+                assertNotNull(editButton)
+                assertTrue(editButton!!.performClick())
+            }
+            var dialog: AlertDialog? = null
+            instrumentation.runOnMainSync { dialog = activity.profileEditorDialog }
+            assertNotNull("Profile editor should be shown", dialog)
+            instrumentation.runOnMainSync {
+                val dialogContent = dialog!!.window!!.decorView
+                var nameField: EditText? = null
+                var consent: android.widget.CheckBox? = null
+                fun find(view: View) {
+                    if (view is EditText && view.hint.toString() == "Customer name") nameField = view
+                    if (view is android.widget.CheckBox && view.text.toString().startsWith("Customer agreed to store this number")) consent = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(dialogContent)
+                assertNotNull("Customer name input should be available", nameField)
+                assertNotNull("Contact consent checkbox should be available", consent)
+                assertTrue(consent!!.isChecked)
+                nameField!!.setText("Asha Updated")
+                consent!!.isChecked = false
+                assertTrue(dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick())
+            }
+            instrumentation.waitForIdleSync()
+
+            instrumentation.runOnMainSync { activity.finish() }
+            val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            try {
+                val profile = reopened.customerProfiles().single { it.customerId == "ct22-edit-customer" }
+                assertEquals("Asha Updated", profile.displayName)
+                assertNull(profile.phone)
+                assertFalse(profile.contactConsent)
+                assertEquals(2400, reopened.creditBalance("ct22-edit-customer"))
+                assertEquals(1, reopened.allOrders().size)
+                assertEquals(4, reopened.stockLevels()["ct22_edit_tea"])
+            } finally { reopened.close() }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun customerDetailsAddProfileUiCreatesOptionalContactWithoutChangingCredit() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("ct22_add_tea", "Add Tea", "Chai", 1000, true, true, true)).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("ct22_add_tea", 5, "synthetic CT-22 add fixture", "ct22-add-stock").contains("5 units"))
+        assertTrue(model.quickSale(listOf("ct22_add_tea" to 1), "udhar", "ct22-add-customer", "ct22-add-credit").startsWith("Quick sale"))
+        model.close()
+
+        val activity = instrumentation.startActivitySync(
+            Intent(context, CustomerDetailsActivity::class.java)
+                .putExtra(CustomerDetailsActivity.EXTRA_CUSTOMER_ID, "ct22-add-customer")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ) as CustomerDetailsActivity
+        try {
+            var addButton: Button? = null
+            instrumentation.runOnMainSync {
+                fun find(view: View) {
+                    if (view is Button && view.text.toString() == "Add customer profile") addButton = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(activity.findViewById(android.R.id.content))
+                assertNotNull("Owner should be able to add a profile from an unprofiled credit account", addButton)
+                assertTrue(addButton!!.performClick())
+            }
+            var dialog: AlertDialog? = null
+            instrumentation.runOnMainSync { dialog = activity.profileEditorDialog }
+            assertNotNull(dialog)
+            instrumentation.runOnMainSync {
+                val dialogContent = dialog!!.window!!.decorView
+                var nameField: EditText? = null
+                var consent: android.widget.CheckBox? = null
+                fun find(view: View) {
+                    if (view is EditText && view.hint.toString() == "Customer name") nameField = view
+                    if (view is android.widget.CheckBox && view.text.toString().startsWith("Customer agreed to store this number")) consent = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(dialogContent)
+                assertNotNull(nameField)
+                assertNotNull(consent)
+                assertFalse("Phone consent must be optional and off by default", consent!!.isChecked)
+                nameField!!.setText("Nisha Patel")
+                assertTrue(dialog!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick())
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { activity.finish() }
+            val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            try {
+                val profile = reopened.customerProfiles().single { it.customerId == "ct22-add-customer" }
+                assertEquals("Nisha Patel", profile.displayName)
+                assertNull(profile.phone)
+                assertFalse(profile.contactConsent)
+                assertEquals(1000, reopened.creditBalance("ct22-add-customer"))
+                assertEquals(1, reopened.allOrders().size)
+                assertEquals(4, reopened.stockLevels()["ct22_add_tea"])
+            } finally { reopened.close() }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun managerCustomerDetailsHidesOwnerOnlyProfileEditor() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveCustomerProfile(CustomerProfile("ct22-manager-customer", "Manager Customer")).contains("saved"))
+        model.close()
+        instrumentation.runOnMainSync {
+            LocalSessionState.establishStaff("ct22-manager", "Synthetic Manager", StaffRole.MANAGER)
+        }
+        val activity = instrumentation.startActivitySync(
+            Intent(context, CustomerDetailsActivity::class.java)
+                .putExtra(CustomerDetailsActivity.EXTRA_CUSTOMER_ID, "ct22-manager-customer")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ) as CustomerDetailsActivity
+        try {
+            instrumentation.runOnMainSync {
+                var editor: Button? = null
+                fun find(view: View) {
+                    if (view is Button && view.text.toString() == "Edit customer profile") editor = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(activity.findViewById(android.R.id.content))
+                assertNull("Manager role must not expose the owner-only profile editor", editor)
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.establish("Synthetic test owner") }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun customerDirectorySearchFiltersAccountIdsAndNamesCaseInsensitively() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
