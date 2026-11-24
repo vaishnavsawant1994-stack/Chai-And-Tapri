@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CAT-052 Android release variant - 24 November 2026
+
+`assembleRelease` completed successfully and produced an unsigned APK; the packaged manifest is non-debuggable by default. This qualifies release-variant compilation/package output only, not signing, distribution, security review, or deployment. See [release variant check](specs/CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md). Continue the six-wave plan; do not run destructive default-store recovery tests against a database that may contain user business records.
+
 ## Latest continuation - CAT-052 local mutation role enforcement - 24 November 2026
 
 Encrypted SQLite commits now verify that an authenticated audit actor matches the active local operator and enforce cashier restrictions for refunds/cancellations, expense/procurement, cash register/closing, credit repayments and physical stock counts. Cashier sales and the existing opening-stock workflow remain allowed. JVM 81/81, debug/instrumentation APK build tasks passed, focused API 37 persistence authorization test passed 1/1, and lint reports 0 errors / 182 warnings. The full Android instrumentation suite remains unqualified after the earlier runner stall. See `specs/CAT-052-LOCAL-MUTATION-ROLE-ENFORCEMENT-REPORT-2026-11-24.md`.
