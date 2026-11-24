@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - CAT-051B fresh-install recovery - 24 November 2026
+
+On a new disposable API 37 AVD, the Android CreateDocument backup flow and a separate post-reinstall OpenDocument restore flow each passed 1/1. The encrypted synthetic backup persisted in Downloads across the target-app installation boundary, and restored financial, stock, audit/outbox, and idempotency checks passed. This is same-emulator clean-app-install evidence, not cross-device qualification. Physical key invalidation, low storage, hard power-loss testing, independent review and other launch gates remain open. See [CAT-051B SAF qualification](specs/CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md); ignored local evidence is under `test-evidence/2026-11-24/cat051b-clean-install/`.
+
 ## Latest continuation - CAT-052 Android release variant - 24 November 2026
 
 `assembleRelease` completed successfully and produced an unsigned APK; the packaged manifest is non-debuggable by default. This qualifies release-variant compilation/package output only, not signing, distribution, security review, or deployment. See [release variant check](specs/CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md). Continue the six-wave plan; do not run destructive default-store recovery tests against a database that may contain user business records.

@@ -22,3 +22,15 @@ Evidence is under `test-evidence/2026-11-23/android-full-regression-follow-up/`,
 ## Scope limits
 
 This qualifies the current synthetic Android emulator scenarios only. It does not complete CAT-051B's hard power-loss/low-storage/physical-key-loss matrix or independent security review. It does not qualify physical Bluetooth microphones, noisy-shop use, second physical devices, production synchronization, deployment, or the complete six-wave product. These gates remain open.
+
+## Fresh API 37 emulator installation recovery drill - 24 November 2026
+
+Follow-up on a newly created disposable AVD, `Tapri_Recovery_Clean_2026` (API 37, Google Play x86_64, 2 GB RAM), leaving the previously active AVD and its app data untouched:
+
+1. The Android UI export test seeded only synthetic orders and records, then created `cat051b-saf-roundtrip-1795485549510.ctbackup` through Android's CreateDocument picker in Downloads. Result: **1/1 passed**.
+2. A separate Gradle instrumentation invocation installed the app again on the disposable AVD. PackageManager logged a new app code path; the target package was absent after the instrumentation invocation, while the Downloads backup remained present outside private app storage.
+3. The explicit clean-restore test then opened that Downloads file through Android's OpenDocument picker, authenticated it with the fixture recovery secret, confirmed replacement, and verified restored orders, partial refund, Udhar balance, repayment, cash, UPI-pending state, stock, audit/outbox counts, duplicate-command protection, and usable local Keystore key material. Result: **1/1 passed**.
+
+The backup crossed the app uninstall/reinstall boundary on the same isolated emulator profile. This supports clean-app-install recovery on that emulator, not cross-device recovery. Synthetic JUnit evidence is `../test-evidence/2026-11-24/cat051b-clean-install/clean-install-restore.xml`; the encrypted synthetic artifact is `../test-evidence/2026-11-24/cat051b-clean-install/synthetic-saf-backup.ctbackup`. These files are local and git-ignored. No customer/shop data was used.
+
+CAT-051B remains partially qualified: no actual low-storage exhaustion, physical Keystore invalidation, abrupt power-loss matrix, second physical device, second-person recovery, or independent security review was performed. The original active AVD's app database was not run through this destructive drill.

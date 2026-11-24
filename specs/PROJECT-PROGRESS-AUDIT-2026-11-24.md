@@ -1,5 +1,9 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
 
+## Latest continuation - CAT-051B fresh-install restore
+
+The real SAF backup export and restore UI each passed 1/1 in separate instrumentation invocations on a new disposable API 37 emulator. The encrypted synthetic file stayed in Downloads across app reinstall; the restore checked financial records, stock, audit/outbox consistency and duplicate-command behavior. This qualifies same-emulator clean-app-install recovery for that synthetic path only. It does not qualify cross-device recovery, low storage, physical key invalidation, hard interruption, or independent security review. See [updated recovery report](CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md).
+
 ## Latest continuation - release variant packaging
 
 The Android release variant packaged successfully as an unsigned APK. The manifest is non-debuggable by default; the artifact was not signed, installed, distributed, or deployed. See [CAT-052 release check](CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md). CAT-051B's synthetic UI flows have prior emulator evidence, but the destructive clean-install drill must run only in a disposable profile or isolated store. Hardware, independent security, visual authorization, production deployment and full product gates remain open.

@@ -717,3 +717,7 @@ The actual `StaffCloudAccessActivity` passed a focused API 37 test against the i
 ## CAT-052 release-variant packaging check - 24 November 2026
 
 `assembleRelease` completed successfully and created `android/app/build/outputs/apk/release/app-release-unsigned.apk` (47,604,317 bytes). The packaged manifest has no `android:debuggable` attribute, so Android treats the app as non-debuggable and the synthetic database override is unavailable. This is an unsigned build artifact only; signing, distribution, security review and deployment remain unqualified. See [release check](CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md).
+
+## CAT-051B fresh-install SAF recovery - 24 November 2026
+
+On a newly created disposable API 37 AVD, native SAF export and restore were run in separate instrumentation invocations. Export passed **1/1**; the target app was installed again before the restore invocation, and the encrypted backup persisted in Downloads. Restore passed **1/1**, validating restored synthetic order/payment/refund/credit/repayment/stock/audit/outbox state and duplicate-command rejection. This is same-emulator fresh-app-install evidence, not cross-device recovery. Evidence/report: [CAT-051B SAF qualification](CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md); local ignored artifact at `../test-evidence/2026-11-24/cat051b-clean-install/`. Physical key invalidation, low storage, abrupt power loss, second-person recovery and independent security review remain open.
