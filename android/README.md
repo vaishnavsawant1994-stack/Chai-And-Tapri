@@ -1,6 +1,12 @@
 ﻿# CAT-049 Android Prototype
 
-This directory contains a native Kotlin feasibility prototype for the Chai And Tapri voice counter. The current app supports a limited demo order model backed by a local SQLite database and a user-reviewed, one-utterance speech flow. It is not a production POS or continuous Bluetooth counter.
+This directory contains the native Android shopkeeper application. It now connects a substantial set of synthetic-test-qualified counter, product, stock, customer credit, procurement, cash, staff, closing, reporting, recovery and sync workflows to encrypted local persistence. The overall 32-screen plan remains partial; Android speech is operator-started, one utterance at a time, and reviewed before application. This is not a production POS or a qualified continuous Bluetooth counter.
+
+## Superseding current-source regression — 24 November 2026
+
+After rebooting the disposable API 37 AVD, the serial-pinned full instrumentation suite passed **137/137** with 0 failures, errors, or skips. Node prototype tests passed 52/52, Kotlin JVM tests 81/81, and backend Node tests passed 30 with 5 PostgreSQL-dependent skips. Debug and instrumentation APK build tasks passed; lint reported 0 errors and 182 warnings. See [`ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md`](../specs/ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md) and the current [project progress audit](../specs/PROJECT-PROGRESS-AUDIT-2026-11-24.md).
+
+This result supersedes older counts in this README. It covers only the listed synthetic emulator flows. Bluetooth hardware, noisy-shop trials, independent security review, cross-device recovery, visual browser review, and production deployment remain unqualified.
 
 ## Current-source continuation — OW-10 shift summary — 24 November 2026
 

@@ -1,6 +1,12 @@
 # Android Regression Qualification — 24 November 2026
 
-## Result
+## Superseding result — serial-pinned API 37 rerun
+
+After rebooting the disposable AVD from a stale Android System UI dialog, the current-source serial-pinned instrumentation suite passed **137/137** with 0 failures, errors, or skips. The sales-history export test that failed in the earlier contaminated run passed 1/1 on its own before the clean full rerun. All five CT-27 shift/migration/backup cases passed in that 137-test run. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; invocation: `android/scripts/run-isolated-connected-tests.cmd emulator-5554`.
+
+This supersedes the 136/136 result and failure analysis below for current full-suite status. The 136-test record remains historical provenance. The 137-test result qualifies only the synthetic tests in that API 37 emulator suite; it does not qualify physical devices, Bluetooth microphones, field conditions, cross-device recovery, independent security review, or production readiness.
+
+## Historical result
 
 The current-source, serial-pinned Android API 37 instrumentation suite passed **136/136**: 0 failures, 0 errors, 0 skipped. It ran on `Tapri_Recovery_Isolated` (`emulator-5554`) using `android/scripts/run-isolated-connected-tests.cmd`; the runner excluded only the opt-in live-backend classes because no isolated backend endpoint was configured for this suite.
 
