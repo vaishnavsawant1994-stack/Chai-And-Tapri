@@ -705,3 +705,7 @@ Staff can now accept a server-issued manager/cashier invitation after local PIN 
 ## Latest continuation - CAT-052 local mutation role enforcement - 24 November 2026
 
 Authenticated SQLite commits bind the audit actor to the active local operator and deny selected cashier manager-level mutations. JVM 81/81, APK build tasks passed, focused API 37 persistence authorization test passed 1/1. Lint completed with 0 errors / 182 warnings; full instrumentation remains unqualified. See [report](CAT-052-LOCAL-MUTATION-ROLE-ENFORCEMENT-REPORT-2026-11-24.md).
+
+## CAT-052 live Android invitation and cashier sync - 24 November 2026
+
+Using a new local synthetic PostgreSQL 17 cluster, migrations 001–004, a restricted runtime login, and loopback test HTTPS, the backend suite passed 33/33 (0 skipped). A focused API 37 instrumentation test passed 1/1: owner registration, owner-issued cashier invitation, Android `SyncAccountClient` acceptance, role binding, encrypted actor vault storage, owner stock setup, cashier-attributed sale sync, owner summary verification and explicit server-session revocation/local-vault clearing. JUnit and backend log are in ignored `test-evidence/2026-11-24/cat052-staff-link/`. Debug and instrumentation APK tasks passed. This is not a `StaffCloudAccessActivity` UI test; invite issuance UI, full permission matrix, production sync/accounting, broad Android regression and production qualification remain open. See [CAT-052 E2E report](CAT-052-STAFF-INVITATION-ANDROID-POSTGRES-E2E-REPORT-2026-11-24.md).

@@ -55,6 +55,104 @@ class LiveBackendSyncE2ETest {
         }
     }
 
+    private fun postJson(endpoint: String, token: String, body: JSONObject): Pair<Int, JSONObject> {
+        val connection = URL(endpoint).openConnection() as HttpsURLConnection
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 5_000
+        connection.readTimeout = 5_000
+        connection.doOutput = true
+        connection.setRequestProperty("Authorization", "Bearer $token")
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("Accept", "application/json")
+        try {
+            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            return status to JSONObject(response)
+        } finally { connection.disconnect() }
+    }
+
+    @Test fun invitedCashierUsesAndroidAccountClientAndUploadsOnlyTheirAttributedSale() {
+        val endpointBase = InstrumentationRegistry.getArguments().getString("syncE2eEndpoint")
+        assumeTrue("Provide syncE2eEndpoint for the isolated staff-link drill.", !endpointBase.isNullOrBlank())
+        val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val suffix = UUID.randomUUID().toString().replace("-", "")
+        val databaseName = "staff_link_e2e_$suffix.db"
+        val namespace = "staff_link_$suffix"
+        val localActor = "cashier-${suffix.take(12)}"
+        var persistence: SqliteCounterPersistence? = null
+        var model: CounterModel? = null
+        var owner: SyncSession? = null
+        var cashier: SyncSession? = null
+        try {
+            configureTestTrust()
+            val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
+            val ownerDevice = UUID.randomUUID().toString()
+            val ownerSession = SyncAccountClient(transport).register(
+                endpointBase!!,
+                SyncRegistration("staff-owner-$suffix@example.test", "Synthetic-Only-Password-2026!", "Synthetic Owner", "Synthetic Staff Business", "Synthetic Staff Shop", ownerDevice, "API 37 Staff E2E")
+            )
+            owner = ownerSession
+            val (inviteStatus, inviteBody) = postJson("$endpointBase/v1/staff/invitations", ownerSession.bearerToken,
+                JSONObject().put("shopId", ownerSession.identity.shopId).put("email", "staff-$suffix@example.test").put("role", "cashier"))
+            assertEquals("Owner-created cashier invitation", 201, inviteStatus)
+            val invitationToken = inviteBody.getString("invitationToken")
+
+            instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic owner") }
+            persistence = SqliteCounterPersistence(context, databaseName, namespace)
+            model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            assertTrue(model!!.saveProduct(TapriProduct("staff_e2e_tea", "Synthetic Staff Tea", "Tea", 1_500, active = true, favorite = true, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model!!.confirmOpeningStock("staff_e2e_tea", 5, "synthetic staff link setup", "staff-open-$suffix").contains("Opening stock confirmed"))
+            val ownerSetupSync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(ownerSession.endpointBase, ownerSession.identity, ownerSession.bearerToken)
+            assertEquals("Owner setup stock must be acknowledged before the cashier event.", 1, ownerSetupSync.acknowledged)
+
+            val cashierDevice = UUID.randomUUID().toString()
+            val cashierSession = SyncAccountClient(transport).acceptStaffInvitation(endpointBase, StaffInvitationAcceptance(
+                invitationToken, "Synthetic Cashier", "Synthetic-Staff-Password-2026!", cashierDevice, "API 37 Cashier E2E"
+            ))
+            cashier = cashierSession
+            assertEquals(SyncAccountRole.CASHIER, cashierSession.role)
+            assertEquals(ownerSession.identity.businessId, cashierSession.identity.businessId)
+            assertEquals(ownerSession.identity.shopId, cashierSession.identity.shopId)
+            assertTrue("Only a same-role local cashier can bind the invited session.", SyncStaffPolicy.mayBindCloudSession(cashierSession, localActor, StaffRole.CASHIER))
+            assertTrue("A manager invite must not bind to a local cashier.", !SyncStaffPolicy.mayBindCloudSession(cashierSession.copy(role = SyncAccountRole.MANAGER), localActor, StaffRole.CASHIER))
+
+            instrumentation.runOnMainSync { LocalSessionState.establishStaff(localActor, "Synthetic Cashier", StaffRole.CASHIER) }
+            val boundSession = cashierSession.copy(localActorId = localActor)
+            SyncDeviceIdentityStore(context, localActor).save(boundSession)
+            val staffVault = SyncSessionVault(context, localActor)
+            staffVault.save(boundSession)
+            assertEquals(localActor, staffVault.load()?.localActorId)
+            assertTrue(model!!.quickSale(listOf("staff_e2e_tea" to 1), "cash", commandId = "staff-sale-$suffix").startsWith("Quick sale"))
+
+            val actorJournal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence!!), localActor)
+            val cashierSync = SyncRunner(actorJournal, transport).push(boundSession.endpointBase, boundSession.identity, boundSession.bearerToken)
+            assertEquals("Cashier should upload only its own attributed sale.", 1, cashierSync.acknowledged)
+            assertEquals(1_500L, model!!.localBusinessSummary().recordedSalesPaise)
+            assertEquals(4, model!!.stockLevels()["staff_e2e_tea"])
+            val activity = getJson("${ownerSession.endpointBase}/v1/dashboard/overview?shopId=${ownerSession.identity.shopId}", ownerSession.bearerToken)
+            assertEquals(2, activity.getInt("acceptedEventCount"))
+            assertEquals(1, activity.getInt("recordedOrderCount"))
+            assertEquals(1_500L, activity.getLong("cashCollectedPaise"))
+            SyncAccountClient(transport).logout(boundSession)
+            staffVault.clear()
+            assertTrue("Explicit disconnect removes the encrypted staff vault session.", staffVault.load() == null)
+            SyncAccountClient(transport).logout(ownerSession)
+        } finally {
+            model?.close()
+            persistence?.close()
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            context.deleteDatabase(databaseName)
+            context.getSharedPreferences("chai_tapri_secure_key_envelope.$namespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(namespace) }
+            runCatching { SyncSessionVault(context, localActor).clear() }
+            HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
+        }
+    }
+
     @Test fun realBackendStoresAndroidEventAndMakesLostAcknowledgmentRetryIdempotent() {
         val args = InstrumentationRegistry.getArguments()
         val endpointBase = args.getString("syncE2eEndpoint")
