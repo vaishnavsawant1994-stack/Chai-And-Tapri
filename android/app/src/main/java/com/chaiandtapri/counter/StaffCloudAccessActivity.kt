@@ -161,7 +161,7 @@ class StaffCloudAccessActivity : Activity() {
                         check(SyncStaffPolicy.mayUpload(session, actor) && session.role == SyncStaffPolicy.roleForLocal(localRole)) {
                             "Saved cloud identity does not match the active local staff account. No records were uploaded."
                         }
-                        SqliteCounterPersistence(this).use { persistence ->
+                        openCounterPersistence().use { persistence ->
                             val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actor)
                             val result = SyncRunner(journal, HttpsSyncHttpTransport()).push(
                                 session.endpointBase, session.identity, session.bearerToken
@@ -209,6 +209,21 @@ class StaffCloudAccessActivity : Activity() {
         }
     }
 
+    private fun openCounterPersistence(): SqliteCounterPersistence {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            val databaseName = intent.getStringExtra(EXTRA_QUALIFICATION_DATABASE_NAME)
+            val namespace = intent.getStringExtra(EXTRA_QUALIFICATION_KEY_NAMESPACE)
+            if (databaseName != null || namespace != null) {
+                require(databaseName?.matches(Regex("staff_ui_e2e_[A-Za-z0-9_-]{1,64}\\.db")) == true &&
+                    namespace?.matches(Regex("staff_ui_[A-Za-z0-9_-]{1,64}")) == true) {
+                    "Qualification database configuration is invalid."
+                }
+                return SqliteCounterPersistence(this, databaseName!!, namespace!!)
+            }
+        }
+        return SqliteCounterPersistence(this)
+    }
+
     private fun setBusy(value: Boolean, message: String? = null) {
         busy = value
         if (::status.isInitialized && message != null) status.text = message
@@ -240,4 +255,10 @@ class StaffCloudAccessActivity : Activity() {
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }
     private fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; minHeight = 60; setOnClickListener { action() } }
     override fun onDestroy() { worker.shutdownNow(); super.onDestroy() }
+
+    companion object {
+        /** Debug-only isolated database hook for synthetic Android instrumentation. */
+        const val EXTRA_QUALIFICATION_DATABASE_NAME = "com.chaiandtapri.counter.QUALIFICATION_DATABASE_NAME"
+        const val EXTRA_QUALIFICATION_KEY_NAMESPACE = "com.chaiandtapri.counter.QUALIFICATION_KEY_NAMESPACE"
+    }
 }

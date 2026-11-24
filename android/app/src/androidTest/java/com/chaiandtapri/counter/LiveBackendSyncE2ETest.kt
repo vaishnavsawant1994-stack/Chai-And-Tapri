@@ -1,5 +1,11 @@
 package com.chaiandtapri.counter
 
+import android.content.Intent
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
@@ -71,6 +77,124 @@ class LiveBackendSyncE2ETest {
             val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             return status to JSONObject(response)
         } finally { connection.disconnect() }
+    }
+
+    private fun descendants(root: View): List<View> = buildList {
+        add(root)
+        if (root is ViewGroup) for (index in 0 until root.childCount) addAll(descendants(root.getChildAt(index)))
+    }
+
+    private fun enterField(activity: StaffCloudAccessActivity, hint: String, value: String) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val field = descendants(activity.window.decorView).filterIsInstance<EditText>()
+                .firstOrNull { it.hint?.toString() == hint }
+                ?: throw AssertionError("Staff cloud field not found: $hint")
+            field.setText(value)
+        }
+    }
+
+    private fun press(activity: StaffCloudAccessActivity, label: String) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val button = descendants(activity.window.decorView).filterIsInstance<Button>()
+                .firstOrNull { it.text.toString() == label }
+                ?: throw AssertionError("Staff cloud action not found: $label")
+            button.performClick()
+        }
+    }
+
+    private fun waitForText(activity: StaffCloudAccessActivity, expected: String, timeoutMs: Long = 15_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var found = false
+        var visible = emptyList<String>()
+        while (!found && System.currentTimeMillis() < deadline) {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                visible = descendants(activity.window.decorView).filterIsInstance<TextView>()
+                    .map { it.text.toString() }.filter(String::isNotBlank)
+                found = visible.any { it.contains(expected) }
+            }
+            if (!found) Thread.sleep(100)
+        }
+        assertTrue("Expected Staff Cloud Access UI text: $expected; currently visible=${visible.joinToString(" | ")}", found)
+    }
+
+    @Test fun staffCloudAccessUiAcceptsInviteSyncsCashierSaleAndDisconnects() {
+        val endpointBase = InstrumentationRegistry.getArguments().getString("syncE2eEndpoint")
+        assumeTrue("Provide syncE2eEndpoint for the isolated staff-link UI drill.", !endpointBase.isNullOrBlank())
+        val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val suffix = UUID.randomUUID().toString().replace("-", "")
+        val databaseName = "staff_ui_e2e_$suffix.db"
+        val namespace = "staff_ui_$suffix"
+        val actorId = "ui-cashier-${suffix.take(10)}"
+        var activity: StaffCloudAccessActivity? = null
+        var persistence: SqliteCounterPersistence? = null
+        var model: CounterModel? = null
+        var owner: SyncSession? = null
+        try {
+            configureTestTrust()
+            val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
+            val ownerSession = SyncAccountClient(transport).register(
+                endpointBase!!,
+                SyncRegistration("staff-ui-owner-$suffix@example.test", "Synthetic-Only-Password-2026!", "Synthetic UI Owner", "Synthetic UI Business", "Synthetic UI Shop", UUID.randomUUID().toString(), "API 37 Staff UI E2E")
+            )
+            owner = ownerSession
+            val (inviteStatus, inviteBody) = postJson("$endpointBase/v1/staff/invitations", ownerSession.bearerToken,
+                JSONObject().put("shopId", ownerSession.identity.shopId).put("email", "staff-ui-$suffix@example.test").put("role", "cashier"))
+            assertEquals(201, inviteStatus)
+
+            instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic UI owner") }
+            persistence = SqliteCounterPersistence(context, databaseName, namespace)
+            model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            assertTrue(model!!.saveProduct(TapriProduct("staff_ui_tea", "Synthetic UI Tea", "Tea", 1_500, active = true, favorite = true, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model!!.confirmOpeningStock("staff_ui_tea", 4, "synthetic UI setup", "staff-ui-open-$suffix").contains("Opening stock confirmed"))
+            assertEquals(1, SyncRunner(PersistenceSyncJournal(persistence!!), transport)
+                .push(ownerSession.endpointBase, ownerSession.identity, ownerSession.bearerToken).acknowledged)
+            instrumentation.runOnMainSync { LocalSessionState.establishStaff(actorId, "Synthetic UI Cashier", StaffRole.CASHIER) }
+            assertTrue(model!!.quickSale(listOf("staff_ui_tea" to 1), "cash", commandId = "staff-ui-sale-$suffix").startsWith("Quick sale"))
+
+            val intent = Intent(context, StaffCloudAccessActivity::class.java)
+                .putExtra(StaffCloudAccessActivity.EXTRA_QUALIFICATION_DATABASE_NAME, databaseName)
+                .putExtra(StaffCloudAccessActivity.EXTRA_QUALIFICATION_KEY_NAMESPACE, namespace)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity = instrumentation.startActivitySync(intent) as StaffCloudAccessActivity
+            enterField(activity!!, "Backend HTTPS URL", endpointBase)
+            enterField(activity!!, "One-time staff invitation secret", inviteBody.getString("invitationToken"))
+            enterField(activity!!, "Display name for a new cloud account", "Synthetic UI Cashier")
+            enterField(activity!!, "Cloud account password (12+ characters)", "Synthetic-Staff-Password-2026!")
+            press(activity!!, "Accept invitation and link this staff ID")
+            waitForText(activity!!, "Linked to the server cashier membership")
+            val linked = SyncSessionVault(context, actorId).load()
+                ?: throw AssertionError("The accepted invitation should store an encrypted actor-scoped session.")
+            assertEquals(actorId, linked.localActorId)
+            assertEquals(SyncAccountRole.CASHIER, linked.role)
+            assertEquals(ownerSession.identity.shopId, linked.identity.shopId)
+
+            press(activity!!, "Sync this staff member's queued actions")
+            waitForText(activity!!, "Sync complete: 1 event(s) acknowledged")
+            assertTrue(persistence!!.loadPendingSyncEvents(10).isEmpty())
+            val overview = getJson("${ownerSession.endpointBase}/v1/dashboard/overview?shopId=${ownerSession.identity.shopId}", ownerSession.bearerToken)
+            assertEquals(2, overview.getInt("acceptedEventCount"))
+            assertEquals(1, overview.getInt("recordedOrderCount"))
+            assertEquals(1_500, overview.getLong("cashCollectedPaise"))
+
+            press(activity!!, "Disconnect linked cloud session")
+            waitForText(activity!!, "Cloud session revoked and removed from this device")
+            assertNull(SyncSessionVault(context, actorId).load())
+            SyncAccountClient(transport).logout(ownerSession)
+        } finally {
+            activity?.let { instance -> instrumentation.runOnMainSync { instance.finish() } }
+            model?.close()
+            persistence?.close()
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            context.deleteDatabase(databaseName)
+            context.getSharedPreferences("chai_tapri_secure_key_envelope.$namespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(namespace) }
+            runCatching { SyncSessionVault(context, actorId).clear() }
+            runCatching { owner?.let { SyncAccountClient(HttpsSyncHttpTransport()).logout(it) } }
+            HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
+        }
     }
 
     @Test fun invitedCashierUsesAndroidAccountClientAndUploadsOnlyTheirAttributedSale() {

@@ -73,7 +73,8 @@ class HttpsSyncTransportIntegrationTest {
                             "/v1/register" -> JSONObject()
                                 .put("businessId", "11111111-1111-4111-8111-111111111111")
                                 .put("shopId", "22222222-2222-4222-8222-222222222222")
-                                .put("userId", "synthetic-owner")
+                                .put("userId", "33333333-3333-4333-8333-333333333333")
+                                .put("role", "owner")
                                 .put("token", "local-test-token")
                             "/v1/sync/events" -> {
                                 val event = request.getJSONArray("events").getJSONObject(0)
