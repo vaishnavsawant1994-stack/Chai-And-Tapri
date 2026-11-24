@@ -1,5 +1,9 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 
+## Current verification update - Android regression - 24 November 2026
+
+Current-source serial API 37 instrumentation now passes 136/136 after a focused CT-28 pass and a test-only accessibility-state polling correction in the split-tender refund scenario. Node 52/52; Kotlin JVM 81/81; backend 28 passed / 5 PostgreSQL-dependent skipped; APK build tasks pass; lint 0 errors / 182 warnings. This qualifies the listed emulator test scope, not the complete product. Details and failed-first-attempt provenance: [`ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md`](ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md). CAT-051B hardware/security gates, browser visual review, physical Bluetooth/field tests, full product, and production readiness remain open.
+
 ## Current continuation - CAT-051B recovery/sync barrier - 23 November 2026
 
 New maintenance requests close operation admission before waiting for active work. Thread-independent leases survive coroutine dispatcher switches; the active sync operation can write its own local acknowledgment while outside operations and competing workers are denied. The opt-in API 37 E2E used loopback HTTPS and isolated PostgreSQL to hold an acknowledgment after server commit, start maintenance, verify competing worker retry/no extra POST, release the acknowledgment, then verify two accepted events, local cursor 2, empty outbox, and maintenance entry after sync completion. Focused live E2E 1/1, Kotlin JVM 59/59, APK builds pass. No full Android regression was run; the earlier broad 82/120 result remains a failed historical run. Physical/cross-device recovery, production sync/security and independent review remain open. See [report](CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md) and ignored test evidence in `../test-evidence/2026-11-23/cat051b-sync-maintenance-e2e/`.

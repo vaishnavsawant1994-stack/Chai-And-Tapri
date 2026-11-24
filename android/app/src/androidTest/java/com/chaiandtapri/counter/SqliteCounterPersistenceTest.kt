@@ -599,6 +599,17 @@ class SqliteCounterPersistenceTest {
                 }
                 throw AssertionError("Updated refund balance was not rendered: $fragment")
             }
+            fun awaitChecked(prefix: String): AccessibilityNodeInfo {
+                repeat(100) {
+                    val node = awaitNode(prefix = prefix)
+                    if (node.isChecked) return node
+                    instrumentation.waitForIdleSync()
+                    Thread.sleep(100)
+                }
+                return awaitNode(prefix = prefix).also {
+                    assertTrue("Expected checked accessibility control: $prefix", it.isChecked)
+                }
+            }
             fun click(prefix: String) {
                 repeat(100) {
                     val root = instrumentation.uiAutomation.rootInActiveWindow
@@ -676,7 +687,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             val cashPayoutConfirmation = awaitNode(prefix = "I confirm any cash refund was handed to the customer")
             assertTrue("Cash payout needs explicit staff confirmation", cashPayoutConfirmation.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            assertTrue("Staff cash-refund confirmation should be checked", awaitNode(prefix = "I confirm any cash refund was handed to the customer").isChecked)
+            awaitChecked("I confirm any cash refund was handed to the customer")
             click("Review")
             click("Record audited correction")
 

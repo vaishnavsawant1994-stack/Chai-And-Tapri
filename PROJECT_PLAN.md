@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## Latest continuation - Android regression requalification - 24 November 2026
+
+The CT-28 focused daily-closing review passed 1/1 on the current API 37 isolated AVD. A subsequent serial-pinned current-source Android instrumentation run passed **136/136**, with 0 failures, 0 errors and 0 skips. The first broad attempt before the test synchronization fix had 1 failure in `salesHistoryRefundsSplitTenderReceivableBeforeCashWithoutRestocking`: the test asserted a checkbox state immediately after an accessibility click. The test now waits for the live checked state; the focused refund test passed 1/1 and the full rerun passed. No production transaction behavior was changed. Current host checks: prototype Node 52/52; Kotlin JVM 81/81; backend Node 28 passed / 5 PostgreSQL-dependent skipped / 0 failed; debug and instrumentation APK tasks passed; lint 0 errors / 182 warnings. Backend PostgreSQL integration was not rerun in this continuation. Details: [Android regression qualification](specs/ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md). The emulator result does not qualify physical devices, Bluetooth audio, field conditions, independent security review, browser visual review, or production readiness.
+
 ## Latest continuation - CT-22 customer profile editing - 24 November 2026
 
 Added an owner-only add/edit profile entry point inside customer details, reusing encrypted local storage and consent-safe profile APIs. Four focused API 37 instrumentation cases pass across separate invocations: opening/canceling without mutation, editing while revoking phone consent and preserving credit/order/stock, adding an optional profile without collecting contact consent or changing financial/stock state, and hiding the owner-only editor from a manager. CT-22 remains partial. See [CT-22 report](specs/CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
