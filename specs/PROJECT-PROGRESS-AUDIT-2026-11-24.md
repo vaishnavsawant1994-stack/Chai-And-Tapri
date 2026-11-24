@@ -8,6 +8,10 @@ The real SAF backup export and restore UI each passed 1/1 in separate instrument
 
 The owner can now add or edit a profile from CT-22 Customer Details using the existing encrypted, consent-aware profile operations. Four focused API 37 instrumentation cases passed across separate invocations: edit/save with phone-consent revocation and financial/stock preservation; editor cancel/no-mutation; add-profile without collecting contact consent or changing existing credit/stock; and manager restriction of the owner-only editor. This qualifies only those UI paths, not the full customer module. See [CT-22 report](CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
 
+## Latest emulator regression result — 24 November 2026
+
+A current-source full instrumentation rerun did not complete. It was stopped after the CT-28 test's `startActivitySync` stalled. A subsequent isolated CT-28 run failed because the expected acknowledgement control was absent from the accessibility tree; the captured screen showed the Android system message “Pixel Launcher isn't responding.” The runner reported 1 failed test, 0 errors. This is an emulator/runtime failure and does not qualify the full Android suite. Focused CT-22 tests previously passed individually; do not infer a full-suite pass from them. Evidence is saved locally under ignored `test-evidence/2026-11-24/android-regression-investigation/`. Reboot/stabilize the disposable AVD and rerun the failing CT-28 case before the full serial instrumentation suite.
+
 ## Latest continuation - release variant packaging
 
 The Android release variant packaged successfully as an unsigned APK. The manifest is non-debuggable by default; the artifact was not signed, installed, distributed, or deployed. See [CAT-052 release check](CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md). CAT-051B's synthetic UI flows have prior emulator evidence, but the destructive clean-install drill must run only in a disposable profile or isolated store. Hardware, independent security, visual authorization, production deployment and full product gates remain open.

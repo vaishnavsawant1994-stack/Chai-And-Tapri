@@ -17,3 +17,7 @@ The screen continues to label contact information as consent-based, display only
 ## Scope and remaining work
 
 This qualifies the tested owner add/edit flows, phone-consent revocation, editor cancellation, and manager visibility restriction on API 37. Existing model-level tests cover profile validation, encrypted persistence, audit redaction, and no credit mutation. CT-22 remains partial; customer messaging, profile deletion, authenticated server history, and visual/manual usability review are not included.
+
+## Subsequent emulator regression attempt — 24 November 2026
+
+A later attempt to rerun the full connected instrumentation suite did not complete. It was stopped after the CT-28 daily-closing test launch stalled. A clean, single-test retry then failed because the test could not find its acknowledgement control; the captured UI was the Android system dialog `Pixel Launcher isn't responding`. JUnit reports one failure and no test errors. This does not invalidate the earlier focused CT-22 passes, but the complete current-source instrumentation suite is not qualified by this rerun. Local ignored artifacts: `test-evidence/2026-11-24/android-regression-investigation/ct28-daily-closing-focused-failure.xml` and `ct28-daily-closing-focused-logcat.txt`. The emulator issue needs a clean runtime investigation before claiming broad regression success.

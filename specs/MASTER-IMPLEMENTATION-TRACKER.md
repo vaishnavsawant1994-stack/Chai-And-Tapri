@@ -115,6 +115,8 @@ Status labels: **Implemented**, **Partial**, **Not started**, **Blocked**, **Tes
 
 Added an owner-only add/edit profile action directly from customer details. It reuses encrypted profile storage, consent-aware contact validation and existing audit behavior; it does not mutate customer credit or transaction history. Four focused API 37 CT-21 to CT-22 UI cases pass across separate invocations: edit/save with phone-consent revocation while preserving financial and stock state, cancel/no-mutation, add-profile without collecting contact consent or changing existing credit/stock, and manager restriction of the owner-only editor. Report: [CT-22 profile edit](CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md). The six-wave product remains incomplete.
 
+**Regression qualification update:** the later full connected instrumentation rerun did not complete. A clean focused CT-28 retry failed when Android showed `Pixel Launcher isn't responding` instead of the expected UI control. No full current-source instrumentation pass is claimed until the AVD is stable and the run completes. Evidence: ignored `../test-evidence/2026-11-24/android-regression-investigation/`.
+
 ## Delivery gates
 
 | ID | Wave | Deliverable | Implementation | Tests / qualification | Blockers / next action |

@@ -4,6 +4,8 @@
 
 Added an owner-only add/edit profile entry point inside customer details, reusing encrypted local storage and consent-safe profile APIs. Four focused API 37 instrumentation cases pass across separate invocations: opening/canceling without mutation, editing while revoking phone consent and preserving credit/order/stock, adding an optional profile without collecting contact consent or changing financial/stock state, and hiding the owner-only editor from a manager. CT-22 remains partial. See [CT-22 report](specs/CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
 
+The subsequent full connected instrumentation rerun did not complete; the isolated CT-28 daily-closing retry failed with the Android system “Pixel Launcher isn't responding” screen, and no current full-suite pass is claimed. The four focused CT-22 test passes remain valid as their own scope. See the emulator result in [the CT-22 report](specs/CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
+
 ## Latest continuation - CAT-051B fresh-install recovery - 24 November 2026
 
 On a new disposable API 37 AVD, the Android CreateDocument backup flow and a separate post-reinstall OpenDocument restore flow each passed 1/1. The encrypted synthetic backup persisted in Downloads across the target-app installation boundary, and restored financial, stock, audit/outbox, and idempotency checks passed. This is same-emulator clean-app-install evidence, not cross-device qualification. Physical key invalidation, low storage, hard power-loss testing, independent review and other launch gates remain open. See [CAT-051B SAF qualification](specs/CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md); ignored local evidence is under `test-evidence/2026-11-24/cat051b-clean-install/`.
