@@ -3726,6 +3726,24 @@ class SqliteCounterPersistenceTest {
             assertTrue(strings.any { it.contains("Contact:") && it.contains("3344") })
             assertFalse(strings.any { it.contains("+919911223344") })
             assertTrue(strings.any { it.contains("customer_repayment") && it.contains("₹10.00") && it.contains("staff_declared") })
+            var editProfile: Button? = null
+            instrumentation.runOnMainSync {
+                fun find(view: View) {
+                    if (view is Button && view.text.toString() == "Edit customer profile") editProfile = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) view.getChildAt(index)?.let(::find)
+                }
+                find(details!!.findViewById(android.R.id.content))
+                assertNotNull("Owner should be able to edit the profile from customer details", editProfile)
+                assertTrue(editProfile!!.performClick())
+            }
+            instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            val afterDismissal = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+            try {
+                assertEquals("Priya Joshi", afterDismissal.customerProfiles().single { it.customerId == "ct22-customer" }.displayName)
+                assertEquals(2000, afterDismissal.creditBalance("ct22-customer"))
+                assertEquals(1, afterDismissal.allOrders().size)
+                assertEquals(3, afterDismissal.stockLevels()["ct22_tea"])
+            } finally { afterDismissal.close() }
             instrumentation.runOnMainSync { details!!.finish(); directory.finish() }
         } finally {
             instrumentation.removeMonitor(monitor)

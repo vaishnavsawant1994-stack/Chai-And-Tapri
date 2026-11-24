@@ -1,4 +1,5 @@
 <resources>
     <string name="stock_movement_results">Showing %1$d of %2$d recorded movements</string>
     <string name="cash_count_invalid">Enter valid whole note and coin counts up to the drawer limit. No drawer was closed.</string>
+    <string name="customer_profile_contact_consent">Customer agreed to store this number for account-related contact. No marketing messages.</string>
 </resources>

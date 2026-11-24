@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.os.Bundle
 import android.text.InputType
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -52,6 +53,11 @@ class CustomerDetailsActivity : Activity() {
             profile?.let {
                 content.addView(label("Name: ${it.displayName}", 17f))
                 it.phone?.let { phone -> content.addView(label("Contact: ${"••••••" + phone.takeLast(4)} · consent recorded", 14f)) }
+            }
+            if (LocalSessionState.isOwner) {
+                content.addView(button(if (profile == null) "Add customer profile" else "Edit customer profile") {
+                    editProfile(profile)
+                })
             }
             content.addView(label("Credit extended: ${money(credited)}", 16f))
             content.addView(label("Repaid: ${money(repaid)}", 16f))
@@ -108,6 +114,54 @@ class CustomerDetailsActivity : Activity() {
                     render(result ?: "Repayment was not recorded.")
                 }
             }.show()
+    }
+
+    private fun editProfile(profile: CustomerProfile?) {
+        if (!LocalSessionState.isOwner) return
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0) }
+        val displayName = EditText(this).apply {
+            hint = "Customer name"
+            contentDescription = "Customer name"
+            setSingleLine(true)
+            text.append(profile?.displayName.orEmpty())
+        }
+        val phone = EditText(this).apply {
+            hint = "Phone number (optional)"
+            contentDescription = "Customer phone number"
+            inputType = InputType.TYPE_CLASS_PHONE
+            setSingleLine(true)
+            setText(profile?.phone.orEmpty())
+        }
+        val consent = CheckBox(this).apply {
+            text = getString(R.string.customer_profile_contact_consent)
+            isChecked = profile?.contactConsent == true
+        }
+        form.addView(label("Contact details are optional. Store a phone number only with the customer's agreement. Unchecking consent clears the saved number; credit history is kept.", 13f))
+        form.addView(displayName)
+        form.addView(phone)
+        form.addView(consent)
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (profile == null) "Add customer profile" else "Edit customer profile")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+        if (profile != null && (profile.phone != null || profile.contactConsent)) {
+            builder.setNeutralButton("Clear saved phone and revoke consent") { _, _ ->
+                render(model?.updateCustomerProfile(profile.copy(phone = null, contactConsent = false))
+                    ?: "Customer profile could not be updated.")
+            }
+        }
+        builder.setPositiveButton(if (profile == null) "Save profile" else "Save changes") { _, _ ->
+            val rawPhone = phone.text.toString().trim().filterNot { it == ' ' || it == '-' || it == '(' || it == ')' }
+            val retainContact = consent.isChecked && rawPhone.isNotEmpty()
+            val updated = CustomerProfile(
+                customerId = customerId,
+                displayName = displayName.text.toString().trim(),
+                phone = rawPhone.takeIf { retainContact },
+                contactConsent = retainContact
+            )
+            val result = if (profile == null) model?.saveCustomerProfile(updated) else model?.updateCustomerProfile(updated)
+            render(result ?: "Customer profile could not be saved.")
+        }.show()
     }
 
     private fun money(paise: Int) = String.format(Locale.ROOT, "₹%.2f", paise / 100.0)

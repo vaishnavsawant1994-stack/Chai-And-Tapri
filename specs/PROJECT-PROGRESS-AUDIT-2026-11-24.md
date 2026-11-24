@@ -4,6 +4,10 @@
 
 The real SAF backup export and restore UI each passed 1/1 in separate instrumentation invocations on a new disposable API 37 emulator. The encrypted synthetic file stayed in Downloads across app reinstall; the restore checked financial records, stock, audit/outbox consistency and duplicate-command behavior. This qualifies same-emulator clean-app-install recovery for that synthetic path only. It does not qualify cross-device recovery, low storage, physical key invalidation, hard interruption, or independent security review. See [updated recovery report](CAT-051B-SAF-UI-QUALIFICATION-2026-11-24.md).
 
+## Latest continuation - CT-22 profile edit entry point - 24 November 2026
+
+The owner can now add or edit a profile from CT-22 Customer Details using the existing encrypted, consent-aware profile operations. Focused API 37 instrumentation passed 1/1 for navigation, editor opening, and cancel/no-mutation assertions over persisted profile, credit, order, and stock. This narrow result does not qualify the profile save/revocation UI or the full customer module. See [CT-22 report](CT-22-DETAIL-PROFILE-EDIT-REPORT-2026-11-24.md).
+
 ## Latest continuation - release variant packaging
 
 The Android release variant packaged successfully as an unsigned APK. The manifest is non-debuggable by default; the artifact was not signed, installed, distributed, or deployed. See [CAT-052 release check](CAT-052-ANDROID-RELEASE-VARIANT-CHECK-2026-11-24.md). CAT-051B's synthetic UI flows have prior emulator evidence, but the destructive clean-install drill must run only in a disposable profile or isolated store. Hardware, independent security, visual authorization, production deployment and full product gates remain open.
