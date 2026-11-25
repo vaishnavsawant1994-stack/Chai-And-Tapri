@@ -183,7 +183,9 @@ data class TapriProduct(
     /** Owner-entered estimate in paise; not a verified purchase cost or accounting valuation. */
     val estimatedUnitCostPaise: Int? = null,
     /** Exact product identifier entered by an optional keyboard-wedge barcode/QR scanner. */
-    val scanCode: String? = null
+    val scanCode: String? = null,
+    /** Configured base unit used for sale, count, and stock quantities; no pack conversion is implied. */
+    val unitLabel: String = "units"
 )
 
 data class CounterSnapshot(

@@ -172,7 +172,8 @@ class SqliteCounterPersistence internal constructor(
         if (oldVersion < 28) migrateOpaqueProcurementSyncIds(db)
         if (oldVersion < 29) migrateOpaqueCustomerSyncIds(db)
         if (oldVersion < 30 && !hasColumn(db, "cash_drawer_sessions", "staff_actor_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_actor_id TEXT")
-        if (newVersion > DATABASE_VERSION || oldVersion > 29) {
+        if (oldVersion < 31 && !hasColumn(db, "product_catalog", "unit_label")) db.execSQL("ALTER TABLE product_catalog ADD COLUMN unit_label TEXT NOT NULL DEFAULT 'units'")
+        if (newVersion > DATABASE_VERSION || oldVersion > 30) {
             throw IllegalStateException("No migration is defined from database version $oldVersion to $newVersion")
         }
     }
@@ -720,8 +721,8 @@ class SqliteCounterPersistence internal constructor(
         try {
             val db = readableDatabase
             assertCipherActive(db)
-            return db.rawQuery("SELECT product_id,name,category,unit_price_paise,active,favorite,price_confirmed,aliases,reorder_threshold,estimated_unit_cost_paise,scan_code FROM product_catalog ORDER BY name COLLATE NOCASE", null).use { c ->
-                buildList { while (c.moveToNext()) add(TapriProduct(c.getString(0), c.getString(1), c.getString(2), c.getInt(3), c.getInt(4) != 0, c.getInt(5) != 0, c.getInt(6) != 0, c.getString(7).split('|').filter(String::isNotBlank), if (c.isNull(8)) null else c.getInt(8), if (c.isNull(9)) null else c.getInt(9), if (c.isNull(10)) null else c.getString(10))) }
+            return db.rawQuery("SELECT product_id,name,category,unit_price_paise,active,favorite,price_confirmed,aliases,reorder_threshold,estimated_unit_cost_paise,scan_code,unit_label FROM product_catalog ORDER BY name COLLATE NOCASE", null).use { c ->
+                buildList { while (c.moveToNext()) add(TapriProduct(c.getString(0), c.getString(1), c.getString(2), c.getInt(3), c.getInt(4) != 0, c.getInt(5) != 0, c.getInt(6) != 0, c.getString(7).split('|').filter(String::isNotBlank), if (c.isNull(8)) null else c.getInt(8), if (c.isNull(9)) null else c.getInt(9), if (c.isNull(10)) null else c.getString(10), c.getString(11))) }
             }
         } finally { permit.close() }
     }
@@ -748,6 +749,7 @@ class SqliteCounterPersistence internal constructor(
                     if (product.reorderThreshold == null) putNull("reorder_threshold") else put("reorder_threshold", product.reorderThreshold)
                     if (product.estimatedUnitCostPaise == null) putNull("estimated_unit_cost_paise") else put("estimated_unit_cost_paise", product.estimatedUnitCostPaise)
                     if (product.scanCode.isNullOrBlank()) putNull("scan_code") else put("scan_code", product.scanCode.trim())
+                    put("unit_label", product.unitLabel.trim())
                 }, CipherDatabase.CONFLICT_REPLACE)
                 if (!existed) db.insertWithOnConflict("stock", null, ContentValues().apply { put("product_id", product.productId); put("quantity", 0) }, CipherDatabase.CONFLICT_IGNORE)
                 val now = System.currentTimeMillis()
@@ -1124,7 +1126,7 @@ class SqliteCounterPersistence internal constructor(
 
     companion object {
         internal const val DATABASE_NAME = "chai_tapri_counter.db"
-        internal const val DATABASE_VERSION = 30
+        internal const val DATABASE_VERSION = 31
         internal const val STORE_IDENTITY_KEY = "shop_identity"
 
         internal fun locallyBoundShopIdentity(context: Context, databaseName: String, keyNamespace: String): String? =
@@ -1143,7 +1145,7 @@ class SqliteCounterPersistence internal constructor(
     }
 
     private fun createProductCatalog(db: CipherDatabase) {
-        db.execSQL("CREATE TABLE product_catalog(product_id TEXT PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,unit_price_paise INTEGER NOT NULL CHECK(unit_price_paise >= 0),active INTEGER NOT NULL,favorite INTEGER NOT NULL,price_confirmed INTEGER NOT NULL,aliases TEXT NOT NULL DEFAULT '',reorder_threshold INTEGER CHECK(reorder_threshold IS NULL OR reorder_threshold BETWEEN 1 AND 100000),estimated_unit_cost_paise INTEGER CHECK(estimated_unit_cost_paise IS NULL OR estimated_unit_cost_paise BETWEEN 0 AND 10000000),scan_code TEXT)")
+        db.execSQL("CREATE TABLE product_catalog(product_id TEXT PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,unit_price_paise INTEGER NOT NULL CHECK(unit_price_paise >= 0),active INTEGER NOT NULL,favorite INTEGER NOT NULL,price_confirmed INTEGER NOT NULL,aliases TEXT NOT NULL DEFAULT '',reorder_threshold INTEGER CHECK(reorder_threshold IS NULL OR reorder_threshold BETWEEN 1 AND 100000),estimated_unit_cost_paise INTEGER CHECK(estimated_unit_cost_paise IS NULL OR estimated_unit_cost_paise BETWEEN 0 AND 10000000),scan_code TEXT,unit_label TEXT NOT NULL DEFAULT 'units')")
         db.execSQL("CREATE UNIQUE INDEX product_catalog_scan_code_unique ON product_catalog(scan_code COLLATE NOCASE) WHERE scan_code IS NOT NULL AND scan_code <> ''")
     }
 

@@ -28,7 +28,8 @@ class StockCountHistoryActivity : ComponentActivity() {
                 val csv = runCatching {
                     CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true).use { current ->
                         val names = current.products().associate { it.productId to it.name }
-                        val sessions = StockCountHistory.from(current.auditRecords(), names)
+                        val units = current.products().associate { it.productId to it.unitLabel }
+                        val sessions = StockCountHistory.from(current.auditRecords(), names, units)
                         StockCountHistoryCsv.render(sessions, ZoneId.systemDefault().id)
                     }
                 }
@@ -64,14 +65,15 @@ class StockCountHistoryActivity : ComponentActivity() {
             content.addView(label("Read-only local audit history. Times use this device's clock and may be inaccurate. This history does not change stock.", 14f))
             exportStatus = label("", 14f).also(content::addView)
             val names = current.products().associate { it.productId to it.name }
-            val sessions = StockCountHistory.from(current.auditRecords(), names)
+            val units = current.products().associate { it.productId to it.unitLabel }
+            val sessions = StockCountHistory.from(current.auditRecords(), names, units)
             if (sessions.isEmpty()) content.addView(label("No physical stock counts have been recorded.", 16f))
             sessions.forEach { session ->
                 content.addView(label("${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.recordedAtEpochMs))} · ${session.rows.size} products", 17f))
                 content.addView(label("Reason: ${session.reason}", 14f))
                 session.actorId?.let { content.addView(label("Recorded by local account: $it", 13f)) }
                 session.rows.forEach { row ->
-                    val quantity = row.countedQuantity?.let { "counted $it ${if (it == 1) "unit" else "units"}" }
+                    val quantity = row.countedQuantity?.let { "counted $it ${row.unitLabel}" }
                         ?: "historical quantity unavailable"
                     content.addView(label("${row.productName} · $quantity", 15f))
                 }

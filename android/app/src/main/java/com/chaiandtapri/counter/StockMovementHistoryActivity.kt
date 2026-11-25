@@ -122,7 +122,8 @@ class StockMovementHistoryActivity : Activity() {
             val order = movement.orderNumber?.let { "Order $it" }
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 8, 12, 8) }
             card.addView(label(productNames[movement.productId] ?: movement.productId, 17f))
-            card.addView(label("$delta ${if (kotlin.math.abs(movement.quantityDelta) == 1) "unit" else "units"} · ${movement.reason}", 14f))
+            val unit = products.firstOrNull { it.productId == movement.productId }?.unitLabel ?: "units"
+            card.addView(label("$delta $unit · ${movement.reason}", 14f))
             if (order != null) card.addView(label(order, 13f))
             card.addView(label("Movement ${movement.movementId}", 12f))
             rows.addView(card, matchWidth())

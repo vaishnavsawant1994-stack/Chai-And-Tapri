@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chaiandtapri.counter.CounterModelTest" tests="66" skipped="0" failures="0" errors="0" timestamp="2026-11-25T05:19:13.523Z" hostname="OMPC" time="0.903">
+  <properties/>
+  <testcase name="priceCorrectionSyncsOrderPriceButKeepsReasonLocal" classname="com.chaiandtapri.counter.CounterModelTest" time="0.022"/>
+  <testcase name="cashDrawerSessionReconcilesLinkedCashEventsAndKeepsVarianceUnresolved" classname="com.chaiandtapri.counter.CounterModelTest" time="0.096"/>
+  <testcase name="cashUpiPendingSplitSeparatesCollectedCashFromPendingAndIsIdempotent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.028"/>
+  <testcase name="partialHandoverPostsOnlyDeliveredStockAndThenTheRemainder" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="nativeOutcomesMatchSharedTransactionBehaviorFixtures" classname="com.chaiandtapri.counter.CounterModelTest" time="0.044"/>
+  <testcase name="orderLineRemovalPersistsReasonInAuditEvent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.006"/>
+  <testcase name="splitCollectionPersistenceFailureRollsBackBothTendersAndReceivable" classname="com.chaiandtapri.counter.CounterModelTest" time="0.01"/>
+  <testcase name="upiIsRecordedAsPendingPaymentEventAndNeverAsVerified" classname="com.chaiandtapri.counter.CounterModelTest" time="0.012"/>
+  <testcase name="creditAgingUsesOldestOpenOrderAndNeverInventsOverdueStatus" classname="com.chaiandtapri.counter.CounterModelTest" time="0.007"/>
+  <testcase name="criticalOrderSequenceKeepsPaymentSeparateFromHandover" classname="com.chaiandtapri.counter.CounterModelTest" time="0.004"/>
+  <testcase name="busyCounterEstimateIsAuditedAndNeverChangesRecordedBusinessTotals" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="multiProductPhysicalCountIsAtomicAuditedAndIdempotent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.017"/>
+  <testcase name="removingLastOrderLineCannotLeaveAnEmptyDraft" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="handoverPostsConfiguredStockOnceAndPaymentRemainsIndependent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.008"/>
+  <testcase name="paymentScreenSplitCollectionAtomicallyPostsCashAndUdhar" classname="com.chaiandtapri.counter.CounterModelTest" time="0.01"/>
+  <testcase name="unrecognizedAndUnknownProductCommandsAreRejected" classname="com.chaiandtapri.counter.CounterModelTest" time="0.004"/>
+  <testcase name="customerTimelineOrdersEventsAndDoesNotInventMissingOrFutureDates" classname="com.chaiandtapri.counter.CounterModelTest" time="0.023"/>
+  <testcase name="refundPersistenceFailureRollsBackMoneyCreditAndAudit" classname="com.chaiandtapri.counter.CounterModelTest" time="0.008"/>
+  <testcase name="persistenceFailureRollsBackBusinessAndStockMutation" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="backupExportPolicyRemovesPartialDocumentAndPreservesWriteFailure" classname="com.chaiandtapri.counter.CounterModelTest" time="0.009"/>
+  <testcase name="syncEnvelopeMapperRejectsInvalidIdentityRevisionVersionAndEventIds" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="duplicateCommandIdIsIdempotent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="cancellingUnhandedRemainderRequiresBoundedReasonAndPreservesDeliveredSaleAndStock" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="multiLinePartialHandoverIsAtomicAuditedAndIdempotent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="splitCollectionRejectsInvalidAmountsStaleRevisionAndDifferentCreditOwner" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="purchaseOrderCancellationIsAuditedAndCannotCancelReceivedGoods" classname="com.chaiandtapri.counter.CounterModelTest" time="0.005"/>
+  <testcase name="invalidTransitionsAndDuplicateCashCannotChangePaymentTwice" classname="com.chaiandtapri.counter.CounterModelTest" time="0.004"/>
+  <testcase name="supplierFinancialProjectionUsesPersistedOpaqueIdsAndOmitsSupplierPii" classname="com.chaiandtapri.counter.CounterModelTest" time="0.006"/>
+  <testcase name="newOrdersReceivePersistableCreationTimestamps" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="backupReconciliationDetectsCreditProjectionMismatchWithoutRepairingIt" classname="com.chaiandtapri.counter.CounterModelTest" time="0.007"/>
+  <testcase name="maintenanceExceptionAndFaultyUiListenerDoNotLeaveWritesPaused" classname="com.chaiandtapri.counter.CounterModelTest" time="0.006"/>
+  <testcase name="estimatedUnitCostRejectsNegativeAndOutOfRangeValues" classname="com.chaiandtapri.counter.CounterModelTest" time="0.0"/>
+  <testcase name="quickSaleSplitRejectsInvalidTenderAndRollsBackStorageFailure" classname="com.chaiandtapri.counter.CounterModelTest" time="0.006"/>
+  <testcase name="devanagariAndMarathiAliasesCreateTheExpectedOrder" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="multiProductReceiptPostsEachStockMovementAndOnePayable" classname="com.chaiandtapri.counter.CounterModelTest" time="0.007"/>
+  <testcase name="creditAndRepaymentLedgerSurviveModelRecreation" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="maintenanceClosesAdmissionBeforeWaitingForAnInFlightBusinessOperation" classname="com.chaiandtapri.counter.CounterModelTest" time="0.123"/>
+  <testcase name="supplierInvoiceReferencesAreOptionalValidatedUniquePerSupplierAndPersisted" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="catalogueRejectsDuplicateAndUnprintableScannerCodes" classname="com.chaiandtapri.counter.CounterModelTest" time="0.0"/>
+  <testcase name="partialRefundOutcomesMatchSharedFinancialAndStockFixtures" classname="com.chaiandtapri.counter.CounterModelTest" time="0.008"/>
+  <testcase name="partialCashCollectionsUsePaiseAndDoNotOvercollect" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="operatingExpensesAreValidatedIdempotentAndRollbackOnPersistenceFailure" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="purchaseOrderDraftDoesNotChangeStockOrPayablesAndPartialReceiptsReconcile" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="quickSaleSplitPostsCashAndCustomerCreditAtomicallyAndIsIdempotent" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="committedOrdersAndCommandIdsSurviveModelRecreation" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="purchaseReceiptAndSupplierSettlementAreAtomicAndPersisted" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="explicitCashAmountIsInPaiseAndOverpaymentIsRejected" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="productUnitLabelIsValidatedNormalizedAndFrozenAfterLedgerActivity" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="directUpiReceiptIsStaffDeclaredAndCannotReplacePendingAttempt" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="amountOnlyRefundsAreBoundedConfirmedAndDoNotRestock" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="supplierReturnReducesAvailableStockAndOnlyUnpaidPayable" classname="com.chaiandtapri.counter.CounterModelTest" time="0.011"/>
+  <testcase name="barcodeLookupIsExactCaseInsensitiveAndRejectsAmbiguousCodes" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="udharAndRepaymentsMaintainCustomerBalanceAndOrderPaymentState" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="businessOperationLeaseCanCloseOnAnotherDispatcherThread" classname="com.chaiandtapri.counter.CounterModelTest" time="0.194"/>
+  <testcase name="lowStockAlertsRequireAConfiguredThresholdAndConfirmedPhysicalCount" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="nestedMaintenanceRestoresOuterLabelUntilTheWritePauseEnds" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="supplierUpiSettlementIsStaffDeclaredAndDoesNotChangeCashDrawer" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="managerPriceCorrectionIsReasonedRevisionCheckedAndPreFulfillmentOnly" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <testcase name="pendingUpiCanBeResolvedAsStaffDeclaredReceiptWithoutProviderVerification" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="orderHistoryDateRangeUsesInclusiveBoundsAndExcludesUndatedLegacyOrders" classname="com.chaiandtapri.counter.CounterModelTest" time="0.0"/>
+  <testcase name="maintenanceWaitsForInFlightCommitAndRejectsNewCommitsUntilRelease" classname="com.chaiandtapri.counter.CounterModelTest" time="0.109"/>
+  <testcase name="localMutationPolicyBindsActorAndRestrictsCashierFinancialCorrections" classname="com.chaiandtapri.counter.CounterModelTest" time="0.002"/>
+  <testcase name="staleOrderRevisionIsRejectedWithoutMutation" classname="com.chaiandtapri.counter.CounterModelTest" time="0.001"/>
+  <testcase name="parserMatchesSharedCommandContractFixtures" classname="com.chaiandtapri.counter.CounterModelTest" time="0.008"/>
+  <testcase name="unknownOrderDoesNotMutateBusinessState" classname="com.chaiandtapri.counter.CounterModelTest" time="0.0"/>
+  <testcase name="syncProjectionDeltaUsesAllowListedFieldsAndBlocksUnsupportedEntities" classname="com.chaiandtapri.counter.CounterModelTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

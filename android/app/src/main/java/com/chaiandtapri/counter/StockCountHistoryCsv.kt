@@ -3,7 +3,7 @@ package com.chaiandtapri.counter
 /** Flat, one-product-per-row export of the local immutable physical-count audit projection. */
 object StockCountHistoryCsv {
     fun render(sessions: List<StockCountHistorySession>, timeZoneId: String): String = buildString {
-        appendLine("command_id,recorded_at_epoch_ms,device_time_zone,product_id,product_name,counted_quantity,quantity_status,reason,local_actor_recorded,evidence")
+        appendLine("command_id,recorded_at_epoch_ms,device_time_zone,product_id,product_name,counted_quantity,unit_label,quantity_status,reason,local_actor_recorded,evidence")
         sessions.forEach { session ->
             session.rows.forEach { row ->
                 val quantity = row.countedQuantity
@@ -14,6 +14,7 @@ object StockCountHistoryCsv {
                     row.productId,
                     row.productName,
                     quantity?.toString().orEmpty(),
+                    row.unitLabel,
                     if (quantity == null) "historical quantity unavailable" else "recorded physical count",
                     session.reason,
                     (session.actorId != null).toString(),

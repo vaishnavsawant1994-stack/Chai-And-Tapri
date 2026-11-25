@@ -3,7 +3,8 @@ package com.chaiandtapri.counter
 data class StockCountHistoryRow(
     val productId: String,
     val productName: String,
-    val countedQuantity: Int?
+    val countedQuantity: Int?,
+    val unitLabel: String = "units"
 )
 
 data class StockCountHistorySession(
@@ -19,7 +20,7 @@ object StockCountHistory {
     private val fieldsPattern = Regex("(?:^|\\s)([a-z_]+)=([^\\s]*)")
     private val countedPairPattern = Regex("([a-z][a-z0-9_]{1,39}):(\\d{1,6})")
 
-    fun from(records: List<AuditRecord>, productNames: Map<String, String>): List<StockCountHistorySession> =
+    fun from(records: List<AuditRecord>, productNames: Map<String, String>, productUnits: Map<String, String> = emptyMap()): List<StockCountHistorySession> =
         records.asSequence().mapNotNull { record ->
             val eventBody = record.event.substringAfter(' ', missingDelimiterValue = "")
             val prefix = "stock.physical_count "
@@ -37,7 +38,7 @@ object StockCountHistory {
                 commandId = record.commandId,
                 recordedAtEpochMs = record.createdAtEpochMs,
                 reason = reason,
-                rows = productIds.distinct().sorted().map { id -> StockCountHistoryRow(id, productNames[id] ?: id, counted[id]) },
+                rows = productIds.distinct().sorted().map { id -> StockCountHistoryRow(id, productNames[id] ?: id, counted[id], productUnits[id] ?: "units") },
                 actorId = record.actorId
             )
         }.sortedWith(compareByDescending<StockCountHistorySession> { it.recordedAtEpochMs }.thenByDescending { it.commandId }).toList()

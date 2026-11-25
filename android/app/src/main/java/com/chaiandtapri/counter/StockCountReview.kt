@@ -4,7 +4,8 @@ data class StockCountReviewRow(
     val productId: String,
     val productName: String,
     val previousQuantity: Int?,
-    val countedQuantity: Int
+    val countedQuantity: Int,
+    val unitLabel: String = "units"
 ) {
     val variance: Int? get() = previousQuantity?.let { countedQuantity - it }
 }
@@ -23,7 +24,7 @@ object StockCountReview {
             require(quantity in 0..100_000) { "Count for $productId is outside the supported range." }
             val product = productsById[productId] ?: throw IllegalArgumentException("Selected product is missing or inactive.")
             val previous = if (productId in confirmedProductIds) (stock[productId] ?: 0) else null
-            StockCountReviewRow(productId, product.name, previous, quantity)
+            StockCountReviewRow(productId, product.name, previous, quantity, product.unitLabel)
         }
     }
 }

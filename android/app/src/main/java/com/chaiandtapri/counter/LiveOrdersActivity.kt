@@ -89,7 +89,9 @@ class LiveOrdersActivity : Activity() {
         filtered.forEach { order ->
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 14, 12, 14) }
             card.addView(label("Order #${order.number} · ${order.fulfillment}", 19f))
-            card.addView(label(order.items, 16f))
+            val unitLabels = model.products().associate { it.productId to it.unitLabel }
+            val orderDisplay = order.lines.joinToString(" + ") { line -> "${line.quantity} ${unitLabels[line.productId] ?: "units"} × ${line.name}" }
+            card.addView(label(orderDisplay, 16f))
             card.addView(label("Sale ₹${money(order.salePaise)} · Payment ${order.payment} · Due ₹${money(order.duePaise)}", 15f))
             val revision = order.revision
             card.addView(button("View order details") {
@@ -135,7 +137,8 @@ class LiveOrdersActivity : Activity() {
         val controls = remaining.map { line ->
             val available = line.quantity - line.deliveredQuantity
             val check = CheckBox(this).apply {
-                text = "${line.name} · $available remaining"
+                val unit = model.products().firstOrNull { it.productId == line.productId }?.unitLabel ?: "units"
+                text = "${line.name} · $available $unit remaining"
                 contentDescription = "Select ${line.name} for handover"
             }
             val count = EditText(this).apply {

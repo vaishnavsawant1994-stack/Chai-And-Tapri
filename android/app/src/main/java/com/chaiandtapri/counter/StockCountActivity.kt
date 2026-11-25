@@ -62,7 +62,7 @@ class StockCountActivity : Activity() {
                 }
                 selected.setOnCheckedChangeListener { _, checked -> quantity.isEnabled = checked }
                 val confirmed = current.isStockConfirmed(product.productId)
-                row.addView(label(if (confirmed) "Last recorded balance: ${stock[product.productId] ?: 0} units · verify by counting" else "No verified baseline · enter an actual physical count", 13f))
+            row.addView(label(if (confirmed) "Last recorded balance: ${stock[product.productId] ?: 0} ${product.unitLabel} · verify by counting" else "No verified baseline · enter an actual physical count in ${product.unitLabel}", 13f))
                 row.addView(selected)
                 row.addView(quantity)
                 content.addView(row, matchWidth())
@@ -108,10 +108,10 @@ class StockCountActivity : Activity() {
                 append(row.productName).append(": ")
                 val variance = row.variance
                 if (variance == null) {
-                    append("counted ").append(row.countedQuantity).append(" units · no confirmed prior baseline; this establishes opening stock")
+                    append("counted ").append(row.countedQuantity).append(' ').append(row.unitLabel).append(" · no confirmed prior baseline; this establishes opening stock")
                 } else {
                     append("prior ").append(row.previousQuantity).append(", counted ").append(row.countedQuantity)
-                    append(", variance ").append(if (variance > 0) "+$variance" else variance.toString()).append(" units")
+                    append(", variance ").append(if (variance > 0) "+$variance" else variance.toString()).append(' ').append(row.unitLabel)
                 }
                 append('\n')
             }

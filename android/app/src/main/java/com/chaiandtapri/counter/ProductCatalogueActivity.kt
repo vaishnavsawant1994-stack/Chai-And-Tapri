@@ -60,14 +60,15 @@ class ProductCatalogueActivity : Activity() {
         products.forEach { product ->
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
             card.addView(label("${product.name} · ${product.category}", 18f))
+            card.addView(label("Sell / count unit: ${product.unitLabel} · pack-size conversion is not configured", 13f))
             val price = if (product.priceConfirmed) "₹${rupees(product.unitPricePaise)} · Owner confirmed" else "₹${rupees(product.unitPricePaise)} · Example price, not confirmed"
             card.addView(label("$price · ${if (product.active) "Active" else "Inactive"}${if (product.favorite) " · Favourite" else ""}", 14f))
             card.addView(label(product.scanCode?.let { "Scanner code · $it" } ?: "Scanner code not configured", 13f))
             card.addView(label(product.estimatedUnitCostPaise?.let { "Estimated unit cost ₹${rupees(it)} · owner-entered, not verified" } ?: "Unit cost not recorded", 14f))
             val countConfirmed = product.productId in confirmedStock
-            val stockText = if (countConfirmed) "Opening count confirmed · ${stock[product.productId] ?: 0} units" else "Opening count not confirmed · existing value hidden"
+            val stockText = if (countConfirmed) "Opening count confirmed · ${stock[product.productId] ?: 0} ${product.unitLabel}" else "Opening count not confirmed · existing value hidden"
             card.addView(label(stockText, 14f))
-            card.addView(label(product.reorderThreshold?.let { "Low-stock alert at ${it} units or fewer" } ?: "Low-stock alert not configured", 13f))
+            card.addView(label(product.reorderThreshold?.let { "Low-stock alert at ${it} ${product.unitLabel} or fewer" } ?: "Low-stock alert not configured", 13f))
             if (product.active) card.addView(button(if (countConfirmed) "Update physical stock count" else "Confirm physical opening stock") { confirmOpeningStock(product) })
             card.addView(button("Edit ${product.name}") { editProduct(product) })
             list.addView(card, matchWidth())
@@ -76,7 +77,7 @@ class ProductCatalogueActivity : Activity() {
 
     private fun confirmOpeningStock(product: TapriProduct) {
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 8, 20, 8) }
-        form.addView(label("Count the actual sellable units on hand. This replaces the local balance through an audited stock movement; it does not create a purchase.", 14f))
+        form.addView(label("Count the actual sellable ${product.unitLabel} on hand. This replaces the local balance through an audited stock movement; it does not create a purchase.", 14f))
         val quantity = EditText(this).apply {
             hint = "Physical quantity counted (0 to 100000)"
             inputType = InputType.TYPE_CLASS_NUMBER
@@ -105,11 +106,12 @@ class ProductCatalogueActivity : Activity() {
         val id = if (existing == null) field("Stable product ID, e.g. bun_maska") else null
         val name = field("Product name", existing?.name.orEmpty())
         val category = field("Category", existing?.category.orEmpty())
+        val unitLabel = field("Sell / count unit (e.g. cup, bottle, piece, pack)", existing?.unitLabel ?: "units")
         val price = field("Actual selling price in ₹", existing?.let { rupees(it.unitPricePaise) }.orEmpty(), true)
         val estimatedCost = field("Estimated unit cost in ₹ (optional)", existing?.estimatedUnitCostPaise?.let(::rupees).orEmpty(), true)
         val scanCode = field("Barcode / QR scanner code (optional)", existing?.scanCode.orEmpty())
         val aliases = field("Voice/search aliases, comma separated", existing?.aliases?.joinToString(", ").orEmpty())
-        val reorderThreshold = field("Low-stock alert threshold in units (optional, 1–100000)", existing?.reorderThreshold?.toString().orEmpty(), integer = true)
+        val reorderThreshold = field("Low-stock alert threshold in ${existing?.unitLabel ?: "chosen unit"} (optional, 1–100000)", existing?.reorderThreshold?.toString().orEmpty(), integer = true)
         val active = CheckBox(this).apply { text = "Active for sale"; isChecked = existing?.active ?: true }; form.addView(active)
         val favorite = CheckBox(this).apply { text = "Favourite shortcut"; isChecked = existing?.favorite ?: false }; form.addView(favorite)
         val confirmed = CheckBox(this).apply { text = "I confirm this is the shop's actual price"; isChecked = existing?.priceConfirmed ?: false }; form.addView(confirmed)
@@ -131,7 +133,8 @@ class ProductCatalogueActivity : Activity() {
                     aliases = aliases.text.toString().split(',').map(String::trim).filter(String::isNotBlank),
                     reorderThreshold = reorderThreshold.text.toString().trim().takeIf(String::isNotEmpty)?.toIntOrNull() ?: if (reorderThreshold.text.isNullOrBlank()) null else -1,
                     estimatedUnitCostPaise = costPaise,
-                    scanCode = scanCode.text.toString().trim().takeIf(String::isNotEmpty)
+                    scanCode = scanCode.text.toString().trim().takeIf(String::isNotEmpty),
+                    unitLabel = unitLabel.text.toString()
                 )
                 performMutation("Saving product…") { store -> store.saveProduct(product) }
             }.show()

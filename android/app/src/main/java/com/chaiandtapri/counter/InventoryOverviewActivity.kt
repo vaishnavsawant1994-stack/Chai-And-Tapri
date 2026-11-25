@@ -46,7 +46,7 @@ class InventoryOverviewActivity : Activity() {
                 } else {
                     content.addView(label("${lowStock.size} confirmed product(s) are at or below their owner-configured threshold. This is a stock alert, not a purchase recommendation.", 14f))
                     lowStock.forEach { (product, quantity) ->
-                        content.addView(label("Low stock · ${product.name}: $quantity units on hand · alert at ${product.reorderThreshold} or fewer", 15f))
+                        content.addView(label("Low stock · ${product.name}: $quantity ${product.unitLabel} on hand · alert at ${product.reorderThreshold} or fewer", 15f))
                     }
                 }
                 if (unverifiedCount > 0) content.addView(label("Unverified stock is not evaluated until a physical count is confirmed for $unverifiedCount thresholded product(s).", 14f))
@@ -56,7 +56,7 @@ class InventoryOverviewActivity : Activity() {
                 val quantity = current.stockLevels()[product.productId]
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
                 card.addView(label(product.name, 18f))
-                card.addView(label(if (confirmed) "Confirmed stock: ${quantity ?: 0} ${if (quantity == 1) "unit" else "units"}" else "Physical count required · balance not verified", 15f))
+                card.addView(label(if (confirmed) "Confirmed stock: ${quantity ?: 0} ${product.unitLabel}" else "Physical count required · balance not verified", 15f))
                 card.addView(label(if (product.active) "Active catalogue item" else "Inactive catalogue item", 13f))
                 content.addView(card, matchWidth())
             }
@@ -68,7 +68,8 @@ class InventoryOverviewActivity : Activity() {
             movements.forEach { movement ->
                 val delta = if (movement.quantityDelta > 0) "+${movement.quantityDelta}" else movement.quantityDelta.toString()
                 val order = movement.orderNumber?.let { " · Order $it" }.orEmpty()
-                content.addView(label("${names[movement.productId] ?: movement.productId}: $delta units · ${movement.reason}$order", 14f))
+                val unit = products.firstOrNull { it.productId == movement.productId }?.unitLabel ?: "unit"
+                content.addView(label("${names[movement.productId] ?: movement.productId}: $delta $unit · ${movement.reason}$order", 14f))
             }
             content.addView(label("Stock counts and adjustments affect inventory only; they do not create purchases or supplier payables.", 13f))
             content.addView(button("Search full movement history · CT-15") { startActivity(Intent(this, StockMovementHistoryActivity::class.java)) })

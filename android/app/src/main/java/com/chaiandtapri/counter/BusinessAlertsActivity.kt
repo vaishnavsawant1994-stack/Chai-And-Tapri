@@ -42,7 +42,7 @@ class BusinessAlertsActivity : Activity() {
                         products.filter { it.active && it.priceConfirmed && !model.isStockConfirmed(it.productId) }
                             .forEach { add(Alert("Opening stock count required", "${it.name} · quantity is not verified", true, "Review inventory", InventoryOverviewActivity::class.java)) }
                         model.lowStockProducts().forEach { (product, quantity) ->
-                            add(Alert("Low stock · ${product.name}", "$quantity units on hand · alert threshold ${product.reorderThreshold} units", true, "Review inventory", InventoryOverviewActivity::class.java))
+                            add(Alert("Low stock · ${product.name}", "$quantity ${product.unitLabel} on hand · alert threshold ${product.reorderThreshold} ${product.unitLabel}", true, "Review inventory", InventoryOverviewActivity::class.java))
                         }
                         model.suppliers().forEach { supplier ->
                             val payable = model.supplierPayablePaise(supplier.supplierId)

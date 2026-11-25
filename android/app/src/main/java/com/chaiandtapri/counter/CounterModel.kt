@@ -102,6 +102,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun saveProduct(product: TapriProduct): String {
         if (!product.productId.matches(Regex("[a-z][a-z0-9_]{1,39}"))) return "Product ID must use 2–40 lowercase letters, numbers or underscores."
         if (product.name.trim().length !in 2..60 || product.category.trim().length !in 2..40) return "Enter a product name and category."
+        if (product.unitLabel.trim().length !in 1..24 || product.unitLabel.any(Char::isISOControl)) return "Enter a stock/selling unit label of 1 to 24 printable characters."
+        val existingProduct = products().firstOrNull { it.productId == product.productId }
+        val normalizedUnit = product.unitLabel.trim()
+        if (existingProduct != null && existingProduct.unitLabel != normalizedUnit &&
+            (allOrders().any { order -> order.lines.any { it.productId == product.productId } } ||
+                stockMovements().any { it.productId == product.productId })) {
+            return "This product's unit cannot change after an order or stock movement exists. Create a new product ID; unit conversion is not supported."
+        }
         if (product.unitPricePaise !in 0..10_000_000) return "Enter a valid price in rupees."
         if (product.active && product.priceConfirmed && product.unitPricePaise <= 0) return "A sellable product needs a price above ₹0."
         if (product.estimatedUnitCostPaise != null && product.estimatedUnitCostPaise !in 0..10_000_000) return "Estimated unit cost must be 0 to ₹100000, or blank."
@@ -113,7 +121,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             return "That scan code is already assigned to another product."
         }
         return try {
-            if (persistence?.saveProduct(product.copy(name = product.name.trim(), category = product.category.trim(), scanCode = scanCode), "product-${java.util.UUID.randomUUID()}") == true) {
+            if (persistence?.saveProduct(product.copy(name = product.name.trim(), category = product.category.trim(), scanCode = scanCode, unitLabel = normalizedUnit), "product-${java.util.UUID.randomUUID()}") == true) {
                 stock.putIfAbsent(product.productId, 0)
                 "Product saved in encrypted catalogue."
             } else "Product could not be saved."
@@ -220,7 +228,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         stock[productId] = quantity
         stockConfirmedProductIds += productId
         if (delta != 0) movements += StockMovement("$commandId:$productId:opening-count", productId, delta, "opening_count:${reason.trim()}", null)
-        return commitMutation(before, commandId, "Opening stock confirmed for ${product.name}: $quantity units.", "stock.opening_count product_id=$productId counted=$quantity delta=$delta reason=${reason.trim()}")
+        return commitMutation(before, commandId, "Opening stock confirmed for ${product.name}: $quantity ${product.unitLabel}.", "stock.opening_count product_id=$productId counted=$quantity unit=${product.unitLabel} delta=$delta reason=${reason.trim()}")
     }
     /** Commits one multi-product physical count atomically; no purchase or payable is created. */
     fun confirmPhysicalStockCounts(counts: Map<String, Int>, reason: String, commandId: String): String {

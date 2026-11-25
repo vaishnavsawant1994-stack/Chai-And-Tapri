@@ -66,7 +66,8 @@ class OrderDetailsActivity : Activity() {
                 order.lines.all { it.deliveredQuantity == 0 } && order.paidPaise == 0 && order.creditPaise == 0 &&
                 order.refundedPaise == 0 && current.paymentHistory().none { it.orderNumber == order.number }
             order.lines.forEach { line ->
-                content.addView(label("${line.name} · ordered ${line.quantity} · handed over ${line.deliveredQuantity} · returned ${line.refundedQuantity}", 15f))
+                val unit = current.products().firstOrNull { it.productId == line.productId }?.unitLabel ?: "units"
+                content.addView(label("${line.name} · ordered ${line.quantity} $unit · handed over ${line.deliveredQuantity} · returned ${line.refundedQuantity}", 15f))
                 content.addView(label("Unit ${money(line.unitPricePaise)} · delivered value ${money(line.deliveredQuantity * line.unitPricePaise)}", 13f))
                 if (priceEditable) content.addView(button("Adjust price for ${line.name}") {
                     confirmUnitPriceChange(order.number, line.productId, line.name, line.unitPricePaise, order.revision)
@@ -100,7 +101,8 @@ class OrderDetailsActivity : Activity() {
             val movements = current.stockMovements().filter { it.orderNumber == number }
             if (movements.isEmpty()) content.addView(label("No order-linked stock movements recorded.", 14f))
             movements.forEach { movement ->
-                content.addView(label("${movement.productId} · ${if (movement.quantityDelta > 0) "+" else ""}${movement.quantityDelta} units · ${movement.reason}", 14f))
+                val unit = current.products().firstOrNull { it.productId == movement.productId }?.unitLabel ?: "units"
+                content.addView(label("${movement.productId} · ${if (movement.quantityDelta > 0) "+" else ""}${movement.quantityDelta} $unit · ${movement.reason}", 14f))
             }
 
             content.addView(label("Audit events", 19f))

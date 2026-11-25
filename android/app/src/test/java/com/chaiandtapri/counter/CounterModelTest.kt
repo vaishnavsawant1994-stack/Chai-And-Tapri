@@ -56,6 +56,20 @@ class CounterModelTest {
         model.close()
     }
 
+    @Test fun productUnitLabelIsValidatedNormalizedAndFrozenAfterLedgerActivity() {
+        val persistence = MemoryPersistence()
+        val model = CounterModel(persistence, requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("unit_label_tea", "Unit Label Tea", "Tea", 1500, priceConfirmed = true, unitLabel = " ")).contains("unit label"))
+        assertTrue(model.saveProduct(TapriProduct("unit_label_ctrl", "Unit Label Control", "Tea", 1500, unitLabel = "cup\npack")).contains("unit label"))
+        assertTrue(model.saveProduct(TapriProduct("unit_label_tea", "Unit Label Tea", "Tea", 1500, priceConfirmed = true, unitLabel = " cup ")).startsWith("Product saved"))
+        assertEquals("cup", model.products().single { it.productId == "unit_label_tea" }.unitLabel)
+        assertTrue(model.saveProduct(model.products().single().copy(unitLabel = "piece")).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("unit_label_tea", 5, "physical opening count", "unit-label-stock").contains("5 piece"))
+        assertTrue(model.saveProduct(model.products().single().copy(unitLabel = "cup")).contains("unit cannot change"))
+        assertEquals("piece", model.products().single { it.productId == "unit_label_tea" }.unitLabel)
+        model.close()
+    }
+
     @Test fun customerTimelineOrdersEventsAndDoesNotInventMissingOrFutureDates() {
         val events = listOf(
             PaymentEntry("older", null, "c", 100, "cash", "staff_declared", "customer_repayment", createdAtEpochMs = 1_000L),

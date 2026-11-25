@@ -123,7 +123,7 @@ class QuickSaleActivity : Activity() {
         visible.forEach { product ->
             val available = levels[product.productId] ?: 0
             val countConfirmed = model.isStockConfirmed(product.productId)
-            products.addView(button("${product.name} · ₹${money(product.unitPricePaise)} · ${if (countConfirmed) "stock $available" else "opening count needed"} · add") {
+            products.addView(button("${product.name} · ₹${money(product.unitPricePaise)} · ${if (countConfirmed) "stock $available ${product.unitLabel}" else "opening count needed"} · add") {
                 if (!countConfirmed) status.text = "Physically count and confirm opening stock for ${product.name} before selling."
                 else if (available <= (quantities[product.productId] ?: 0)) status.text = "Not enough recorded stock for ${product.name}. Receive/count stock first."
                 else { quantities[product.productId] = (quantities[product.productId] ?: 0) + 1; status.text = ""; render() }
@@ -131,10 +131,10 @@ class QuickSaleActivity : Activity() {
         }
         val cartRows = quantities.mapNotNull { (id, qty) -> model.products().firstOrNull { it.productId == id }?.let { it to qty } }
         val total = cartRows.sumOf { (product, qty) -> product.unitPricePaise.toLong() * qty }
-        cart.text = if (cartRows.isEmpty()) "No items" else cartRows.joinToString("\n") { (product, qty) -> "$qty × ${product.name} · ₹${money(product.unitPricePaise.toLong() * qty)}" } + "\nTotal · ₹${money(total)}"
+        cart.text = if (cartRows.isEmpty()) "No items" else cartRows.joinToString("\n") { (product, qty) -> "$qty ${product.unitLabel} × ${product.name} · ₹${money(product.unitPricePaise.toLong() * qty)}" } + "\nTotal · ₹${money(total)}"
         cartRows.forEach { (product, qty) ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.addView(label("${product.name} · quantity $qty", 15f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(label("${product.name} · quantity $qty ${product.unitLabel}", 15f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(button("−") {
                 val newQuantity = (quantities[product.productId] ?: 0) - 1
                 if (newQuantity <= 0) quantities.remove(product.productId) else quantities[product.productId] = newQuantity
@@ -243,7 +243,8 @@ class QuickSaleActivity : Activity() {
             return
         }
         receipt.addView(label("Last sale · Order #${order.number}", 19f))
-        receipt.addView(label(order.lines.joinToString("\n") { "${it.quantity} × ${it.name} · ₹${money(it.amountPaise)}" }, 15f))
+        val units = model.products().associate { it.productId to it.unitLabel }
+        receipt.addView(label(order.lines.joinToString("\n") { "${it.quantity} ${units[it.productId] ?: "units"} × ${it.name} · ₹${money(it.amountPaise)}" }, 15f))
         receipt.addView(label("Sale total · ₹${money(order.salePaise)}", 17f))
         val payments = model.paymentHistory().filter { it.orderNumber == order.number }
         payments.forEach { entry ->

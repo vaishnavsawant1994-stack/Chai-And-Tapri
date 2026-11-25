@@ -8,15 +8,15 @@ class StockCountHistoryCsvTest {
     @Test fun exportsExactAndLegacyUnknownQuantitiesWithLocalEvidenceDisclosure() {
         val sessions = listOf(
             StockCountHistorySession("count-1", 123L, "evening shelf count", listOf(
-                StockCountHistoryRow("tea", "Tea", 0),
+                StockCountHistoryRow("tea", "Tea", 0, "cup"),
                 StockCountHistoryRow("old", "Legacy item", null)
             ), "local-owner")
         )
         val csv = StockCountHistoryCsv.render(sessions, "Asia/Calcutta")
 
         assertTrue(csv.startsWith("command_id,recorded_at_epoch_ms,device_time_zone"))
-        assertTrue(csv.contains("\"123\",\"Asia/Calcutta\",\"tea\",\"Tea\",\"0\",\"recorded physical count\""))
-        assertTrue(csv.contains("\"old\",\"Legacy item\",\"\",\"historical quantity unavailable\""))
+        assertTrue(csv.contains("\"123\",\"Asia/Calcutta\",\"tea\",\"Tea\",\"0\",\"cup\",\"recorded physical count\""))
+        assertTrue(csv.contains("\"old\",\"Legacy item\",\"\",\"units\",\"historical quantity unavailable\""))
         assertTrue(csv.contains("\"true\""))
         assertTrue(csv.contains("not independently verified"))
     }
