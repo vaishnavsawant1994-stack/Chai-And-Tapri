@@ -1,12 +1,12 @@
 # CT-12 Open-Order Cancellation UI Qualification
 
 **Date:** 25 November 2026  
-**Scope:** One synthetic cancellation path on Android API 37 emulator  
-**Result:** Focused UI test passed; CT-12 remains partial.
+**Scope:** Synthetic API 37 emulator cancellation and role-gate paths
+**Result:** Both focused UI tests passed; CT-12 remains partial.
 
 ## What was verified
 
-The API 37 test `refundCorrectionScreenRequiresReasonAndConfirmsOpenOrderCancellation` creates a synthetic, unfulfilled order in encrypted local storage and launches the actual CT-12 Refund & Correction screen for that order.
+The API 37 test `refundCorrectionScreenRequiresReasonAndConfirmsOpenOrderCancellation` creates a synthetic, unfulfilled order in encrypted local storage, establishes a local manager session, and launches the actual CT-12 Refund & Correction screen for that order. A second test, `cashierIsRedirectedFromManagerGatedRefundCorrectionScreen`, establishes a local cashier session and verifies that the protected activity finishes and the access screen is launched.
 
 The test exercises this sequence:
 
@@ -18,9 +18,11 @@ The test exercises this sequence:
 
 Assertions verify the order is `CANCELLED`, the reason is retained, delivered quantity is zero, and there is no payment/refund event or stock movement for this unfulfilled order. The append-only audit record contains the cancellation event and reason.
 
+The allowed manager action is attributed to the manager's local actor ID. The cashier route is denied at the activity gate. These tests do not establish cloud identity or other screens' authorization rules.
+
 ## Verification results
 
-- Focused API 37 instrumentation: **1/1 passed**.
+- Focused API 37 instrumentation: **2/2 passed across two invocations** (manager cancellation and cashier denial).
 - Kotlin JVM tests: **96/96 passed**, freshly run with `testDebugUnitTest --rerun-tasks`.
 - Debug APK and instrumentation APK assembly: **passed**.
 - `lintDebug`: **0 errors, 189 warnings**.
@@ -30,4 +32,4 @@ The first test attempt failed at an assertion that assumed a command-ID prefix n
 
 ## Limits and remaining qualification
 
-This test covers one reasoned open-order cancellation on a synthetic emulator account. It does not establish the staff role/permission matrix, partial-handover cancellation, cancellation with payment states, interrupted database writes, physical-device behavior, manual usability, or full Android suite status. CT-12, CAT-051 recovery/security review, physical Bluetooth, shop trials, authenticated production synchronization, deployment, and the overall product remain incomplete.
+These tests cover one reasoned open-order cancellation as manager and one cashier denial on synthetic emulator accounts. They do not establish the complete staff role/permission matrix, partial-handover cancellation, cancellation with payment states, interrupted database writes, physical-device behavior, manual usability, or full Android suite status. CT-12, CAT-051 recovery/security review, physical Bluetooth, shop trials, authenticated production synchronization, deployment, and the overall product remain incomplete.

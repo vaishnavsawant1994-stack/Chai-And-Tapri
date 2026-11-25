@@ -566,6 +566,7 @@ class SqliteCounterPersistenceTest {
         assertTrue(seed.apply("ct12-cancel-create", ProposedCommand("create", null, "one cancellation tea", "ct12_cancel_tea", 1)).contains("Order #"))
         val orderNumber = seed.allOrders().single().number
         seed.close()
+        LocalSessionState.establishStaff("ct12-manager", "Synthetic CT-12 Manager", StaffRole.MANAGER)
 
         val activity = instrumentation.startActivitySync(Intent(context, RefundCorrectionActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -627,13 +628,34 @@ class SqliteCounterPersistenceTest {
                 assertTrue("Cancellation before handover must not create tender/refund events", snapshot.paymentEntries.none { it.orderNumber == orderNumber })
                 assertTrue("No stock was committed for an unfulfilled order", snapshot.stockMovements.none { it.orderNumber == orderNumber })
                 val audit = db.loadAuditRecords()
-                assertTrue("Cancellation audit entry should retain reason and command identity: ${audit.joinToString { "${it.commandId}:${it.event}" }}",
-                    audit.any { it.event.contains("order.cancelled") && it.event.contains("reason=Customer cancelled before preparation") })
+                assertTrue("Cancellation audit entry should retain reason and authenticated manager actor: ${audit.joinToString { "${it.actorId}:${it.commandId}:${it.event}" }}",
+                    audit.any { it.event.contains("order.cancelled") && it.event.contains("reason=Customer cancelled before preparation") && it.actorId == "ct12-manager" })
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             Thread.sleep(250)
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun cashierIsRedirectedFromManagerGatedRefundCorrectionScreen() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        LocalSessionState.establishStaff("ct12-cashier", "Synthetic CT-12 Cashier", StaffRole.CASHIER)
+        val accessMonitor = instrumentation.addMonitor(LocalAccessActivity::class.java.name, null, false)
+        var refundActivity: Activity? = null
+        try {
+            refundActivity = instrumentation.startActivitySync(Intent(context, RefundCorrectionActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val access = instrumentation.waitForMonitorWithTimeout(accessMonitor, 5_000)
+            assertNotNull("A cashier must be routed to the access screen", access)
+            instrumentation.waitForIdleSync()
+            assertTrue("The protected CT-12 activity should finish for a cashier", refundActivity!!.isFinishing)
+            assertFalse("The session remains cashier-scoped", LocalSessionState.isManager)
+        } finally {
+            instrumentation.removeMonitor(accessMonitor)
+            instrumentation.runOnMainSync { refundActivity?.finish(); LocalSessionState.clear() }
+            Thread.sleep(250)
         }
     }
 
