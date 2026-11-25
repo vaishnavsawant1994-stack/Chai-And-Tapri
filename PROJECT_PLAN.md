@@ -1,4 +1,8 @@
 # Chai And Tapri OS
+## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
+
+After a successful sale, Quick Sale now presents the committed order, lines, sale total, payment evidence labels and outstanding balance, plus direct navigation to Order Details. Cash remains staff-declared, UPI pending is not verified, and Udhar is shown as a receivable. Kotlin JVM tests passed **80/80**, debug and instrumentation APK tasks passed, focused receipt UI test **1/1** passed, and the full default API 37 instrumentation suite passed **139/139** with no failures/errors/skips. `lintDebug` passed with 183 warnings. CT-06 and the Android MVP remain partial. Details: [CT-06 receipt report](specs/CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md).
+
 ## Latest continuation - CT-07 reviewed-transcript safety - 25 November 2026
 
 Native CT-07 now invalidates a pending parsed command whenever its editable transcript changes. A focused API 37 emulator test verifies the stale proposal cannot create an order and that a newly proposed edit records the changed quantity. `testDebugUnitTest assembleDebug assembleDebugAndroidTest` passed (80 Kotlin JVM tests); the focused instrumentation case passed **1/1**; `lintDebug` passed with 183 warnings reported. This is a review-safety improvement to the existing one-utterance prototype; it does not qualify continuous/Bluetooth speech, the complete shopkeeper MVP, production security, or real-shop operation. Details: [CT-07 report](specs/CT-07-REVIEWED-TRANSCRIPT-INVALIDATION-REPORT-2026-11-25.md).

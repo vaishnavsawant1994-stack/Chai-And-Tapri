@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-06 Quick Sale receipt handoff
+
+Quick Sale now shows a receipt sourced from the committed order and payment ledger after checkout and provides a direct route to Order Details. Focused API 37 cash/UPI UI-to-ledger-to-order-details test passed **1/1**; the full default Android regression passed **139/139**; Kotlin JVM **80/80**; APK tasks passed; `lintDebug` passed with 183 warnings. Details: [CT-06 receipt report](CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md).
+
 ## CT-07 transcript review safety
 
 The native counter now invalidates its pending structured command as soon as the recognized/typed transcript changes. The UI tells the operator to propose again. This prevents Apply from committing a command that was parsed from text different from the text currently visible for review.

@@ -5000,6 +5000,8 @@ class SqliteCounterPersistenceTest {
         assertTrue(setup.confirmOpeningStock("ui_quick_tea", 5, "Synthetic Quick Sale UI tender test", "ui-quick-stock").contains("5 units"))
         setup.close()
 
+        val detailMonitor = Instrumentation.ActivityMonitor(OrderDetailsActivity::class.java.name, null, false)
+        instrumentation.addMonitor(detailMonitor)
         val activity = instrumentation.startActivitySync(Intent(context, QuickSaleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         try {
             fun awaitNode(prefix: String): AccessibilityNodeInfo {
@@ -5023,9 +5025,11 @@ class SqliteCounterPersistenceTest {
             click("Tea")
             click("Checkout")
             click("Cash received")
+            assertTrue("The on-screen receipt should distinguish staff-declared cash", awaitNode("Cash recorded · staff-declared · ₹15.00").text.toString().contains("staff-declared"))
             click("Tea")
             click("Checkout")
             click("UPI pending")
+            assertTrue("The receipt must not present pending UPI as verified", awaitNode("UPI pending · not verified · ₹15.00").text.toString().contains("not verified"))
 
             val reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             val orders = reopened.allOrders().sortedBy { it.number }
@@ -5038,7 +5042,13 @@ class SqliteCounterPersistenceTest {
             assertEquals("staff_declared", reopened.paymentHistory().single { it.method == "cash" }.status)
             assertEquals("pending", reopened.paymentHistory().single { it.method == "upi" }.status)
             reopened.close()
+            val latestOrderNumber = orders.last().number
+            click("Open order #$latestOrderNumber")
+            val details = detailMonitor.waitForActivityWithTimeout(15_000) as? OrderDetailsActivity
+            assertNotNull("Receipt action should open the persisted order detail", details)
+            assertTrue("Order detail should show the receipt's order number", awaitNode("Order #$latestOrderNumber").text.toString().contains("#$latestOrderNumber"))
         } finally {
+            instrumentation.removeMonitor(detailMonitor)
             instrumentation.runOnMainSync { activity.finish() }
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         }

@@ -30,6 +30,7 @@ class QuickSaleActivity : Activity() {
     private lateinit var emptyNotice: TextView
     private lateinit var cart: TextView
     private lateinit var cartRowsContainer: LinearLayout
+    private lateinit var receipt: LinearLayout
     private lateinit var status: TextView
     private val quantities = linkedMapOf<String, Int>()
     private var selectedCategory = "All products"
@@ -94,6 +95,8 @@ class QuickSaleActivity : Activity() {
         root.addView(button("Clear order") { quantities.clear(); render() })
         status = label("", 15f); root.addView(status)
         root.addView(button("Checkout · choose payment") { checkout() })
+        receipt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(12, 12, 12, 12) }
+        root.addView(receipt)
         root.addView(button("Back") { finish() })
         refreshCategoryOptions()
         render()
@@ -210,13 +213,55 @@ class QuickSaleActivity : Activity() {
     private fun commit(tender: String, customerId: String? = null) {
         val result = model.quickSale(quantities.map { it.key to it.value }, tender, customerId)
         status.text = result
-        if (result.startsWith("Quick sale")) { quantities.clear(); render() }
+        if (result.startsWith("Quick sale")) {
+            quantities.clear()
+            render()
+            showRecordedReceipt(committedOrder(result))
+        }
     }
 
     private fun commitSplit(cashPaise: Int, customerId: String) {
         val result = model.quickSaleSplit(quantities.map { it.key to it.value }, cashPaise, customerId)
         status.text = result
-        if (result.startsWith("Quick sale")) { quantities.clear(); render() }
+        if (result.startsWith("Quick sale")) {
+            quantities.clear()
+            render()
+            showRecordedReceipt(committedOrder(result))
+        }
+    }
+
+    private fun committedOrder(result: String): CounterOrder? {
+        val number = Regex("order #(\\d+)").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+        return model.allOrders().firstOrNull { it.number == number && it.salePosted }
+    }
+
+    private fun showRecordedReceipt(order: CounterOrder?) {
+        receipt.removeAllViews()
+        if (order == null) {
+            receipt.addView(label("Sale recorded. Open Sales History to review its order details.", 14f))
+            receipt.visibility = View.VISIBLE
+            return
+        }
+        receipt.addView(label("Last sale · Order #${order.number}", 19f))
+        receipt.addView(label(order.lines.joinToString("\n") { "${it.quantity} × ${it.name} · ₹${money(it.amountPaise)}" }, 15f))
+        receipt.addView(label("Sale total · ₹${money(order.salePaise)}", 17f))
+        val payments = model.paymentHistory().filter { it.orderNumber == order.number }
+        payments.forEach { entry ->
+            val evidence = when {
+                entry.method == "cash" && entry.status == "staff_declared" -> "Cash recorded · staff-declared"
+                entry.method == "upi" && entry.status == "pending" -> "UPI pending · not verified"
+                entry.method == "upi" && entry.status == "staff_declared" -> "UPI receipt · staff-declared, not provider-verified"
+                entry.method == "udhar" && entry.status == "receivable" -> "Udhar receivable · not collected"
+                else -> "${entry.method.uppercase(Locale.ROOT)} · ${entry.status}"
+            }
+            receipt.addView(label("$evidence · ₹${money(entry.amountPaise)}", 14f))
+        }
+        if (order.duePaise > 0) receipt.addView(label("Outstanding · ₹${money(order.duePaise)}", 15f))
+        receipt.addView(button("Open order #${order.number}") {
+            startActivity(android.content.Intent(this, OrderDetailsActivity::class.java)
+                .putExtra(OrderDetailsActivity.EXTRA_ORDER_NUMBER, order.number))
+        })
+        receipt.visibility = View.VISIBLE
     }
 
     /** Copies a prior completed sale into the current draft only; checkout remains a separate explicit action. */

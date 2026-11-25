@@ -12,6 +12,7 @@ This applies to normal text edits and speech-recognition results, because both u
 - Focused API 37 emulator test `editingRecognizedTranscriptInvalidatesReviewedCommandUntilReproposed`: **1/1 passed**.
 - The instrumentation test creates a synthetic owner and configured product, proposes a two-item order, edits the transcript to one item, verifies the old proposal is gone and Apply creates no order, then re-proposes and verifies the one-item order is recorded.
 - `lintDebug`: **BUILD SUCCESSFUL**, 183 existing/project warnings reported by the HTML report; no lint failure. Report: `android/app/build/reports/lint-results-debug.html`.
+- The later full default API 37 instrumentation regression passed **139/139**, 0 failures/errors/skips, including this CT-07 test and the CT-06 receipt journey. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`.
 
 ## Scope limits
 

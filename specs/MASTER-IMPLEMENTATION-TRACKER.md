@@ -1,5 +1,10 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 ## Latest continuation - CT-07 reviewed-transcript safety - 25 November 2026
+## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
+
+CT-06 now presents the committed order and tender evidence after checkout and links directly to CT-09. Cash, pending UPI and Udhar are labeled according to their actual ledger status. Kotlin JVM **80/80**; focused API 37 receipt/ledger/order-detail test **1/1**; full default instrumentation **139/139**; debug/instrumentation APK tasks and `lintDebug` PASS (183 warnings). See [report](CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md). CT-06 remains partial.
+
+## Latest continuation - CT-07 reviewed-transcript safety - 25 November 2026
 
 Editing CT-07's transcript now clears the prior reviewed command and command ID, requires a fresh proposal, and preserves the existing apply/reject transaction gate. API 37 focused test `editingRecognizedTranscriptInvalidatesReviewedCommandUntilReproposed` passed **1/1**; Kotlin JVM tests passed **80/80**; debug and instrumentation APK builds passed. `lintDebug` passed with 183 warnings. This is a single UI safety fix, not completion of CT-07, continuous voice, or the Android MVP. See [test report](CT-07-REVIEWED-TRANSCRIPT-INVALIDATION-REPORT-2026-11-25.md).
 
