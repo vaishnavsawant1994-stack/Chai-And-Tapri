@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-09 pre-fulfillment price correction
+
+An owner/manager can adjust an order-line unit price only before any fulfillment or financial event. The UI requires a paise-precise decimal rupee price, reason, review, explicit confirmation, and current revision. It changes the line snapshot only; catalogue price, stock, payment and credit ledgers stay unchanged. The reason is local audit data and is excluded from the outbound projection. Kotlin JVM **86/86**; focused API 37 UI **1/1**; debug and Android-test APK builds passed; lint 0 errors / 187 warnings. Full Android and Node suites were not rerun. Evidence: [report](CT-09-ORDER-PRICE-CORRECTION-REPORT-2026-11-25.md), [focused XML](../test-evidence/2026-11-25/ct09-price-correction-focused-instrumentation.xml). Repricing after partial fulfillment remains unsupported.
+
 ## CT-09 cancel unhanded remainder
 
 The Order Details screen now allows managers/owners to cancel only the unhanded remainder of an open or partially handed-over order. It requires a bounded reason, explicit review and confirmation, and a current revision. A focused API 37 UI test passed 1/1 and verified the delivered-sale, stock, payment, and audit state; Kotlin JVM passed **84/84**, APK tasks passed, and lint reported 0 errors / 187 warnings. The full API 37 suite was not rerun after this slice; Node tests were not rerun. Evidence: [CT-09 report](CT-09-CANCEL-UNHANDED-REMAINDER-REPORT-2026-11-25.md) and [focused XML](../test-evidence/2026-11-25/ct09-cancel-remainder-focused-instrumentation.xml). The UI does not refund or restock; use the separate refund flow when appropriate.

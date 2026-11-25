@@ -27,6 +27,9 @@ class CounterModelTest {
             LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "owner", "order.cancelled #12 reason=test")
         }.exceptionOrNull() is SecurityException)
         assertTrue(runCatching {
+            LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "order.price_adjusted #12 product=tea old=100p new=125p reason=override")
+        }.exceptionOrNull() is SecurityException)
+        assertTrue(runCatching {
             LocalBusinessMutationPolicy.requireAllowed(true, "cashier-01", StaffRole.CASHIER, "cashier-01", "expense.recorded amount=500p")
         }.exceptionOrNull() is SecurityException)
         assertTrue(runCatching {
@@ -458,6 +461,52 @@ class CounterModelTest {
         assertTrue(model.cancelOrder(12, "stale follow-up", "cancel-remainder-stale", revisionBeforeCancel).contains("revision conflict"))
         model.close()
         LocalSessionState.clear()
+    }
+
+    @Test fun managerPriceCorrectionIsReasonedRevisionCheckedAndPreFulfillmentOnly() {
+        LocalSessionState.clear()
+        val model = CounterModel()
+        assertTrue(model.apply("price-correction-create", ProposedCommand("create", null, "two cutting chai", "cutting_chai", 2)).contains("Order #12 created"))
+        val original = model.allOrders().single()
+        val originalRevision = original.revision
+        val stockBefore = model.stockLevels().toMap()
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 0, "valid reason", "price-zero", originalRevision).contains("1 to 10000000 paise"))
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1250, "no", "price-short-reason", originalRevision).contains("3–120 characters"))
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1250, "unsafe\nreason", "price-control-reason", originalRevision).contains("3–120 characters"))
+        assertEquals(originalRevision, model.allOrders().single().revision)
+
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1250, "Owner corrected menu price", "price-adjust-valid", originalRevision).contains("₹25.00"))
+        val adjusted = model.allOrders().single()
+        assertEquals(1250, adjusted.lines.single().unitPricePaise)
+        assertEquals(2500, adjusted.totalPaise)
+        assertEquals(originalRevision + 1, adjusted.revision)
+        assertEquals(stockBefore, model.stockLevels())
+        assertTrue(model.paymentHistory().isEmpty())
+        assertTrue(model.auditEvents().any { it.contains("order.price_adjusted #12") && it.contains("reason=Owner corrected menu price") })
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1300, "duplicate", "price-adjust-valid", adjusted.revision).contains("Duplicate"))
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1300, "stale revision correction", "price-adjust-stale", originalRevision).contains("revision conflict"))
+
+        assertTrue(model.apply("price-correction-ready", ProposedCommand("ready", 12, "ready", expectedRevision = adjusted.revision)).contains("ready"))
+        val ready = model.allOrders().single()
+        assertTrue(model.partialHandover(12, mapOf("cutting_chai" to 1), "price-correction-handover", ready.revision).contains("Handed over"))
+        val partiallyGiven = model.allOrders().single()
+        assertTrue(model.adjustUnhandedUnitPrice(12, "cutting_chai", 1400, "too late", "price-adjust-after-handover", partiallyGiven.revision).contains("before handover"))
+        assertEquals(partiallyGiven, model.allOrders().single())
+        model.close()
+        LocalSessionState.clear()
+    }
+
+    @Test fun priceCorrectionSyncsOrderPriceButKeepsReasonLocal() {
+        val line = CounterLine("tea", "Tea", 2, 1000)
+        val order = CounterOrderRecord(12, listOf(line), Fulfillment.TAKEN, Payment.UNPAID, 0, false, null, 1)
+        val before = CounterSnapshot(13, listOf(order), emptyMap(), setOf("create"), emptyList(), emptyList(), emptyList(), emptyList())
+        val changed = order.copy(lines = listOf(line.copy(unitPricePaise = 1250)), revision = 2)
+        val after = before.copy(orders = listOf(changed), commandIds = before.commandIds + "price-change", auditEvents = listOf("order.price_adjusted #12 reason=private correction reason"))
+
+        val payload = SyncOutboxPayloadEncoder.between(before, after)
+        assertTrue(payload.sendable)
+        assertTrue(payload.json!!.contains("\"unitPricePaise\":1250"))
+        assertFalse(payload.json.contains("private correction reason"))
     }
 
     @Test fun syncProjectionDeltaUsesAllowListedFieldsAndBlocksUnsupportedEntities() {

@@ -61,9 +61,16 @@ class OrderDetailsActivity : Activity() {
                     confirmCancelUnhandedRemainder(order.number, order.revision, order.fulfillment == Fulfillment.PARTIALLY_GIVEN)
                 })
             }
+            val priceEditable = LocalSessionState.isManager && !order.voided &&
+                order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY) &&
+                order.lines.all { it.deliveredQuantity == 0 } && order.paidPaise == 0 && order.creditPaise == 0 &&
+                order.refundedPaise == 0 && current.paymentHistory().none { it.orderNumber == order.number }
             order.lines.forEach { line ->
                 content.addView(label("${line.name} · ordered ${line.quantity} · handed over ${line.deliveredQuantity} · returned ${line.refundedQuantity}", 15f))
                 content.addView(label("Unit ${money(line.unitPricePaise)} · delivered value ${money(line.deliveredQuantity * line.unitPricePaise)}", 13f))
+                if (priceEditable) content.addView(button("Adjust price for ${line.name}") {
+                    confirmUnitPriceChange(order.number, line.productId, line.name, line.unitPricePaise, order.revision)
+                })
                 val remaining = line.quantity - line.deliveredQuantity
                 if (LocalSessionState.isManager && !order.voided && remaining > 0 && order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) {
                     content.addView(button("Correct unhanded quantity · ${line.name}") {
@@ -271,6 +278,82 @@ class OrderDetailsActivity : Activity() {
             }
         }
         dialog.show()
+    }
+
+    private fun confirmUnitPriceChange(orderNumber: Int, productId: String, productName: String, currentPricePaise: Int, expectedRevision: Int) {
+        if (!LocalSessionState.isManager) {
+            render("Manager access is required to adjust an order price. No change made.")
+            return
+        }
+        val price = EditText(this).apply {
+            hint = "New unit price in rupees"
+            contentDescription = "New unit price"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setSingleLine(true)
+            setText(String.format(Locale.ROOT, "%.2f", currentPricePaise / 100.0))
+        }
+        val reason = EditText(this).apply {
+            hint = "Reason for price correction (3-120 characters)"
+            contentDescription = "Price correction reason"
+            setSingleLine(true)
+            filters = arrayOf(android.text.InputFilter.LengthFilter(120))
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 8, 48, 0)
+            addView(label("Current ${money(currentPricePaise)} each; order #$orderNumber has not been handed over or paid", 14f))
+            addView(price)
+            addView(reason)
+        }
+        val review = AlertDialog.Builder(this)
+            .setTitle("Adjust $productName")
+            .setMessage("This changes the full unhanded order line and recalculates its total. It does not change the catalogue, stock, payments, or customer credit.")
+            .setView(form)
+            .setNegativeButton("Keep current price", null)
+            .setPositiveButton("Review price", null)
+            .create()
+        review.setOnShowListener {
+            review.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (!LocalSessionState.isManager) {
+                    review.dismiss()
+                    render("Manager access is required to adjust an order price. No change made.")
+                    return@setOnClickListener
+                }
+                val parsedPrice = runCatching {
+                    java.math.BigDecimal(price.text.toString().trim())
+                        .setScale(2, java.math.RoundingMode.UNNECESSARY)
+                        .movePointRight(2)
+                        .intValueExact()
+                }.getOrNull()
+                if (parsedPrice == null || parsedPrice !in 1..10_000_000) {
+                    price.error = "Enter a positive price with up to two decimal places"
+                    return@setOnClickListener
+                }
+                val note = reason.text.toString().trim()
+                if (note.length !in 3..120 || note.any(Char::isISOControl)) {
+                    reason.error = "Enter a short reason (3-120 characters)"
+                    return@setOnClickListener
+                }
+                review.dismiss()
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm price change")
+                    .setMessage("$productName: ${money(currentPricePaise)} to ${money(parsedPrice)} each. The full order total will be recalculated. Reason: $note")
+                    .setNegativeButton("Go back", null)
+                    .setPositiveButton("Record price change") { _, _ ->
+                        if (!LocalSessionState.isManager) {
+                            render("Manager access is required to adjust an order price. No change was made.")
+                            return@setPositiveButton
+                        }
+                        val result = model?.adjustUnhandedUnitPrice(
+                            orderNumber, productId, parsedPrice, note,
+                            "order-price-${java.util.UUID.randomUUID()}", expectedRevision
+                        ) ?: "Order details are unavailable. No change was made."
+                        render(result)
+                    }
+                    .show()
+            }
+        }
+        review.show()
     }
 
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }

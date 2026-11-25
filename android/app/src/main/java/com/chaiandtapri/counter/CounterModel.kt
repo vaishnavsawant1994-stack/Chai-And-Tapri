@@ -848,6 +848,45 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         return commitMutation(before, commandId, "Order #$number cancelled with correction reason.", "order.cancelled #$number reason=$correctionReason", order)
     }
 
+    /** Manager correction of a price before any fulfillment or financial event has been recorded. */
+    fun adjustUnhandedUnitPrice(
+        number: Int,
+        productId: String,
+        newUnitPricePaise: Int,
+        reason: String,
+        commandId: String,
+        expectedRevision: Int? = null
+    ): String {
+        if (commandId.isBlank()) return "Command ID is required. No change made."
+        if (commandId in appliedCommandIds) return "Duplicate command ignored."
+        if (newUnitPricePaise !in 1..10_000_000) return "Enter a unit price from 1 to 10000000 paise. No change made."
+        val correctionReason = reason.trim()
+        if (correctionReason.length !in 3..120 || correctionReason.any(Char::isISOControl)) return "A correction reason of 3–120 characters is required. No change made."
+        val order = orders[number] ?: return "Order not found. No change made."
+        if (expectedRevision != null && expectedRevision != order.revision) return "Order revision conflict. Refresh and review the order before retrying."
+        if (order.voided || order.fulfillment !in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY)) return "Price changes require an open order before handover. No change made."
+        if (order.lines.any { it.deliveredQuantity > 0 } || order.salePosted || order.paidPaise != 0 || order.creditPaise != 0 || order.refundedPaise != 0 || paymentEntries.any { it.orderNumber == number }) {
+            return "Price changes are unavailable after fulfillment or financial activity. No change made."
+        }
+        val index = order.lines.indexOfFirst { it.productId == productId }
+        if (index < 0) return "Product is not in this order. No change made."
+        val oldLine = order.lines[index]
+        if (oldLine.unitPricePaise == newUnitPricePaise) return "The price is unchanged. No change made."
+        val updatedTotal = order.lines.sumOf { line ->
+            (if (line.productId == productId) newUnitPricePaise else line.unitPricePaise).toLong() * line.quantity
+        }
+        if (updatedTotal !in 1..Int.MAX_VALUE.toLong()) return "Updated order total exceeds the supported amount. No change made."
+        val before = snapshot()
+        order.lines[index] = oldLine.copy(unitPricePaise = newUnitPricePaise)
+        return commitMutation(
+            before,
+            commandId,
+            "Unit price updated for ${oldLine.name}; new order total ${money(updatedTotal.toInt())}.",
+            "order.price_adjusted #$number product=$productId old=${oldLine.unitPricePaise}p new=${newUnitPricePaise}p reason=$correctionReason",
+            order
+        )
+    }
+
     /** Refunds delivered line quantities only. Returnability is shop policy; omitted products are never restocked. */
     fun refundItems(number: Int, items: Map<String,Int>, reason: String, stockDispositionByProduct: Map<String,String>, cashRefundConfirmed: Boolean, commandId: String, expectedRevision: Int? = null): String {
         if (commandId.isBlank()) return "Command ID is required."

@@ -4638,6 +4638,103 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun ownerCanAdjustUnhandedOrderPriceWithReasonWithoutChangingCatalogueStockOrPayments() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic price owner")
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("price_chai", "Price Chai", "Chai", 1000, true, true, true)).contains("Product saved"))
+        assertTrue(model.confirmOpeningStock("price_chai", 5, "synthetic price correction", "price-detail-stock").contains("5 units"))
+        assertTrue(model.apply("price-detail-create", ProposedCommand("create", null, "two chai", "price_chai", 2)).contains("Order #12 created"))
+        val originalRevision = model.allOrders().single().revision
+        val stockBefore = model.stockLevels().toMap()
+        model.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, OrderDetailsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(OrderDetailsActivity.EXTRA_ORDER_NUMBER, 12))
+        try {
+            var adjustmentButton: Button? = null
+            instrumentation.runOnMainSync {
+                fun visit(view: View) {
+                    if (view is Button && view.text.toString() == "Adjust price for Price Chai") adjustmentButton = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+                }
+                visit(activity.findViewById(android.R.id.content))
+                assertNotNull("Owner should see the pre-fulfillment price action", adjustmentButton)
+                adjustmentButton!!.performClick()
+            }
+
+            val ui = instrumentation.uiAutomation
+            var reviewClicked = false
+            var priceEntered = false
+            var reasonEntered = false
+            repeat(100) {
+                if (!reviewClicked) {
+                    val root = ui.rootInActiveWindow
+                    if (root != null) {
+                        fun setField(node: AccessibilityNodeInfo, description: String, value: String): Boolean {
+                            if (node.className == EditText::class.java.name && node.contentDescription == description) {
+                                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
+                                val changed = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                                if (description == "New unit price") priceEntered = changed else reasonEntered = changed
+                                return changed
+                            }
+                            for (index in 0 until node.childCount) node.getChild(index)?.let { if (setField(it, description, value)) return true }
+                            return false
+                        }
+                        if (!priceEntered) setField(root, "New unit price", "12.50")
+                        if (!reasonEntered) setField(root, "Price correction reason", "Owner approved exception")
+                        fun click(node: AccessibilityNodeInfo): Boolean {
+                            if (node.text?.toString().equals("Review price", ignoreCase = true)) return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            for (index in 0 until node.childCount) node.getChild(index)?.let { if (click(it)) return true }
+                            return false
+                        }
+                        reviewClicked = click(root)
+                    }
+                    if (!reviewClicked) Thread.sleep(100)
+                }
+            }
+            assertTrue("Review price action should be visible after both entries are set", priceEntered && reasonEntered && reviewClicked)
+            instrumentation.waitForIdleSync()
+            Thread.sleep(300)
+            var confirmClicked = false
+            repeat(100) {
+                if (!confirmClicked) {
+                    val root = ui.rootInActiveWindow
+                    fun click(node: AccessibilityNodeInfo): Boolean {
+                        if (node.text?.toString().equals("Record price change", ignoreCase = true)) return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        for (index in 0 until node.childCount) node.getChild(index)?.let { if (click(it)) return true }
+                        return false
+                    }
+                    if (root != null) confirmClicked = click(root)
+                    if (!confirmClicked) Thread.sleep(100)
+                }
+            }
+            assertTrue("Explicit final price-change confirmation should be visible", confirmClicked)
+            instrumentation.waitForIdleSync()
+            Thread.sleep(300)
+
+            SqliteCounterPersistence(context).use { db ->
+                val snapshot = db.load() ?: error("Price-corrected snapshot missing")
+                val order = snapshot.orders.single { it.number == 12 }
+                val line = order.lines.single { it.productId == "price_chai" }
+                assertEquals(originalRevision + 1, order.revision)
+                assertEquals(1250, line.unitPricePaise)
+                assertEquals(2500, line.amountPaise)
+                assertEquals(1000, db.loadProducts().single { it.productId == "price_chai" }.unitPricePaise)
+                assertEquals(stockBefore, snapshot.stock)
+                assertTrue(snapshot.paymentEntries.none { it.orderNumber == 12 })
+                assertTrue(db.loadAuditRecords().any { it.event.contains("order.price_adjusted #12") && it.event.contains("reason=Owner approved exception") && it.actorId == "local-owner" })
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun cashierCanAddConfiguredItemFromOpenOrderDetailsWithoutPostingSaleOrStock() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

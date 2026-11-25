@@ -67,6 +67,7 @@ internal object LocalBusinessMutationPolicy {
         if (event.startsWith("staff_shift.ended") && event.contains("staff_actor_id=$actorId")) return false
         return event.startsWith("remove #") ||
             event.startsWith("order.cancelled") ||
+            event.startsWith("order.price_adjusted") ||
             event.startsWith("sale.refund") ||
             event.startsWith("purchase.") ||
             event.startsWith("purchase_order.") ||
