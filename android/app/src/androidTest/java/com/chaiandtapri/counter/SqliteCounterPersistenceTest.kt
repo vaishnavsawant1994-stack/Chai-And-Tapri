@@ -3963,6 +3963,59 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun stockCountHistoryExportsThroughSystemPickerWithoutChangingLedger() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("export_count_tea", "Export Count Tea", "Tea", 1000, true, false, true)).startsWith("Product saved"))
+            assertTrue(model.confirmPhysicalStockCounts(mapOf("export_count_tea" to 4), "initial export count", "export-count-physical").startsWith("Physical count saved"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Count export fixture missing") }
+        val activity = instrumentation.startActivitySync(Intent(context, StockCountHistoryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun find(prefix: String, editText: Boolean = false): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if (node.text?.toString()?.startsWith(prefix, true) == true &&
+                        (!editText || node.className?.toString()?.endsWith("EditText") == true)) return node
+                    for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
+                    return null
+                }
+                return visit(root)
+            }
+            fun await(prefix: String, editText: Boolean = false): AccessibilityNodeInfo {
+                repeat(100) { find(prefix, editText)?.let { return it }; Thread.sleep(100) }
+                throw AssertionError("Stock count export UI not found: $prefix")
+            }
+            assertTrue(await("Export stock count history as CSV").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            var picker = ""
+            val deadline = System.currentTimeMillis() + 30_000
+            while (System.currentTimeMillis() < deadline) {
+                picker = instrumentation.uiAutomation.rootInActiveWindow?.let { root ->
+                    val values = mutableListOf<String>()
+                    fun collect(node: AccessibilityNodeInfo?) { if (node == null) return; node.text?.toString()?.let(values::add); for (i in 0 until node.childCount) collect(node.getChild(i)) }
+                    collect(root); values.joinToString(" | ")
+                }.orEmpty()
+                if (picker.contains("Downloads", true) && picker.contains("Save", true)) break
+                Thread.sleep(100)
+            }
+            assertTrue("System Save picker should be visible: $picker", picker.contains("Save", true))
+            val filename = "ct16-count-export-${System.currentTimeMillis()}.csv"
+            assertTrue(await("chai-tapri-stock-count-history.csv", editText = true).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
+                Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, filename) }))
+            assertTrue(await("Save").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val status = await("Stock count history CSV exported")
+            assertTrue(status.text.toString().contains("device clock"))
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Export removed local ledger") }
+            assertEquals("Export must not mutate the count history or stock", before, after)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun customerDirectoryOpensDetailsWithPersistedCreditAndRepaymentHistory() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

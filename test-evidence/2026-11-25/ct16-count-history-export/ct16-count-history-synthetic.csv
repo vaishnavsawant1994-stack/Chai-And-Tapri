@@ -1,0 +1,2 @@
+command_id,recorded_at_epoch_ms,device_time_zone,product_id,product_name,counted_quantity,quantity_status,reason,local_actor_recorded,evidence
+"export-count-physical","1795582438700","Asia/Calcutta","export_count_tea","Export Count Tea","4","recorded physical count","initial export count","true","Device-local audit record; timestamp uses device clock; actor identity is not independently verified"

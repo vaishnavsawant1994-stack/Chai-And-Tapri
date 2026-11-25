@@ -50,3 +50,7 @@ Implemented and emulator-tested a date-scoped activity section using the existin
 ## CT-15 owner-configured low-stock thresholds
 
 Inventory Overview now shows active products at or below owner-configured thresholds only when physical stock is confirmed. Unknown stock is omitted with a disclosure; the alert is not a purchase recommendation. Focused API 37 instrumentation passed 1/1, including an unchanged persisted snapshot assertion. Kotlin JVM 86/86; debug and instrumentation APK tasks passed; lint 0 errors / 187 warnings. Node and full connected instrumentation were not rerun. See [CT-15 report](CT-15-LOW-STOCK-THRESHOLD-REPORT-2026-11-25.md) and [focused XML](../test-evidence/2026-11-25/ct15-inventory-low-stock-focused-instrumentation.xml). CT-15 remains partial; hardware, security review and production gates remain open.
+
+## CT-16 stock count history CSV export
+
+Added a local audit-history CSV export using Android's SAF picker. It preserves unavailable legacy quantities as unknown, uses explicit device-clock/actor caveats, safely quotes formula-leading text, and does not mutate inventory. The focused API 37 save-picker test passed 1/1; Kotlin JVM 88/88; debug/test APK builds passed; lint 0 errors / 189 warnings. Node and full Android instrumentation were not rerun. The real saved synthetic file is inspected at [CSV evidence](../test-evidence/2026-11-25/ct16-count-history-export/ct16-count-history-synthetic.csv); full scope and limitations are in the [CT-16 report](CT-16-STOCK-COUNT-HISTORY-CSV-REPORT-2026-11-25.md).
