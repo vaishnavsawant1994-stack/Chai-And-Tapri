@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-09 correction reason capture
+
+Order Details correction of an unhanded quantity now requires a manager/owner-entered reason, validated before mutation and retained in the audited event/outbox. CT-07 reviewed voice removal requests the same reason and rechecks the proposal identity before commit. Kotlin JVM **83/83**; API 37 connected instrumentation **140/140** (0 failures/errors/skips); debug and Android-test APK builds passed; `lintDebug` passed with 0 errors / 187 warnings. Node was not rerun for this Android-only slice. Evidence: [CT-09 report](CT-09-CORRECTION-REASON-REPORT-2026-11-25.md), [full instrumentation XML](../test-evidence/2026-11-25/ct09-correction-reason-full-instrumentation.xml). CT-09 remains partial; hardware, field, independent security, cross-device recovery, deployment and production gates remain open.
+
 ## CT-08 multi-line fulfillment
 
 Live Orders can hand over quantities from several product lines in one validated transaction. Focused API 37 multi-line and single-line UI cases passed 1/1 each; Kotlin JVM 82/82; APK and lint tasks passed; lint reports 186 warnings. Full suite: 139/140, with one Order Details launch timeout that passed focused retest; the broad suite is not green/qualified. See [CT-08 report](CT-08-MULTI-LINE-PARTIAL-HANDOVER-REPORT-2026-11-25.md).

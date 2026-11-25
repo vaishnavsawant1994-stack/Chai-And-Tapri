@@ -1,0 +1,193 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="140" failures="0" errors="0" skipped="0" time="0.000" timestamp="2026-11-25T03:34:33" hostname="localhost">
+  <testsuite name="com.chaiandtapri.counter.HttpsSyncTransportIntegrationTest" tests="1" failures="0" errors="0" skipped="0" time="0.553" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="accountAndSyncRunnerUsePlatformTlsAndAcknowledgeOnlyAcceptedEvent" classname="com.chaiandtapri.counter.HttpsSyncTransportIntegrationTest" time="0.553" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.InstrumentationConfigurationTest" tests="1" failures="0" errors="0" skipped="0" time="0.012" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="runnerArgumentsMatchLiveSyncOptInMode" classname="com.chaiandtapri.counter.InstrumentationConfigurationTest" time="0.012" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SalesHistoryExportUiTest" tests="1" failures="0" errors="0" skipped="0" time="23.453" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="filteredHistoryOpensSafExportAndLeavesLedgerUnchanged" classname="com.chaiandtapri.counter.SalesHistoryExportUiTest" time="23.453" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SqliteCounterPersistenceTest" tests="109" failures="0" errors="0" skipped="0" time="1762.815" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="dailyReportRendersSelectedLocalDateLedgerTotalsAndDisclaimsProfit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.756" />
+    <testcase name="localOwnerEnrollmentWrongSecretsLockoutAndUnlockArePersisted" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="43.459" />
+    <testcase name="schemaV20PurchaseOrderMigrationPreservesReceiptsAndSupportsPartialDelivery" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.621" />
+    <testcase name="devicePermissionsScreenDisclosesOptionalAccessAndTypedFallback" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="6.857" />
+    <testcase name="syncAcknowledgementAndConflictAreDurableAndCursorNeverSkipsConflict" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.973" />
+    <testcase name="configuredSalesRequireAuditedPhysicalOpeningCountAndPersistIt" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.360" />
+    <testcase name="customerDetailsAddProfileUiCreatesOptionalContactWithoutChangingCredit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="12.378" />
+    <testcase name="ownerBackupMenuCreatesEncryptedSyntheticBackupThroughSafUi" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="98.347" />
+    <testcase name="expenseRecordIsAuditedAndPersistsAcrossEncryptedDatabaseReopenAndScreenLaunch" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="8.387" />
+    <testcase name="authenticatedBackupCanRecoverSameShopAfterDeviceKeyLossWithoutDiscardingCiphertext" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="26.986" />
+    <testcase name="paymentScreenShowsPendingUpiAsUnverifiedAndOffersStaffDeclaredFollowUp" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="7.962" />
+    <testcase name="schemaV26ToV27AddsScannerCodeWithoutChangingOrdersOrStock" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="3.719" />
+    <testcase name="cloudSyncScreenIsOwnerGatedAndExplainsHttpsOutboxLimits" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.275" />
+    <testcase name="cashierCanAddConfiguredItemFromOpenOrderDetailsWithoutPostingSaleOrStock" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="22.803" />
+    <testcase name="schemaV29AddsShiftActorIdWithoutChangingExistingShiftRecords" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="1.433" />
+    <testcase name="procurementPurchaseOrderDraftAndTwoPartialReceiptsUseTheNativeScreen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="79.600" />
+    <testcase name="dailyReportDatePickerSelectsPreviousLocalDayWithoutChangingLedger" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="16.049" />
+    <testcase name="catalogueEditorPersistsLowStockThresholdAndAlertReadsIt" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="17.680" />
+    <testcase name="paymentScreenRecordsCashPlusUpiPendingAndResolvesItWithoutFalseVerification" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="33.130" />
+    <testcase name="quickSaleAtomicallyPostsStockAndDeclaredTenderThenRejectsDuplicate" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.570" />
+    <testcase name="schemaV16ToV18AddsCustomerProfilesAndOutboxPayloadsWithoutChangingFinancialRecords" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.825" />
+    <testcase name="dailyReportExportCancellationLeavesLedgerUnchanged" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="17.291" />
+    <testcase name="cashierCanSignInThroughAccessScreenAndSeesCounterOnlyMenu" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="58.797" />
+    <testcase name="quickSaleUiRecordsCashAndUpiPendingAsDifferentPaymentStates" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="27.663" />
+    <testcase name="schemaV22SupplierContactMigrationPreservesLedgerAndPersistsOptionalPhone" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.387" />
+    <testcase name="partialBackupExportFailurePreservesShopDataCleansSnapshotAndReleasesWrites" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="3.500" />
+    <testcase name="dailyClosingReviewShowsSessionTotalsAndKeepsCurrentExceptionsSeparate" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="25.534" />
+    <testcase name="schemaV18ToV19AddsOptionalReorderThresholdWithoutChangingStockOrOrders" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.029" />
+    <testcase name="businessAuditRecordsPersistAuthenticatedActorAcrossEncryptedReopen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.387" />
+    <testcase name="cataloguePriceMustBeConfirmedAndIsTheSalePriceAfterRestart" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.312" />
+    <testcase name="customerProfileUpdateRevokesContactAndAuditsWithoutChangingCredit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.224" />
+    <testcase name="liveOrdersPartialHandoverCanSelectMultipleLinesAtomically" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="13.290" />
+    <testcase name="supplierDirectorySearchOpensIsolatedSupplierLedgerDetails" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="18.260" />
+    <testcase name="cameraScannerResultUsesQuickSaleCatalogueValidationWithoutPostingSale" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="8.502" />
+    <testcase name="repeatLastSaleStagesCurrentCatalogueDraftWithoutPostingSecondSale" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="13.706" />
+    <testcase name="liveOrdersUdharSelectsSavedCustomerAndSettlesOrderDue" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="20.449" />
+    <testcase name="dismissingRecoverySecretDialogReleasesBusyStateAndClearsFields" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="11.909" />
+    <testcase name="shopHomeShowsMissingFirstSaleSetupAndRoutesToStockCount" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="15.013" />
+    <testcase name="localStaffPinAuthenticationRoleAndDisablePersist" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="62.891" />
+    <testcase name="supplierReturnStockPayableAndAuditSurviveEncryptedDatabaseReopen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.717" />
+    <testcase name="voiceSettingsPersistsLanguageAndAliasesWithoutExecutingBusinessCommands" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="13.402" />
+    <testcase name="denominationCashCountClosesDrawerWithoutChangingSalesOrStock" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="31.719" />
+    <testcase name="ownerAccessScreenAuthenticatesAndOpensProtectedCounter" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="48.113" />
+    <testcase name="newDatabaseIsCiphertextAndMissingDeviceKeyFailsClosed" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.836" />
+    <testcase name="editingRecognizedTranscriptInvalidatesReviewedCommandUntilReproposed" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="25.949" />
+    <testcase name="managerCustomerDetailsHidesOwnerOnlyProfileEditor" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.782" />
+    <testcase name="managerCanCorrectUnhandedLineFromOrderDetailsWithoutChangingPaymentsOrStock" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="20.078" />
+    <testcase name="quickSaleUdharSelectsSavedCustomerInsteadOfTypingAnAccountId" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="34.702" />
+    <testcase name="businessAlertRoutesOpenOrdersPaymentsAndCreditWithoutChangingLedger" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="84.321" />
+    <testcase name="schemaV8ToV16CreatesOwnerCredentialTableAndOrderDatesAndPreservesExistingOrders" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="3.163" />
+    <testcase name="paymentScreenConfirmsAndAtomicallyRecordsCashUdharSplit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="26.869" />
+    <testcase name="orderDetailsScreenReadsPersistedFinancialStockAndAuditRecords" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="7.665" />
+    <testcase name="inventoryRouteSavesMultiProductPhysicalCountAsOnePersistentSession" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="28.898" />
+    <testcase name="procurementPaymentDialogRecordsUpiAsStaffDeclaredWithoutChangingCashDrawer" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="20.903" />
+    <testcase name="paymentScreenConfirmsDirectUpiAsStaffDeclaredWithoutPendingOrVerifiedState" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="21.251" />
+    <testcase name="failedSQLiteCommitRollsBackProjectionReceiptAndOutbox" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.550" />
+    <testcase name="cameraScannerResultReturnsOnlyProductCodeForExistingQuickSaleValidation" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.030" />
+    <testcase name="maintenanceBarrierRejectsAndRollsBackBusinessWritesThenReleases" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.416" />
+    <testcase name="customerDirectoryAddProfileDialogSavesContactOnlyAfterConsent" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="20.823" />
+    <testcase name="scannerCodeInputSelectsExactProductWithoutPostingSale" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.911" />
+    <testcase name="dailyReportExportsNonzeroSyntheticLedgerThroughSafSaveDialog" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="21.465" />
+    <testcase name="syncEnvelopeMapperCreatesBackendCompatibleRequestWithRevision" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.654" />
+    <testcase name="shopProfileSettingsEditPersistsOwnerChangesWithoutFinancialSideEffects" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.150" />
+    <testcase name="liveOrdersSearchAndStatusFilterOnlyChangeVisibleCards" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="20.380" />
+    <testcase name="restoreStartupRollsBackReplacementAfterCrashBeforeCommitMarker" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="5.181" />
+    <testcase name="estimatedCostSnapshotSurvivesCatalogueEditsRestartAndV25Migration" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.405" />
+    <testcase name="partialItemRefundCreditReversalAndLedgerSurviveRestart" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.459" />
+    <testcase name="schemaV21AddsSupplierInvoiceReferenceWithoutChangingExistingReceiptFinancials" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.583" />
+    <testcase name="paymentScreenConfirmsAndRecordsPartialStaffDeclaredUpiReceipt" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="16.250" />
+    <testcase name="salesHistoryRefundsSplitTenderReceivableBeforeCashWithoutRestocking" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="42.560" />
+    <testcase name="portableEncryptedBackupRestoresFinancialSnapshotAndRejectsBadOrRepeatedImport" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="50.525" />
+    <testcase name="customerProfileCreationStoresConsentedContactAndKeepsPiiOutOfAudit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.419" />
+    <testcase name="liveOrdersCanRecordAValidatedPartialItemHandoverFromTheScreen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="16.822" />
+    <testcase name="customerCreditScreenShowsPersistedBalanceAndRepaymentEvents" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="17.253" />
+    <testcase name="customerDirectorySearchFiltersAccountIdsAndNamesCaseInsensitively" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="8.833" />
+    <testcase name="verifiedBackupRestoresSyntheticFinancialHistoryIntoSeparateStoreWithNewLocalKey" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="18.975" />
+    <testcase name="customerDirectoryOpensDetailsWithPersistedCreditAndRepaymentHistory" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="14.475" />
+    <testcase name="authenticatedBackupFromAnotherShopCannotReplaceExistingBusinessData" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.987" />
+    <testcase name="authenticatedStaffShiftCanStartAndEndThroughNativeUi" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="21.323" />
+    <testcase name="corruptLegacyDatabaseIsPreservedAndNeverReplacedWithAnEmptyStore" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="1.700" />
+    <testcase name="customerDetailsEditRevokesConsentThroughUiWithoutChangingCreditOrStock" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="11.329" />
+    <testcase name="ownerCanCreateAndDisableStaffFromManagementScreen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="24.621" />
+    <testcase name="schemaV24ToV25AddsActorColumnAndPreservesHistoricalAudit" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.737" />
+    <testcase name="staffShiftCashHandoverAndSessionSummaryPersistAcrossEncryptedReopenAndRender" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="6.556" />
+    <testcase name="restoreStartupRecoversAfterCrashHarnessProcessDiesAtDurableCutoverCheckpoint" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="5.884" />
+    <testcase name="businessAlertsUseLocalRecordsAndDiscloseUnavailableAlertClasses" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="6.299" />
+    <testcase name="orderStockAuditAndIdempotencySurviveStoreRecreationAndV1Migration" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="5.016" />
+    <testcase name="quickSaleSplitTenderFlowsThroughCustomerRepaymentAndReconcilesBalance" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="44.285" />
+    <testcase name="cashDrawerSessionAndReconciliationPersistAndRenderOnScreen" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="7.589" />
+    <testcase name="firstOwnerEnrollmentRoutesToShopSetup" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="19.385" />
+    <testcase name="purchaseReceivingScreenShowsPersistedStockAndSupplierPayable" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.346" />
+    <testcase name="mlKitCameraDecoderReadsSyntheticProductQrImage" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="4.477" />
+    <testcase name="catalogueUiCreatesConfirmedProductAndQuickSalePostsItsConfiguredPrice" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="45.593" />
+    <testcase name="shopSetupIsSavedInEncryptedMetadataAndRespectsRecoveryWriteBarrier" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="1.607" />
+    <testcase name="recoveryActivityCompletesBackupVerificationCallbackForSafContentUri" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="26.098" />
+    <testcase name="newShopSetupSavesProfileAndContinuesToProductCatalogue" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="16.346" />
+    <testcase name="inventoryMovementHistoryIsSearchableAndReadOnly" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="14.007" />
+    <testcase name="cleanInstallRecoveryRestoresSyntheticBackupThroughSafUiWhenExplicitlyRequested" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="1.291" />
+    <testcase name="lowStockAlertReviewOpensInventoryWithoutChangingLedger" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="11.588" />
+    <testcase name="salesHistorySearchFiltersPersistedOrdersAndPaymentStatesWithoutMutation" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="9.873" />
+    <testcase name="restoreJournalFinalizesVerifiedReplacementAfterCommitMarker" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="3.119" />
+    <testcase name="restoreJournalRollsBackActivatedDatabaseWhenProcessStopsBeforeCommitMarker" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="0.560" />
+    <testcase name="refundCorrectionScreenShowsAuditedItemAndAmountPathsForEligibleOrder" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="6.342" />
+    <testcase name="staffDeclaredUpiReceiptPersistsAttemptCancellationAndCannotDuplicateAfterRestart" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.376" />
+    <testcase name="paymentScreenHistoryShowsCashAndCreditEvidenceWithoutClaimingVerification" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="10.504" />
+    <testcase name="restoreJournalRecoversOriginalDatabaseAfterProcessStopsBeforeReplacement" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="1.332" />
+    <testcase name="quickSaleSearchAndCategoryFiltersUseConfiguredProductAliases" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="14.144" />
+    <testcase name="schemaV27AddsOpaqueProcurementSyncIdsWithoutChangingLocalRecords" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="2.195" />
+    <testcase name="ownerCanCompleteGuidedSetupAndRecordFirstSaleFromShopHome" classname="com.chaiandtapri.counter.SqliteCounterPersistenceTest" time="53.505" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SqliteOutboxRetryTest" tests="1" failures="0" errors="0" skipped="0" time="1.609" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="lostSaleAcknowledgmentSurvivesSqlCipherReopenAndRetriesIdempotently" classname="com.chaiandtapri.counter.SqliteOutboxRetryTest" time="1.609" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SyncAccountClientTest" tests="8" failures="0" errors="0" skipped="0" time="0.044" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="loginRejectsUnknownOrMissingServerRole" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.044" />
+    <testcase name="failedAuthenticationErrorContainsSafeCodeButNoResponseDetails" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="loginRequiresSameRegisteredShopAndUsesKnownDeviceIdentity" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="registrationUsesHttpsContractAndReturnsServerIssuedIdentity" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="staffInvitationUsesExactContractAndReturnsServerIssuedStaffIdentity" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="staffInvitationRejectsOwnerRoleAndMalformedSecretBeforeSavingAnything" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="insecureEndpointAndWeakRegistrationAreRejectedBeforeTransport" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+    <testcase name="logoutRequiresServerRevocationConfirmation" classname="com.chaiandtapri.counter.SyncAccountClientTest" time="0.000" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SyncBackgroundWorkTest" tests="5" failures="0" errors="0" skipped="0" time="1.509" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="workerRejectsCloudStaffSessionBoundAsLocalOwnerBeforeNetworkAccess" classname="com.chaiandtapri.counter.SyncBackgroundWorkTest" time="0.413" />
+    <testcase name="schedulerUsesConnectedNetworkAndUniqueDurableRequests" classname="com.chaiandtapri.counter.SyncBackgroundWorkTest" time="0.896" />
+    <testcase name="workerRequiresSessionForTheAttributedOutboxOperator" classname="com.chaiandtapri.counter.SyncBackgroundWorkTest" time="0.200" />
+    <testcase name="workerIsIdleWithoutPendingBusinessEvents" classname="com.chaiandtapri.counter.SyncBackgroundWorkTest" time="0.000" />
+    <testcase name="businessMaintenanceCausesRetryWithoutOpeningSyncSession" classname="com.chaiandtapri.counter.SyncBackgroundWorkTest" time="0.000" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SyncOutboxActorAttributionTest" tests="1" failures="0" errors="0" skipped="0" time="0.212" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="pendingOutboxEventsCarryTheLocalActorFromTheirAuditRecord" classname="com.chaiandtapri.counter.SyncOutboxActorAttributionTest" time="0.212" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SyncRunnerTest" tests="4" failures="0" errors="0" skipped="0" time="0.070" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="mismatchedResponseEventCannotBeAcknowledgedAndHttpIsRejected" classname="com.chaiandtapri.counter.SyncRunnerTest" time="0.017" />
+    <testcase name="conflictIsPersistedAndStopsTheQueue" classname="com.chaiandtapri.counter.SyncRunnerTest" time="0.014" />
+    <testcase name="failedHttpResponseLeavesBusinessOutboxPending" classname="com.chaiandtapri.counter.SyncRunnerTest" time="0.039" />
+    <testcase name="acceptedEventsArePushedInOrderAndAcknowledgedOnlyAfterResponse" classname="com.chaiandtapri.counter.SyncRunnerTest" time="0.000" />
+  </testsuite>
+  <testsuite name="com.chaiandtapri.counter.SyncSessionVaultTest" tests="9" failures="0" errors="0" skipped="0" time="1.484" timestamp="2026-11-25T03:34:33" hostname="localhost">
+    <properties>
+      <property name="device" value="emulator-5554" />
+    </properties>
+    <testcase name="encryptedSessionSurvivesVaultRecreationAndExplicitClear" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.765" />
+    <testcase name="serverAccountIdentityAndMembershipRoleSurviveEncryptedVaultReopen" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.000" />
+    <testcase name="malformedLocalOperatorBindingIsRejected" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.033" />
+    <testcase name="localOperatorBindingSurvivesEncryptedVaultReopen" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.159" />
+    <testcase name="incompleteServerAccountIdentityIsRejectedBeforePersistence" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.052" />
+    <testcase name="invalidEndpointOrIdentityIsRejectedBeforePersistence" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.013" />
+    <testcase name="namespacedVaultIsIsolatedFromTheDefaultOwnerSession" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.293" />
+    <testcase name="missingKeystoreKeyFailsClosedAndPreservesEncryptedEnvelope" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.158" />
+    <testcase name="staffSessionBindingAndUploadRequireMatchingLocalAndServerRoles" classname="com.chaiandtapri.counter.SyncSessionVaultTest" time="0.011" />
+  </testsuite>
+</testsuites>

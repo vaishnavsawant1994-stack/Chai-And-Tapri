@@ -293,7 +293,7 @@ class SqliteCounterPersistenceTest {
             assertTrue(model.saveShopProfile(ShopProfile("Unauthorized Edit", "tea_snacks", "hi-IN", "INR")).contains("SecurityException"))
             assertTrue(model.saveCustomerProfile(CustomerProfile("blocked-customer", "Private Customer", "+919900001111", true)).contains("SecurityException"))
             assertTrue(model.updateCustomerProfile(CustomerProfile("audit-customer", "Changed Customer" )).contains("SecurityException"))
-            assertTrue(model.apply("cashier-order-line-correction", ProposedCommand("remove", 12, "cashier correction", "chai", 1)).contains("SecurityException"))
+            assertTrue(model.apply("cashier-order-line-correction", ProposedCommand("remove", 12, "cashier correction", "chai", 1, auditReason = "Correction requested")).contains("SecurityException"))
             assertTrue(model.cancelOrder(12, "cashier attempted cancellation", "cashier-order-cancel").contains("SecurityException"))
             assertTrue(model.recordExpense("rent", 500, "cash", "cashier attempted expense", "cashier-expense").contains("SecurityException"))
             assertEquals(2, model.allOrders().single { it.number == 12 }.lines.single().quantity)
@@ -306,7 +306,7 @@ class SqliteCounterPersistenceTest {
             assertFalse(model.allOrders().single { it.number == 13 }.voided)
             LocalSessionState.establishStaff("audit-manager", "Synthetic Manager", StaffRole.MANAGER)
             assertTrue(model.saveCustomerProfile(CustomerProfile("manager-customer", "Manager Customer")).contains("Customer profile saved"))
-            assertTrue(model.apply("manager-order-line-correction", ProposedCommand("remove", 12, "manager correction", "chai", 1, expectedRevision = model.allOrders().single { it.number == 12 }.revision)).contains("Item removed"))
+            assertTrue(model.apply("manager-order-line-correction", ProposedCommand("remove", 12, "manager correction", "chai", 1, expectedRevision = model.allOrders().single { it.number == 12 }.revision, auditReason = "Duplicate item entered")).contains("Item removed"))
             LocalSessionState.establish("Synthetic owner")
             val record = model.auditRecords().single { it.commandId == "actor-attributed-sale" }
             assertEquals("audit-cashier", record.actorId)
@@ -1313,6 +1313,7 @@ class SqliteCounterPersistenceTest {
         val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
         val transcriptField = MainActivity::class.java.getDeclaredField("transcript").apply { isAccessible = true }
         val pendingField = MainActivity::class.java.getDeclaredField("pending").apply { isAccessible = true }
+        val pendingIdField = MainActivity::class.java.getDeclaredField("pendingId").apply { isAccessible = true }
         val modelField = MainActivity::class.java.getDeclaredField("model").apply { isAccessible = true }
         val propose = MainActivity::class.java.getDeclaredMethod("propose").apply { isAccessible = true }
         val apply = MainActivity::class.java.getDeclaredMethod("applyPending").apply { isAccessible = true }
@@ -1338,7 +1339,43 @@ class SqliteCounterPersistenceTest {
                 apply.invoke(activity)
                 val created = (modelField.get(activity) as CounterModel).allOrders().single()
                 assertEquals(1, created.lines.single().quantity)
+                val activeModel = modelField.get(activity) as CounterModel
+                assertTrue(activeModel.apply("voice-reason-order", ProposedCommand("create", null, "synthetic correction test", "cutting_chai", 2)).contains("Order #13 created"))
+                transcript.setText("Order 13 remove one cutting chai")
+                propose.invoke(activity)
+                val removal = pendingField.get(activity) as? ProposedCommand
+                assertEquals("remove", removal?.type)
+                assertEquals(13, removal?.orderNumber)
+                pendingIdField.set(activity, "voice-reason-remove")
+                apply.invoke(activity)
             }
+            val ui = instrumentation.uiAutomation
+            var reasonSet = false
+            var continueClicked = false
+            var visible = ""
+            repeat(100) {
+                if (!continueClicked) {
+                    val root = ui.rootInActiveWindow
+                    fun visit(node: AccessibilityNodeInfo) {
+                        val text = node.text?.toString().orEmpty()
+                        if (text.isNotBlank()) visible += "$text | "
+                        if (!reasonSet && node.className == EditText::class.java.name && node.contentDescription == "Correction reason") {
+                            val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Customer changed mind") }
+                            reasonSet = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                        } else if (reasonSet && text.equals("Continue", ignoreCase = true)) {
+                            continueClicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        }
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::visit)
+                    }
+                    root?.let(::visit)
+                    if (!continueClicked) Thread.sleep(100)
+                }
+            }
+            assertTrue("Correction prompt must expose an explicit reason and continue action: $visible", reasonSet && continueClicked)
+            instrumentation.waitForIdleSync()
+            val afterCorrection = (modelField.get(activity) as CounterModel).allOrders().single { it.number == 13 }
+            assertTrue("Voice removal applies only after its reason is reviewed", afterCorrection.lines.single { it.productId == "cutting_chai" }.quantity == 1)
+            assertTrue((modelField.get(activity) as CounterModel).auditEvents().any { it.contains("remove #13") && it.contains("reason=Customer changed mind") })
         } finally {
             instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
             Thread.sleep(250)
@@ -4459,14 +4496,27 @@ class SqliteCounterPersistenceTest {
 
             val ui = instrumentation.uiAutomation
             var clicked = false
+            var reasonEntered = false
             var visibleDialogText = ""
             repeat(80) {
                 if (!clicked) {
                     val root = ui.rootInActiveWindow
+                    fun enterReason(node: AccessibilityNodeInfo): Boolean {
+                        if (node.className == EditText::class.java.name && node.contentDescription == "Correction reason") {
+                            val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Customer changed mind") }
+                            reasonEntered = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                            return reasonEntered
+                        }
+                        for (index in 0 until node.childCount) node.getChild(index)?.let { child -> if (enterReason(child)) return true }
+                        return false
+                    }
                     fun clickText(node: AccessibilityNodeInfo): Boolean {
                         val text = node.text?.toString().orEmpty()
                         if (text.isNotBlank()) visibleDialogText += "$text | "
-                        if (text.contains("Remove quantity", ignoreCase = true)) return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        if (text.contains("Remove quantity", ignoreCase = true)) {
+                            if (!reasonEntered && root != null) enterReason(root)
+                            else return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        }
                         for (index in 0 until node.childCount) node.getChild(index)?.let { child -> if (clickText(child)) return true }
                         return false
                     }
@@ -4475,14 +4525,23 @@ class SqliteCounterPersistenceTest {
                 }
             }
             assertTrue("Confirmation dialog should expose an explicit remove action; visible text: $visibleDialogText", clicked)
-            Thread.sleep(300)
+            instrumentation.waitForIdleSync()
+            Thread.sleep(500)
+            val correctionUiText = mutableListOf<String>()
+            instrumentation.runOnMainSync {
+                fun collect(view: View) {
+                    if (view is TextView) correctionUiText += view.text.toString()
+                    if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                }
+                collect(activity.findViewById(android.R.id.content))
+            }
             SqliteCounterPersistence(context).use { db ->
                 val snapshot = db.load() ?: error("Corrected snapshot missing")
                 val order = snapshot.orders.single { it.number == 12 }
-                assertEquals(originalRevision + 1, order.revision)
+                assertEquals("Correction result: $correctionUiText", originalRevision + 1, order.revision)
                 assertTrue(order.lines.none { it.productId == "chai" })
                 assertEquals(1, order.lines.single { it.productId == "samosa" }.quantity)
-                assertTrue("Correction audit actor/event: ${db.loadAuditRecords().joinToString { "${it.actorId}:${it.event}" }}", db.loadAuditRecords().any { it.event.contains("remove #12") && it.actorId == "detail-manager" })
+                assertTrue("Correction audit actor/event: ${db.loadAuditRecords().joinToString { "${it.actorId}:${it.event}" }}", db.loadAuditRecords().any { it.event.contains("remove #12") && it.event.contains("reason=Customer changed mind") && it.actorId == "detail-manager" })
                 assertTrue(snapshot.paymentEntries.isEmpty())
                 assertTrue(snapshot.stockMovements.isEmpty())
                 assertFalse(order.salePosted)

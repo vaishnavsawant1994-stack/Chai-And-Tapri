@@ -969,8 +969,18 @@ class CounterModelTest {
     @Test fun removingLastOrderLineCannotLeaveAnEmptyDraft() {
         val model = CounterModel()
         model.apply("create", model.parse("Naya order, one samosa")!!)
-        assertTrue(model.apply("remove-last", ProposedCommand("remove", 12, "remove", "samosa", 1)).contains("cannot be empty"))
+        assertTrue(model.apply("remove-no-reason", ProposedCommand("remove", 12, "remove", "samosa", 1)).contains("correction reason"))
         assertEquals(1, model.allOrders().single().lines.size)
+        val result = model.apply("remove-last", ProposedCommand("remove", 12, "remove", "samosa", 1, auditReason = "Customer changed mind"))
+        assertTrue(result.contains("cannot be empty"))
+        assertEquals(1, model.allOrders().single().lines.size)
+    }
+
+    @Test fun orderLineRemovalPersistsReasonInAuditEvent() {
+        val model = CounterModel()
+        model.apply("create", model.parse("Naya order, two samosa")!!)
+        assertTrue(model.apply("remove-one", ProposedCommand("remove", 12, "remove", "samosa", 1, auditReason = "Customer changed mind")).contains("Item removed"))
+        assertTrue(model.auditEvents().any { it.contains("remove #12") && it.contains("reason=Customer changed mind") })
     }
 
     @Test fun partialHandoverPostsOnlyDeliveredStockAndThenTheRemainder() {

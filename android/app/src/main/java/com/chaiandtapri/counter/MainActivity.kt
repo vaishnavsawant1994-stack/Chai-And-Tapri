@@ -306,7 +306,25 @@ class MainActivity : ComponentActivity() {
     }
     private fun applyPending(){
         val command=pending?:run{status.text="No proposed command to apply.";return}
-        status.text=model.apply(pendingId,command);pending=null
+        val commandId=pendingId
+        if(command.type=="remove"&&command.auditReason.isNullOrBlank()){
+            val reason=EditText(this).apply{hint="Reason for correction (3-120 characters)";contentDescription="Correction reason";setSingleLine(true);filters=arrayOf(android.text.InputFilter.LengthFilter(120))}
+            AlertDialog.Builder(this).setTitle("Explain the order correction")
+                .setMessage("A short reason is required for the audit record. Do not include personal information.")
+                .setView(reason).setNegativeButton("Keep order",null).setPositiveButton("Continue",null).create().also{dialog->
+                    dialog.setOnShowListener{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+                        val value=reason.text.toString().trim()
+                        if(value.length !in 3..120||value.any(Char::isISOControl)){reason.error="Enter a short reason (3-120 characters)";return@setOnClickListener}
+                        if(pendingId!=commandId||pending!=command){status.text="The reviewed command is no longer current. Review it again; no change was made.";dialog.dismiss();return@setOnClickListener}
+                        dialog.dismiss();commitPending(commandId,command.copy(auditReason=value))
+                    }}
+                }.show()
+            return
+        }
+        commitPending(commandId,command)
+    }
+    private fun commitPending(commandId:String,command:ProposedCommand){
+        status.text=model.apply(commandId,command);pending=null
         session="Ready · tap Listen for next command";renderOrders()
     }
     private fun rejectPending(){

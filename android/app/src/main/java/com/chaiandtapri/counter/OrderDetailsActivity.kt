@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.ScrollView
@@ -178,23 +179,42 @@ class OrderDetailsActivity : Activity() {
             addView(label("Quantity to remove (not yet handed over)", 14f))
             addView(picker)
         }
-        AlertDialog.Builder(this)
+        val reason = EditText(this).apply {
+            hint = "Reason for correction (3-120 characters)"
+            contentDescription = "Correction reason"
+            setSingleLine(true)
+            filters = arrayOf(android.text.InputFilter.LengthFilter(120))
+        }
+        pickerContainer.addView(reason)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Correct order #$orderNumber")
-            .setMessage("Remove unhanded $productName? Already handed-over items, recorded payments and stock movements will not be changed. This correction will be audited.")
+            .setMessage("Remove unhanded $productName? Already handed-over items, recorded payments and stock movements will not be changed. Enter a short reason for the audit record. Do not include personal information.")
             .setView(pickerContainer)
             .setNegativeButton("Keep order", null)
-            .setPositiveButton("Remove quantity") { _, _ ->
+            .setPositiveButton("Remove quantity", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val auditReason = reason.text.toString().trim()
+                if (auditReason.length !in 3..120 || auditReason.any(Char::isISOControl)) {
+                    reason.error = "Enter a short reason (3-120 characters)"
+                    return@setOnClickListener
+                }
                 if (!LocalSessionState.isManager) {
                     render("Manager access is required to correct an order. No change was made.")
-                    return@setPositiveButton
+                    dialog.dismiss()
+                    return@setOnClickListener
                 }
                 val result = model?.apply(
                     "order-line-correction-${java.util.UUID.randomUUID()}",
-                    ProposedCommand("remove", orderNumber, "Remove unhanded order quantity", productId, picker.value, expectedRevision = expectedRevision)
+                    ProposedCommand("remove", orderNumber, "Remove unhanded order quantity", productId, picker.value,
+                        expectedRevision = expectedRevision, auditReason = auditReason)
                 ) ?: "Order details are unavailable. No change was made."
+                dialog.dismiss()
                 render(result)
             }
-            .show()
+        }
+        dialog.show()
     }
 
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }

@@ -31,7 +31,7 @@ data class CounterOrder(
 }
 enum class Fulfillment { TAKEN, PREPARING, READY, PARTIALLY_GIVEN, GIVEN, CANCELLED }
 enum class Payment { UNPAID, PARTIALLY_PAID, STAFF_DECLARED, UPI_PENDING, CREDIT, SPLIT, REFUNDED, CANCELLED }
-data class ProposedCommand(val type: String,val orderNumber: Int?,val description: String,val productId: String?=null,val quantity: Int=1,val amountPaise: Int?=null,val customerId: String?=null,val expectedRevision: Int?=null)
+data class ProposedCommand(val type: String,val orderNumber: Int?,val description: String,val productId: String?=null,val quantity: Int=1,val amountPaise: Int?=null,val customerId: String?=null,val expectedRevision: Int?=null,val auditReason: String?=null)
 data class LocalBusinessSummary(
     val recordedSalesPaise: Long,
     val cashRecordedPaise: Long,
@@ -673,6 +673,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun apply(commandId: String,command: ProposedCommand): String {
         if (commandId.isBlank()) return "Command ID is required. No change made."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
+        val correctionReason = if (command.type == "remove") command.auditReason?.trim()?.takeIf { it.length in 3..120 && it.none(Char::isISOControl) }
+            ?: return "A correction reason of 3–120 characters is required. No change made." else null
         val before = snapshot()
         if (command.type == "create") {
             val line = line(command.productId ?: return "Unknown product.",command.quantity) ?: return "Unknown product or quantity."
@@ -826,7 +828,10 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             else -> return "Unsupported command."
         }
         if(result.startsWith("Invalid fulfillment") || result.startsWith("Mark the order") || result.startsWith("Order revision conflict")) return result
-        return commitMutation(before, commandId, result, "${command.type} #${order.number}", order)
+        val auditEvent = if (correctionReason != null) {
+            "remove #${order.number} product=${command.productId} quantity=${command.quantity} reason=$correctionReason"
+        } else "${command.type} #${order.number}"
+        return commitMutation(before, commandId, result, auditEvent, order)
     }
 
     fun cancelOrder(number: Int,reason: String,commandId: String = "cancel-${System.nanoTime()}",expectedRevision: Int? = null): String {
