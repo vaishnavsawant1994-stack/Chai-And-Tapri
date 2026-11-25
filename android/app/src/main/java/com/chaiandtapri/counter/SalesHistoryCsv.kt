@@ -19,7 +19,7 @@ object SalesHistoryCsv {
         rows.forEach { row ->
             val order = row.order
             val events = row.payments.joinToString("; ") { event ->
-                "${event.method} ${event.amountPaise} paise ${event.status} ${event.kind}"
+                "${event.method} ${event.amountPaise} paise ${event.status} ${event.kind} recorded_at_epoch_ms=${formatPaymentEventTimestamp(event.createdAtEpochMs)}"
             }
             append(listOf(
                 order.number.toString(), order.createdAtEpochMs.takeIf { it > 0L }?.toString().orEmpty(),
@@ -31,6 +31,9 @@ object SalesHistoryCsv {
             ).joinToString(",") { cell(it) }).append('\n')
         }
     }
+
+    internal fun formatPaymentEventTimestamp(epochMs: Long): String =
+        epochMs.takeIf { it > 0L }?.toString() ?: "timestamp unavailable"
 
     private fun cell(value: String): String {
         val safe = if (value.trimStart().firstOrNull() in setOf('=', '+', '-', '@', '\t', '\r')) "'" + value else value

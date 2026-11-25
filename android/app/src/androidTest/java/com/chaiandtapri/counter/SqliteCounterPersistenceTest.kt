@@ -760,6 +760,7 @@ class SqliteCounterPersistenceTest {
         assertTrue("History should display the configured sale unit", strings.any { it.contains("piece × Samosa") })
         assertTrue(strings.none { it.contains("Order #$cashOrder") })
         assertTrue(strings.any { it.contains("UPI") || it.contains("upi") })
+        assertTrue("History should show the saved payment-event time", strings.any { it.contains("Recorded:") })
 
         instrumentation.runOnMainSync { search!!.setText("no matching product") }
         strings.clear()

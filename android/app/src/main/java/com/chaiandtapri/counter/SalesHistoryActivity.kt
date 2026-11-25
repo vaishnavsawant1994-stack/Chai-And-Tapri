@@ -73,7 +73,7 @@ class SalesHistoryActivity : ComponentActivity() {
             model = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
             unitLabels = model!!.products().associate { it.productId to it.unitLabel }
             content.addView(label("Sales & Order History", 25f))
-            content.addView(label("Local records only · date range uses order creation date. Payment event dates are not available yet.", 14f))
+            content.addView(label("Local records only · date range uses order creation date. Payment-event times use the device clock when recorded.", 14f))
             val orders = model!!.allOrders()
             val payments = model!!.paymentHistory()
             val search = EditText(this).apply {
@@ -145,7 +145,10 @@ class SalesHistoryActivity : ComponentActivity() {
                 val events = payments.filter { it.orderNumber == order.number }
                 if (events.isNotEmpty()) {
                     val eventText = events.joinToString("\n") { entry ->
-                        "${entry.method.uppercase(Locale.ROOT)} ${money(entry.amountPaise)} · ${entry.status} · ${entry.kind}"
+                        val recorded = entry.createdAtEpochMs.takeIf { it > 0L }?.let {
+                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it))
+                        } ?: "timestamp unavailable"
+                        "${entry.method.uppercase(Locale.ROOT)} ${money(entry.amountPaise)} · ${entry.status} · ${entry.kind} · Recorded: $recorded"
                     }
                     card.addView(label("Payment events\n$eventText", 13f))
                 }

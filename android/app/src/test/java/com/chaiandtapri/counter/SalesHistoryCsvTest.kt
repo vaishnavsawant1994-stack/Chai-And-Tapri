@@ -9,13 +9,13 @@ class SalesHistoryCsvTest {
         val order = CounterOrder(17, mutableListOf(CounterLine("tea", "Cutting, special", 2, 1000, deliveredQuantity = 2)),
             fulfillment = Fulfillment.GIVEN, payment = Payment.UPI_PENDING, paidPaise = 500, createdAtEpochMs = 123456L)
         val csv = SalesHistoryCsv.render(listOf(SalesHistoryCsvRow(order, listOf(
-            PaymentEntry("entry-1", 17, null, 500, "upi", "upi_pending", "order_collection")
+            PaymentEntry("entry-1", 17, null, 500, "upi", "upi_pending", "order_collection", createdAtEpochMs = 1700000000123L)
         ), mapOf("tea" to "cup"))))
 
         assertTrue(csv.startsWith("order_number,created_at_epoch_ms,items,"))
         assertTrue(csv.contains("\"123456\""))
         assertTrue(csv.contains("\"2 cup × Cutting, special\""))
-        assertTrue(csv.contains("upi 500 paise upi_pending order_collection"))
+        assertTrue(csv.contains("upi 500 paise upi_pending order_collection recorded_at_epoch_ms=1700000000123"))
         assertTrue(csv.contains("not provider-verified"))
         assertFalse(csv.contains("customer_id"))
         assertFalse(csv.contains("entry-1"))
@@ -35,5 +35,13 @@ class SalesHistoryCsvTest {
         assertTrue(formatSalesHistoryItems(order, emptyMap()).contains("1 unit not recorded × Legacy Tea"))
         assertTrue(SalesHistoryCsv.render(listOf(SalesHistoryCsvRow(order, emptyList())))
             .contains("1 unit not recorded × Legacy Tea"))
+    }
+
+    @Test fun legacyPaymentEventsClearlyShowWhenTheirTimestampWasNotRecorded() {
+        val order = CounterOrder(3, mutableListOf(CounterLine("tea", "Tea", 1, 100)))
+        val payment = PaymentEntry("legacy-payment", 3, null, 100, "cash", "staff_declared", "order_collection")
+
+        assertTrue(SalesHistoryCsv.render(listOf(SalesHistoryCsvRow(order, listOf(payment))))
+            .contains("recorded_at_epoch_ms=timestamp unavailable"))
     }
 }
