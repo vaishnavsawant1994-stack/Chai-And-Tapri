@@ -741,9 +741,11 @@ class SqliteCounterPersistenceTest {
 
         val activity = instrumentation.startActivitySync(Intent(context, SalesHistoryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var search: EditText? = null
+        var dateBasisButton: Button? = null
         val strings = mutableListOf<String>()
         fun collect(view: View) {
             if (view is EditText && view.contentDescription == "Search sales history") search = view
+            if (view is Button && view.text.toString().startsWith("Date basis:")) dateBasisButton = view
             if (view is TextView) strings += view.text.toString()
             if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
         }
@@ -751,7 +753,15 @@ class SqliteCounterPersistenceTest {
         assertTrue("History search should be present", search != null)
         assertTrue(strings.any { it == "From date" })
         assertTrue(strings.any { it == "Through date" })
-        assertTrue(strings.any { it.contains("date range uses order creation date") })
+        assertTrue(strings.any { it.contains("when an order was created or when a payment event was recorded") })
+        assertTrue(strings.any { it == "All order dates" })
+        assertTrue("Date basis control should be present", dateBasisButton != null)
+        instrumentation.runOnMainSync { dateBasisButton!!.performClick() }
+        strings.clear()
+        instrumentation.runOnMainSync { collect(activity.findViewById(android.R.id.content)) }
+        assertTrue(strings.any { it == "All payment-event dates" })
+        assertTrue(strings.any { it.contains("Order #$cashOrder") } && strings.any { it.contains("Order #$upiOrder") })
+        instrumentation.runOnMainSync { dateBasisButton!!.performClick() }
         assertTrue(strings.any { it.contains("Order date:") })
         instrumentation.runOnMainSync { search!!.setText("samosa") }
         strings.clear()

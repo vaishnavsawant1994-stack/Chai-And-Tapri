@@ -686,6 +686,14 @@ class CounterModelTest {
         assertTrue(OrderHistoryDateRange.contains(150L, 100L, null))
     }
 
+    @Test fun salesHistoryCanFilterByOrderCreationOrPaymentEventTimestamp() {
+        assertFalse(OrderHistoryDateRange.matches(50L, listOf(150L), 100L, 200L, OrderHistoryDateRange.Basis.ORDER_CREATION))
+        assertTrue(OrderHistoryDateRange.matches(50L, listOf(150L), 100L, 200L, OrderHistoryDateRange.Basis.PAYMENT_EVENT))
+        assertFalse(OrderHistoryDateRange.matches(50L, listOf(0L), 100L, 200L, OrderHistoryDateRange.Basis.PAYMENT_EVENT))
+        assertTrue(OrderHistoryDateRange.matches(0L, emptyList(), null, null, OrderHistoryDateRange.Basis.PAYMENT_EVENT))
+        assertTrue(OrderHistoryDateRange.matches(0L, listOf(200L), 100L, 200L, OrderHistoryDateRange.Basis.PAYMENT_EVENT))
+    }
+
     @Test fun newOrdersReceivePersistableCreationTimestamps() {
         val model = CounterModel(MemoryPersistence())
         val before = System.currentTimeMillis()

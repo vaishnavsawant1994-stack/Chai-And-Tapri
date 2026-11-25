@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-11 payment-event date filtering
+
+Sales History can switch its inclusive local date range between order creation time and payment-event record time. The selected basis is labeled, all matches remain read-only, and the filtered set is shared with CSV export. Missing legacy timestamps do not match a selected range; clearing the range still includes undated orders. Kotlin JVM **96/96**; focused API 37 UI test **1/1**; prototype Node **52/52**; APK build tasks pass; lint 0 errors / 189 warnings. Backend and full connected Android suites were not rerun. See [CT-11 report](CT-11-PAYMENT-EVENT-DATE-FILTER-REPORT-2026-11-25.md). This remains local device-clock history, not a complete accounting-period report.
+
 ## CT-27 recipient-side handover acknowledgement
 
 The designated enabled local receiver now sees a pending handover in CT-27 and can record their physical cash count. The one-time event is attributed to that local actor, persists through encrypted database reopen and portable encrypted backup restore, and does not alter the sender's closed drawer balance. Count differences remain unresolved and visible. Schema v33 adds an additive v32→v33 migration. The sync projection compares only its allow-listed financial/session fields, so local acknowledgement metadata creates no duplicate shift projection. Verification: Kotlin JVM **95/95**; prototype Node **52/52**; focused API 37 UI/model test **1/1** and synthetic portable restore test **1/1**; APK tasks pass; lint 0 errors / 189 warnings. Full Android/backend suites were not rerun. This is local account/count acknowledgement, not proof of physical transfer or production identity. See [report](CT-27-HANDOVER-ACKNOWLEDGEMENT-REPORT-2026-11-25.md).

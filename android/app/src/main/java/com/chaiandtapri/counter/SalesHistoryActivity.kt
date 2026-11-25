@@ -24,6 +24,7 @@ class SalesHistoryActivity : ComponentActivity() {
     private var searchQuery = ""
     private var fromDateStartMillis: Long? = null
     private var throughDateEndMillis: Long? = null
+    private var dateBasis = OrderHistoryDateRange.Basis.ORDER_CREATION
     private lateinit var dateRangeStatus: TextView
     private lateinit var exportButton: Button
     private lateinit var exportStatus: TextView
@@ -73,7 +74,7 @@ class SalesHistoryActivity : ComponentActivity() {
             model = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
             unitLabels = model!!.products().associate { it.productId to it.unitLabel }
             content.addView(label("Sales & Order History", 25f))
-            content.addView(label("Local records only · date range uses order creation date. Payment-event times use the device clock when recorded.", 14f))
+            content.addView(label("Local records only · choose whether date filters use when an order was created or when a payment event was recorded. Payment-event times use the device clock.", 14f))
             val orders = model!!.allOrders()
             val payments = model!!.paymentHistory()
             val search = EditText(this).apply {
@@ -88,6 +89,11 @@ class SalesHistoryActivity : ComponentActivity() {
             dateActions.addView(button("Through date") { pickDate(false) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             dateActions.addView(button("Clear dates") { fromDateStartMillis = null; throughDateEndMillis = null; updateDateRange(); showOrders(orders, payments) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             content.addView(dateActions)
+            content.addView(button(dateBasisButtonText()) {
+                dateBasis = if (dateBasis == OrderHistoryDateRange.Basis.ORDER_CREATION) OrderHistoryDateRange.Basis.PAYMENT_EVENT else OrderHistoryDateRange.Basis.ORDER_CREATION
+                updateDateRange()
+                model?.let { showOrders(it.allOrders(), it.paymentHistory()) }
+            })
             dateRangeStatus = label("All order dates", 14f)
             content.addView(dateRangeStatus)
             exportStatus = label("", 14f).also(content::addView)
@@ -124,13 +130,19 @@ class SalesHistoryActivity : ComponentActivity() {
                 order.number.toString(), items, order.fulfillment.name, order.payment.name,
                 order.cancelReason.orEmpty(), events.joinToString(" ") { "${it.method} ${it.status} ${it.kind}" }
             ).any { it.lowercase(Locale.ROOT).contains(query) }
-            val dateMatches = OrderHistoryDateRange.contains(order.createdAtEpochMs, fromDateStartMillis, throughDateEndMillis)
+            val dateMatches = OrderHistoryDateRange.matches(
+                order.createdAtEpochMs,
+                events.map(PaymentEntry::createdAtEpochMs),
+                fromDateStartMillis,
+                throughDateEndMillis,
+                dateBasis
+            )
             textMatches && dateMatches
         }
         if (filtered.isEmpty()) {
             exportCsv = null
             if (::exportButton.isInitialized) exportButton.isEnabled = false
-            orderList.addView(label(if (orders.isEmpty()) "No orders recorded on this device." else "No orders match the current filters. Legacy orders without a saved date are excluded from date filters.", 17f))
+            orderList.addView(label(if (orders.isEmpty()) "No orders recorded on this device." else "No orders match the current filters. Legacy records without a timestamp are excluded from the selected date basis.", 17f))
             return
         }
         val paymentByOrder = payments.filter { it.orderNumber != null }.groupBy { it.orderNumber }
@@ -185,13 +197,17 @@ class SalesHistoryActivity : ComponentActivity() {
         val formatter = DateFormat.getDateInstance(DateFormat.MEDIUM)
         val from = fromDateStartMillis?.let { formatter.format(Date(it)) }
         val through = throughDateEndMillis?.let { formatter.format(Date(it)) }
+        val subject = if (dateBasis == OrderHistoryDateRange.Basis.ORDER_CREATION) "order dates" else "payment-event dates"
+        val subjectPrefix = if (dateBasis == OrderHistoryDateRange.Basis.ORDER_CREATION) "Orders" else "Orders with payment events"
         dateRangeStatus.text = when {
-            from == null && through == null -> "All order dates"
-            from != null && through != null -> "Orders from $from through $through"
-            from != null -> "Orders from $from onward"
-            else -> "Orders through $through"
+            from == null && through == null -> "All $subject"
+            from != null && through != null -> "$subjectPrefix from $from through $through"
+            from != null -> "$subjectPrefix from $from onward"
+            else -> "$subjectPrefix through $through"
         }
     }
+
+    private fun dateBasisButtonText() = if (dateBasis == OrderHistoryDateRange.Basis.ORDER_CREATION) "Date basis: order created" else "Date basis: payment event"
 
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }
     private fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; minHeight = 60; setOnClickListener { action() } }
