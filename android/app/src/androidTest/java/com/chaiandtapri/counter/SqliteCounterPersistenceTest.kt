@@ -3046,6 +3046,9 @@ class SqliteCounterPersistenceTest {
             assertTrue(awaitNode(className = Spinner::class.java.name).performAction(AccessibilityNodeInfo.ACTION_CLICK))
             click("UPI")
             click("Record payment")
+            // Accessibility clicks are asynchronous relative to the caller. Wait for the
+            // activity's committed-result feedback before reopening the encrypted store.
+            awaitNode(prefix = "Staff-declared UPI payment")
 
             var reopened = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             val payment = reopened.supplierPaymentHistory().single()
@@ -4127,7 +4130,7 @@ class SqliteCounterPersistenceTest {
         }
     }
 
-    @Test fun schemaV30ToV31AddsProductUnitWithoutChangingLedgerOrStock() {
+    @Test fun schemaV30UpgradeAddsProductUnitWithoutChangingLedgerOrStock() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         LocalSessionState.establish("Synthetic unit migration owner")
@@ -4142,7 +4145,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { restored ->
-            assertEquals(31, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+            assertEquals(SqliteCounterPersistence.DATABASE_VERSION, SqliteCounterPersistence(context).use { it.readableDatabase.version })
             assertEquals("units", restored.products().single { it.productId == "unit_migration_tea" }.unitLabel)
             assertEquals(5, restored.stockLevels()["unit_migration_tea"])
             assertEquals(1, restored.allOrders().count { it.salePosted })
@@ -7380,7 +7383,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(SqliteCounterPersistence.DATABASE_VERSION, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "cost_test_tea" }.estimatedUnitCostPaise)
         assertNull(model.allOrders().single().lines.single().estimatedUnitCostPaise)
         assertEquals(3000, model.allOrders().single().salePaise)

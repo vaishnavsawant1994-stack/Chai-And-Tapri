@@ -1231,3 +1231,6 @@ Cash/UPI repayment screens now display a local receipt with tender evidence, all
 ## CT-25 expense operator attribution — 25 November 2026
 
 Expense history now shows the device-local audit actor ID associated with each expense; legacy unattributed records are explicit. The screen states these IDs are not independent identity proof. No schema migration was needed. Focused API 37 emulator test passed 1/1; Kotlin JVM 94/94; debug/test APK builds and lint passed (0 errors / 189 warnings). Node/backend were not rerun for this Android-only display change. Report: `specs/CT-25-EXPENSE-OPERATOR-ATTRIBUTION-REPORT-2026-11-25.md`.
+## 25 November 2026 — Android full-regression follow-up
+
+The 150-test API 37 serial run completed 149/150. Supplier UPI UI timing is corrected and passes in-suite; current-schema migration assertions pass. The remaining failure is a Quick Sale `startActivitySync` 45-second timeout under sustained emulator load. Quick Sale passes in isolation, but broad instrumentation remains not fully green. Prototype Node 52/52, backend no-DB 33 passed/6 PostgreSQL skips, Kotlin JVM 96/96, APK builds passed, lint 0 errors/189 warnings. See `specs/ANDROID-REGRESSION-RERUN-2026-11-25.md`. Continue recovery qualification and connected Android workflows; do not declare CAT-051B complete or infer device/field/security qualification from this run.
