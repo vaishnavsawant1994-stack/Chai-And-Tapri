@@ -14,6 +14,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.os.Environment
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
 import android.os.Messenger
 import android.os.Message
@@ -25,6 +26,7 @@ import android.view.ViewGroup
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.text.InputType
 import android.widget.Spinner
@@ -1492,6 +1494,61 @@ class SqliteCounterPersistenceTest {
             val afterCorrection = (modelField.get(activity) as CounterModel).allOrders().single { it.number == 13 }
             assertTrue("Voice removal applies only after its reason is reviewed", afterCorrection.lines.single { it.productId == "cutting_chai" }.quantity == 1)
             assertTrue((modelField.get(activity) as CounterModel).auditEvents().any { it.contains("remove #13") && it.contains("reason=Customer changed mind") })
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun voiceCounterAutoRearmsOnlyAfterManualReviewAndStopCancelsNextUtterance() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.clear()
+        assertTrue(LocalOwnerAuth.enroll(context, "voice-rearm-owner", "Voice Rearm Owner", "Synthetic voice rearm passphrase".toCharArray()))
+        LocalSessionState.establish("Voice Rearm Owner")
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = false).use { setup ->
+            assertTrue(setup.saveProduct(TapriProduct("cutting_chai", "Cutting Chai", "Chai", 1000, true, true, true, listOf("cutting"))).startsWith("Product saved"))
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val transcriptField = MainActivity::class.java.getDeclaredField("transcript").apply { isAccessible = true }
+        val pendingField = MainActivity::class.java.getDeclaredField("pending").apply { isAccessible = true }
+        val modelField = MainActivity::class.java.getDeclaredField("model").apply { isAccessible = true }
+        val activeField = MainActivity::class.java.getDeclaredField("voiceSessionActive").apply { isAccessible = true }
+        val autoControlField = MainActivity::class.java.getDeclaredField("autoListenControl").apply { isAccessible = true }
+        val handlerField = MainActivity::class.java.getDeclaredField("speechHandler").apply { isAccessible = true }
+        val runnableField = MainActivity::class.java.getDeclaredField("restartUtterance").apply { isAccessible = true }
+        val propose = MainActivity::class.java.getDeclaredMethod("propose").apply { isAccessible = true }
+        val apply = MainActivity::class.java.getDeclaredMethod("applyPending").apply { isAccessible = true }
+        val stop = MainActivity::class.java.getDeclaredMethod("stopSession", String::class.java).apply { isAccessible = true }
+        try {
+            var ready = false
+            repeat(120) {
+                instrumentation.runOnMainSync { ready = runCatching { transcriptField.get(activity) != null }.getOrDefault(false) }
+                if (ready) return@repeat
+                Thread.sleep(100)
+            }
+            assertTrue("Counter screen should finish loading", ready)
+            instrumentation.runOnMainSync {
+                val autoControl = autoControlField.get(activity) as CheckBox
+                assertFalse("Automatic repeated capture must be opt-in", autoControl.isChecked)
+                assertTrue(autoControl.text.toString().contains("separate utterances"))
+                autoControl.isChecked = true
+                activeField.setBoolean(activity, true)
+                (transcriptField.get(activity) as EditText).setText("Naya order, do cutting chai")
+                propose.invoke(activity)
+                assertNotNull("Speech text must wait for explicit review", pendingField.get(activity))
+                assertFalse("Review alone must not start another capture", (handlerField.get(activity) as Handler).hasCallbacks(runnableField.get(activity) as Runnable))
+                apply.invoke(activity)
+                val orders = (modelField.get(activity) as CounterModel).allOrders()
+                assertEquals("Manual Apply should create exactly one order", 1, orders.size)
+                assertTrue("Apply may schedule only a separate next utterance", (handlerField.get(activity) as Handler).hasCallbacks(runnableField.get(activity) as Runnable))
+                stop.invoke(activity, "Stopped")
+                assertFalse("Stop must cancel the scheduled next utterance", (handlerField.get(activity) as Handler).hasCallbacks(runnableField.get(activity) as Runnable))
+                assertFalse("Stop must close the operator session", activeField.getBoolean(activity))
+                assertEquals("Stop must not duplicate the accepted order", 1, (modelField.get(activity) as CounterModel).allOrders().size)
+            }
         } finally {
             instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
             Thread.sleep(250)

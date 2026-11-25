@@ -1234,3 +1234,7 @@ Expense history now shows the device-local audit actor ID associated with each e
 ## 25 November 2026 — Android full-regression follow-up
 
 The 150-test API 37 serial run completed 149/150. Supplier UPI UI timing is corrected and passes in-suite; current-schema migration assertions pass. The remaining failure is a Quick Sale `startActivitySync` 45-second timeout under sustained emulator load. Quick Sale passes in isolation, but broad instrumentation remains not fully green. Prototype Node 52/52, backend no-DB 33 passed/6 PostgreSQL skips, Kotlin JVM 96/96, APK builds passed, lint 0 errors/189 warnings. See `specs/ANDROID-REGRESSION-RERUN-2026-11-25.md`. Continue recovery qualification and connected Android workflows; do not declare CAT-051B complete or infer device/field/security qualification from this run.
+
+## 25 November 2026 — CT-07 voice counter follow-up
+
+Implemented opt-in automatic re-arming between distinct Android single-utterance speech sessions after manual Apply/Reject, no-match, or timeout. Ambiguous transcripts require operator correction. Stop, Pause, backgrounding, route loss, recovery maintenance, and opt-out cancel pending captures. JVM policy tests 98/98 and focused API 37 UI instrumentation 1/1; Node prototype 52/52; backend 33 passed / 6 PostgreSQL-dependent skipped. This does not implement uninterrupted continuous listening or prove headset microphone routing. See specs/CT-07-OPT-IN-UTTERANCE-REARM-REPORT-2026-11-25.md.

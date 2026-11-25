@@ -10,11 +10,14 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.SpeechRecognizer
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -38,6 +41,17 @@ class MainActivity : ComponentActivity() {
     private lateinit var language:Spinner
     private lateinit var speechInput:AndroidSpeechInput
     private var session="Stopped"
+    private var voiceSessionActive=false
+    private var speechForeground=false
+    private var autoListenAfterReview=false
+    private var autoListenControl:CheckBox?=null
+    private var pendingRearmReason=VoiceRearmReason.OTHER_FAILURE
+    private val speechHandler=Handler(Looper.getMainLooper())
+    private val restartUtterance=Runnable{
+        if(VoiceCounterSessionPolicy.shouldRearm(voiceSessionActive,autoListenAfterReview,pendingRearmReason)&&speechForeground&&!isFinishing&&!isDestroyed){
+            requestPermissionsIfNeeded()
+        }
+    }
     private var routeId:Int?=null
     private var audioCallbackRegistered=false
     private var pending:ProposedCommand?=null
@@ -57,6 +71,12 @@ class MainActivity : ComponentActivity() {
                 maintenanceBanner.text=label?.let{"MAINTENANCE · $it · counter changes are paused"}?:if(recoveryBusy)"Recovery operation starting…" else "Ready · local encrypted storage"
                 maintenanceBanner.setBackgroundColor(if(label==null)0xffe8f5e9.toInt() else 0xffffe0b2.toInt())
             }
+            if(label!=null){
+                cancelAutomaticListening()
+                voiceSessionActive=false
+                if(::speechInput.isInitialized)speechInput.stop()
+                if(::audio.isInitialized){audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null}
+            }
             if(label==null&&::audio.isInitialized&&!::model.isInitialized&&!recoveryOnlyMode)initializeWorkspace()
         }
     }
@@ -74,7 +94,7 @@ class MainActivity : ComponentActivity() {
 
     private val permissionRequest=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){ grants->
         val micOk=ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
-        if(!micOk){session="PermissionDenied · typed mode remains available";renderStatus();return@registerForActivityResult}
+        if(!micOk){voiceSessionActive=false;cancelAutomaticListening();session="PermissionDenied · typed mode remains available";renderStatus();return@registerForActivityResult}
         if(Build.VERSION.SDK_INT>=31 && grants[Manifest.permission.BLUETOOTH_CONNECT]==false)headset.text="Bluetooth permission denied · headset route cannot be inspected"
         startOneUtterance()
     }
@@ -86,6 +106,8 @@ class MainActivity : ComponentActivity() {
         override fun onAudioDevicesAdded(addedDevices:Array<out AudioDeviceInfo>)=refreshDevices()
         override fun onAudioDevicesRemoved(removedDevices:Array<out AudioDeviceInfo>){
             if(removedDevices.any{it.id==routeId}){
+                cancelAutomaticListening()
+                voiceSessionActive=false
                 if(::speechInput.isInitialized)speechInput.stop()
                 audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null
                 session="Disconnected · listening stopped; explicitly resume after reconnect"
@@ -113,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume(){
         super.onResume()
+        speechForeground=true
         if(hasResumedOnce&&::model.isInitialized&&!workspaceInitializing&&BusinessWriteBarrier.currentMaintenance()==null)refreshWorkspaceOffMainThread()
         hasResumedOnce=true
     }
@@ -227,6 +250,14 @@ class MainActivity : ComponentActivity() {
         microphone=label("Microphone: permission status checking",14f);column.addView(microphone)
         headset=label("Headset: checking…",14f);column.addView(headset)
         column.addView(label("Android SpeechRecognizer handles one utterance at a time; provider/network audio handling varies by device. This app does not save audio.",12f))
+        autoListenControl=CheckBox(this).apply{
+            text="Auto-listen after Apply/Reject (separate utterances)"
+            contentDescription="Auto-listen after Apply or Reject, one utterance at a time"
+            isChecked=autoListenAfterReview
+            setOnCheckedChangeListener{_,checked->autoListenAfterReview=checked;if(!checked)cancelAutomaticListening()}
+        }
+        column.addView(autoListenControl)
+        column.addView(label("Proposals always pause for manual review. This option only starts the next one-utterance capture after Apply/Reject; it never applies voice commands or keeps recognition continuously open.",12f))
         column.addView(label("Recognition language",14f))
         language=Spinner(this).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Hindi / Hinglish (hi-IN)","Marathi (mr-IN)","English India (en-IN)"))}
         language.setSelection(when(model.voiceLanguageTag()){ "mr-IN"->1;"en-IN"->2;else->0 })
@@ -266,14 +297,14 @@ class MainActivity : ComponentActivity() {
 
     private fun useSample(text:String){transcript.setText(text);propose()}
     private fun startSession(){
-        if(session=="Stopped"||session.startsWith("Disconnected")||session.startsWith("PermissionDenied"))requestPermissionsIfNeeded()
+        if(session=="Stopped"||session.startsWith("Disconnected")||session.startsWith("PermissionDenied")){voiceSessionActive=true;requestPermissionsIfNeeded()}
         else status.text="Start is available only from Stopped or Disconnected."
     }
     private fun pauseSession(){
-        if(session=="Listening"||session=="Awaiting confirmation"){speechInput.stop();session="Paused";renderStatus()}
+        if(voiceSessionActive){cancelAutomaticListening();voiceSessionActive=false;if(::speechInput.isInitialized)speechInput.stop();session="Paused";renderStatus()}
         else status.text="Pause is available only during an active session."
     }
-    private fun resumeSession(){if(session=="Paused"||session.startsWith("Paused ·"))requestPermissionsIfNeeded()else status.text="Resume is available only from Paused."}
+    private fun resumeSession(){if(session=="Paused"||session.startsWith("Paused ·")){voiceSessionActive=true;requestPermissionsIfNeeded()}else status.text="Resume is available only from Paused."}
     private fun requestPermissionsIfNeeded(){
         val missing=buildList{
             if(ContextCompat.checkSelfPermission(this@MainActivity,Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)add(Manifest.permission.RECORD_AUDIO)
@@ -282,7 +313,8 @@ class MainActivity : ComponentActivity() {
         if(missing.isEmpty())startOneUtterance()else permissionRequest.launch(missing.toTypedArray())
     }
     private fun startOneUtterance(){
-        if(!SpeechRecognizer.isRecognitionAvailable(this)){session="Recognition unavailable · type commands instead";renderStatus();return}
+        if(!voiceSessionActive){status.text="Start or resume a listening session first.";return}
+        if(!SpeechRecognizer.isRecognitionAvailable(this)){voiceSessionActive=false;session="Recognition unavailable · type commands instead";renderStatus();return}
         session=if(routeId==null)"Listening · Android default microphone route (source not verified)" else "Listening · headset route requested (source not verified)";renderStatus()
         val locale=when(language.selectedItemPosition){1->"mr-IN";2->"en-IN";else->"hi-IN"}
         speechInput.start(locale)
@@ -296,7 +328,7 @@ class MainActivity : ComponentActivity() {
             SpeechInputEvent.Ready->{session="Listening";renderStatus()}
             SpeechInputEvent.SpeechStarted->status.text="Speech detected · waiting for final transcript"
             is SpeechInputEvent.Transcript->{transcript.setText(event.text);propose()}
-            is SpeechInputEvent.Failure->{session="Recognition error · ${event.label} · typed fallback available";renderStatus()}
+            is SpeechInputEvent.Failure->{session="Recognition error · ${event.label} · typed fallback available";renderStatus();when(event.code){SpeechRecognizer.ERROR_NO_MATCH->scheduleAutomaticListening(VoiceRearmReason.NO_MATCH);SpeechRecognizer.ERROR_SPEECH_TIMEOUT->scheduleAutomaticListening(VoiceRearmReason.SPEECH_TIMEOUT)}}
         }
     }
     private fun propose(){
@@ -325,13 +357,20 @@ class MainActivity : ComponentActivity() {
     }
     private fun commitPending(commandId:String,command:ProposedCommand){
         status.text=model.apply(commandId,command);pending=null
-        session="Ready · tap Listen for next command";renderOrders()
+        session="Ready · review result; next capture is optional";renderOrders();scheduleAutomaticListening(VoiceRearmReason.REVIEW_APPLIED)
     }
     private fun rejectPending(){
         if(pending==null){status.text="No proposed command to reject.";return}
         pending=null;pendingId="";session="Ready · tap Listen for next command"
-        status.text="Proposed command rejected; no business data changed."
+        status.text="Proposed command rejected; no business data changed.";scheduleAutomaticListening(VoiceRearmReason.REVIEW_REJECTED)
     }
+    private fun scheduleAutomaticListening(reason:VoiceRearmReason){
+        cancelAutomaticListening()
+        if(!VoiceCounterSessionPolicy.shouldRearm(voiceSessionActive,autoListenAfterReview,reason))return
+        pendingRearmReason=reason
+        speechHandler.postDelayed(restartUtterance,650L)
+    }
+    private fun cancelAutomaticListening(){speechHandler.removeCallbacks(restartUtterance)}
     private fun confirmCancelNewest(){
         val order=model.allOrders().firstOrNull{it.fulfillment!=Fulfillment.GIVEN&&it.fulfillment!=Fulfillment.CANCELLED}
         if(order==null){status.text="No cancellable open order.";return}
@@ -362,7 +401,7 @@ class MainActivity : ComponentActivity() {
         headset.text=if(ok)"Route accepted · input candidates: ${inputs.joinToString{it.productName}} · speech service source not independently verified"else"Route rejected · use visible typed or phone-mic fallback"
         status.text=if(ok)"Android communication route selected; microphone source remains unverified."else"Route selection failed."
     }
-    private fun stopSession(message:String){speechInput.stop();audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null;session=message;renderStatus()}
+    private fun stopSession(message:String){cancelAutomaticListening();voiceSessionActive=false;if(::speechInput.isInitialized)speechInput.stop();audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null;session=message;renderStatus()}
     private fun renderStatus(){status.text="Session: $session";refreshDevices()}
     private fun renderOrders(){orders.text=model.allOrders().joinToString("\n"){"#${it.number}: ${it.items} · ${money(it.totalPaise)} due ${money(it.duePaise)} · ${it.fulfillment} / ${it.payment}"}.ifBlank{"No orders"}}
     private fun money(paise:Int)="₹${paise/100}.${(paise%100).toString().padStart(2,'0')}"
@@ -507,6 +546,7 @@ class MainActivity : ComponentActivity() {
     private fun setRecoveryBusy(busy:Boolean){
         recoveryBusy=busy
         actionButtons.forEach{it.isEnabled=!busy}
+        autoListenControl?.isEnabled=!busy
         if(::maintenanceBanner.isInitialized){
             val maintenance=BusinessWriteBarrier.currentMaintenance()
             maintenanceBanner.text=maintenance?.let{"MAINTENANCE · $it · counter changes are paused"}
@@ -518,8 +558,8 @@ class MainActivity : ComponentActivity() {
     private fun discardRestoreSecret(secret:CharArray){secret.fill('\u0000');if(restoreSecret===secret)restoreSecret=null}
 
     override fun onStart(){super.onStart();BusinessWriteBarrier.addListener(barrierListener)}
-    override fun onStop(){BusinessWriteBarrier.removeListener(barrierListener);if(::speechInput.isInitialized&&session.contains("Listening")){speechInput.stop();audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null;session="Paused · foreground listening stopped; route released"};super.onStop()}
-    override fun onDestroy(){exportSecret?.fill('\u0000');exportSecret=null;restoreSecret?.fill('\u0000');restoreSecret=null;if(::speechInput.isInitialized)speechInput.destroy();if(audioCallbackRegistered&&::audio.isInitialized)audio.unregisterAudioDeviceCallback(deviceCallback);if(::audio.isInitialized){audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL};if(::model.isInitialized)model.close();super.onDestroy()}
+    override fun onStop(){speechForeground=false;cancelAutomaticListening();if(voiceSessionActive){voiceSessionActive=false;if(::speechInput.isInitialized)speechInput.stop();if(::audio.isInitialized){audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL;routeId=null};session="Paused · foreground session stopped; explicitly resume"};BusinessWriteBarrier.removeListener(barrierListener);super.onStop()}
+    override fun onDestroy(){speechForeground=false;voiceSessionActive=false;cancelAutomaticListening();exportSecret?.fill('\u0000');exportSecret=null;restoreSecret?.fill('\u0000');restoreSecret=null;if(::speechInput.isInitialized)speechInput.destroy();if(audioCallbackRegistered&&::audio.isInitialized)audio.unregisterAudioDeviceCallback(deviceCallback);if(::audio.isInitialized){audio.clearCommunicationDevice();audio.mode=AudioManager.MODE_NORMAL};if(::model.isInitialized)model.close();super.onDestroy()}
 
     companion object { const val EXTRA_OPEN_RECOVERY = "com.chaiandtapri.counter.OPEN_RECOVERY" }
 }
