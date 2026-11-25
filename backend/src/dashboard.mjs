@@ -173,11 +173,18 @@ export function buildShopOverview({ shopId, shopName, serverRevision, events }) 
 export function buildProductPerformance({ shopId, shopName, serverRevision, events }) {
   const orders = new Map();
   const stock = new Map();
+  const unitLabels = new Map();
   for (const row of events) {
     const payload = row.envelope?.payload;
     if (payload?.kind !== 'projection_delta.v1') continue;
-    for (const order of payload.orders ?? []) orders.set(order.orderNumber, order);
-    for (const item of payload.stock ?? []) stock.set(item.productId, item.quantity);
+    for (const order of payload.orders ?? []) {
+      orders.set(order.orderNumber, order);
+      for (const line of order.lines ?? []) if (line.unitLabel) unitLabels.set(line.productId, line.unitLabel);
+    }
+    for (const item of payload.stock ?? []) {
+      stock.set(item.productId, item.quantity);
+      if (item.unitLabel) unitLabels.set(item.productId, item.unitLabel);
+    }
   }
 
   const products = new Map();
@@ -213,7 +220,8 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
     netDeliveredItemValuePaise: product.netDeliveredItemValuePaise,
     orderCount: product.orderNumbers.size,
     stockState: product.stockQuantity === undefined ? 'unreported' : product.stockQuantity === null ? 'unknown' : 'known',
-    stockQuantity: product.stockQuantity ?? null
+    stockQuantity: product.stockQuantity ?? null,
+    unitLabel: unitLabels.get(product.productId) ?? null
   })).sort((a, b) => b.netDeliveredItemValuePaise - a.netDeliveredItemValuePaise || a.productId.localeCompare(b.productId));
 
   return {
@@ -235,6 +243,7 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
 export function buildInventorySnapshot({ shopId, shopName, serverRevision, events, movementLimit = 100 }) {
   const stock = new Map();
   const movements = new Map();
+  const unitLabels = new Map();
   for (const row of events) {
     const payload = row.envelope?.payload;
     if (payload?.kind !== 'projection_delta.v1') continue;
@@ -243,9 +252,11 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
     const revision = Number(row.server_revision);
     for (const item of payload.stock ?? []) {
       stock.set(item.productId, { quantity: item.quantity, serverRevision: revision, acceptedAt });
+      if (item.unitLabel) unitLabels.set(item.productId, item.unitLabel);
     }
     for (const movement of payload.stockMovements ?? []) {
       movements.set(movement.movementId, { ...movement, serverRevision: revision, acceptedAt });
+      if (movement.unitLabel) unitLabels.set(movement.productId, movement.unitLabel);
     }
   }
 
@@ -254,6 +265,7 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
     const current = stock.get(productId);
     return {
       productId,
+      unitLabel: unitLabels.get(productId) ?? null,
       quantityState: !current ? 'unreported' : current.quantity === null ? 'unknown' : 'known',
       quantity: current?.quantity ?? null,
       lastReportedRevision: current?.serverRevision ?? null,
@@ -268,6 +280,7 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
       productId: movement.productId,
       quantityDelta: movement.quantityDelta,
       orderNumber: movement.orderNumber,
+      unitLabel: movement.unitLabel ?? unitLabels.get(movement.productId) ?? null,
       serverRevision: movement.serverRevision,
       acceptedAt: movement.acceptedAt
     }));
@@ -285,7 +298,7 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
     recentMovements,
     evidence: {
       scope: 'Accepted server events only; offline, blocked and unsynchronized activity is not included.',
-      quantities: 'Known, unknown and unreported quantities are distinct. Quantities stay attached to each product ID; unit metadata is not in the accepted sync model, so do not add or compare quantities across products.',
+      quantities: 'Known, unknown and unreported quantities are distinct. Optional unit labels come from accepted transaction events; the synchronized product catalogue and pack-size conversions are not implemented. Do not add or compare quantities across products.',
       movementHistory: 'Movement entries are deduplicated by movement ID and ordered by server revision. They are records, not proof of a physical count.',
       reconciliation: 'This view does not infer missing sales, waste, theft, or reorder quantities from a stock difference.'
     }

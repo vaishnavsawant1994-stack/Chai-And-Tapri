@@ -523,6 +523,24 @@ class CounterModelTest {
         assertFalse(payload.json.contains("private correction reason"))
     }
 
+    @Test fun syncProjectionIncludesOptionalProductUnitLabelsWithoutChangingLegacyPayloads() {
+        val order = CounterOrderRecord(12, listOf(CounterLine("tea", "Tea", 1, 1000)), Fulfillment.TAKEN, Payment.UNPAID, 0, false, null, 1)
+        val movement = StockMovement("unit-movement", "tea", -1, "quick_sale", 12)
+        val before = CounterSnapshot(13, emptyList(), emptyMap(), emptySet(), emptyList(), emptyList(), emptyList(), emptyList())
+        val after = before.copy(
+            orders = listOf(order), stock = mapOf("tea" to 4), stockMovements = listOf(movement),
+            productUnitLabels = mapOf("tea" to "cup")
+        )
+        val payload = SyncOutboxPayloadEncoder.between(before, after)
+        assertTrue(payload.sendable)
+        val json = payload.json!!
+        assertEquals(3, Regex("\\\"unitLabel\\\":\\\"cup\\\"").findAll(json).count())
+
+        val legacy = SyncOutboxPayloadEncoder.between(before, after.copy(productUnitLabels = emptyMap()))
+        assertTrue(legacy.sendable)
+        assertFalse(legacy.json!!.contains("unitLabel"))
+    }
+
     @Test fun syncProjectionDeltaUsesAllowListedFieldsAndBlocksUnsupportedEntities() {
         val persistence = MemoryPersistence()
         val model = CounterModel(persistence)

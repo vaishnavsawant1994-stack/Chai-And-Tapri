@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, applyCustomerLedgerDelta, applySupplierLedgerDelta, applyStaffShiftLedgerDelta, emptyCustomerLedger, emptySupplierLedger, emptyStaffShiftLedger, validateProjectionDelta } from '../src/service.mjs';
+import { ApiError, applyCustomerLedgerDelta, applyProductUnitLabelDelta, applySupplierLedgerDelta, applyStaffShiftLedgerDelta, authorizeProjectionForRole, emptyCustomerLedger, emptySupplierLedger, emptyStaffShiftLedger, validateProjectionDelta } from '../src/service.mjs';
 
 const emptyDelta = () => ({
   kind:'projection_delta.v1',orders:[],stock:[],stockMovements:[],customerCredits:[],repayments:[],paymentEntries:[]
@@ -13,6 +13,31 @@ test('projection contract rejects empty deltas and accepts supported stock delta
   payload.stock.push({ productId:'tea', quantity:0 });
   payload.stockMovements.push({ movementId:'movement-1', productId:'tea', quantityDelta:-2, orderNumber:12 });
   assert.equal(validateProjectionDelta(payload), true);
+});
+
+test('projection contract accepts optional unit labels while preserving legacy payloads and locking accepted labels', () => {
+  const legacy = emptyDelta();
+  legacy.stock.push({ productId:'tea', quantity:4 });
+  assert.equal(validateProjectionDelta(legacy), true);
+  const labeled = { ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:'cup' }], stockMovements:[{ movementId:'m1', productId:'tea', quantityDelta:1, orderNumber:null, unitLabel:'cup' }] };
+  assert.equal(validateProjectionDelta(labeled), true);
+  const labels = new Map();
+  assert.equal(applyProductUnitLabelDelta(labels, labeled), true);
+  assert.equal(labels.get('tea'), 'cup');
+  assert.throws(() => applyProductUnitLabelDelta(labels, { ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:'piece' }] }), (error) => error.code === 'product_unit_label_conflict');
+  assert.throws(() => validateProjectionDelta({ ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:' ' }] }), (error) => error.code === 'invalid_projection_delta');
+  assert.throws(() => validateProjectionDelta({ ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:'cup\npack' }] }), (error) => error.code === 'invalid_projection_delta');
+  assert.throws(() => validateProjectionDelta({ ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:'x'.repeat(25) }] }), (error) => error.code === 'invalid_projection_delta');
+  const inconsistent = { ...emptyDelta(), stock:[{ productId:'tea', quantity:4, unitLabel:'cup' }], stockMovements:[{ movementId:'m2', productId:'tea', quantityDelta:1, orderNumber:null, unitLabel:'piece' }] };
+  assert.equal(validateProjectionDelta(inconsistent), true);
+  assert.throws(() => applyProductUnitLabelDelta(new Map(), inconsistent), (error) => error.code === 'product_unit_label_conflict');
+});
+
+test('cashiers may use established unit metadata but cannot establish product units', () => {
+  const payload = { ...emptyDelta(), orders:[{ orderNumber:1, fulfillment:'TAKEN', payment:'UNPAID', paidPaise:0, creditPaise:0, refundedPaise:0, cashRefundedPaise:0, creditReversedPaise:0, salePosted:false, voided:false, revision:1, createdAtEpochMs:100, lines:[{ productId:'tea', quantity:1, deliveredQuantity:0, refundedQuantity:0, unitPricePaise:100, unitLabel:'cup' }] }] };
+  assert.throws(() => authorizeProjectionForRole('cashier', payload), (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_business_permission_denied');
+  assert.equal(authorizeProjectionForRole('cashier', payload, new Map(), new Map(), new Map(), new Map([['tea', 'cup']])), true);
+  assert.equal(authorizeProjectionForRole('owner', payload), true);
 });
 
 test('staff shift projection is privacy-minimized, validated and immutable after close', () => {

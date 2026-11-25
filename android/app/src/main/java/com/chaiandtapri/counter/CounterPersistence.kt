@@ -209,7 +209,9 @@ data class CounterSnapshot(
     val cashClosingReviews: List<CashClosingReview> = emptyList(),
     val purchaseOrderDrafts: List<PurchaseOrderDraft> = emptyList(),
     /** Encrypted local-key to opaque UUID mapping used for privacy-minimized cloud ledger sync. */
-    val customerSyncIdentities: Map<String, String> = emptyMap()
+    val customerSyncIdentities: Map<String, String> = emptyMap(),
+    /** Local catalogue metadata projected only alongside allow-listed product ledger deltas. */
+    val productUnitLabels: Map<String, String> = emptyMap()
 )
 
 /** Commits one validated command and its complete resulting state atomically. */

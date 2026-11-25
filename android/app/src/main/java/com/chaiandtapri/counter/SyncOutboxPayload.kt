@@ -30,6 +30,7 @@ object SyncOutboxPayloadEncoder {
             if (old == session && (old.closedAt != null || oldExpected == expected)) null else session to expected
         }
         val customerSyncIds = after.customerSyncIdentities
+        val productUnitLabels = after.productUnitLabels
         if ((receipts.map { it.supplierId } + supplierPayments.map { it.supplierId } + purchaseReturns.map { it.supplierId })
                 .any { supplierId -> supplierSyncIds[supplierId]?.isOpaqueUuid() != true } ||
             receipts.any { !it.syncId.isOpaqueUuid() } || supplierPayments.any { !it.syncId.isOpaqueUuid() } || purchaseReturns.any { !it.syncId.isOpaqueUuid() }) {
@@ -62,18 +63,23 @@ object SyncOutboxPayloadEncoder {
                 append("\"lines\":"); array(order.lines) { line ->
                     append('{'); field("productId", line.productId); append(','); number("quantity", line.quantity); append(',')
                     number("deliveredQuantity", line.deliveredQuantity); append(','); number("refundedQuantity", line.refundedQuantity); append(',')
-                    number("unitPricePaise", line.unitPricePaise); append(','); nullableNumber("estimatedUnitCostPaise", line.estimatedUnitCostPaise); append('}')
+                    number("unitPricePaise", line.unitPricePaise); append(','); nullableNumber("estimatedUnitCostPaise", line.estimatedUnitCostPaise)
+                    productUnitLabels[line.productId]?.let { label -> append(','); field("unitLabel", label) }
+                    append('}')
                 }
                 append('}')
             }
             append(','); append("\"stock\":"); array(stock) { (id, quantity) ->
                 append('{'); field("productId", id); append(',')
                 if (quantity == null) append("\"quantity\":null") else number("quantity", quantity)
+                productUnitLabels[id]?.let { label -> append(','); field("unitLabel", label) }
                 append('}')
             }
             append(','); append("\"stockMovements\":"); array(movements) { movement ->
                 append('{'); field("movementId", movement.movementId); append(','); field("productId", movement.productId); append(',')
-                number("quantityDelta", movement.quantityDelta); append(','); nullableNumber("orderNumber", movement.orderNumber); append('}')
+                number("quantityDelta", movement.quantityDelta); append(','); nullableNumber("orderNumber", movement.orderNumber)
+                productUnitLabels[movement.productId]?.let { label -> append(','); field("unitLabel", label) }
+                append('}')
             }
             append(','); append("\"customerCredits\":"); array(credits) { credit ->
                 append('{'); field("creditId", credit.syncId); append(','); field("customerId", customerSyncIds.getValue(credit.customerId)); append(',')

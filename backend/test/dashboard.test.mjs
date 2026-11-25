@@ -179,8 +179,8 @@ test('product performance uses latest order states, subtracts returns, excludes 
   ] };
   const voided = { ...chai1, orderNumber: 3, voided: true, lines: [{ ...chai1.lines[0], productId: 'samosa' }] };
   const result = buildProductPerformance({ shopId: 's', shopName: 'Synthetic', serverRevision: 4, events: [
-    row(1, { ...empty, orders: [chai1], stock: [{ productId: 'chai', quantity: 8 }] }),
-    row(2, { ...empty, orders: [chai1Returned], stock: [{ productId: 'chai', quantity: 7 }, { productId: 'coffee', quantity: null }] }),
+    row(1, { ...empty, orders: [chai1], stock: [{ productId: 'chai', quantity: 8, unitLabel: 'cup' }] }),
+    row(2, { ...empty, orders: [chai1Returned], stock: [{ productId: 'chai', quantity: 7, unitLabel: 'cup' }, { productId: 'coffee', quantity: null }] }),
     row(3, { ...empty, orders: [chai2] }),
     row(4, { ...empty, orders: [voided] })
   ] });
@@ -193,6 +193,8 @@ test('product performance uses latest order states, subtracts returns, excludes 
   assert.equal(chai.orderCount, 2);
   assert.equal(chai.stockState, 'known');
   assert.equal(chai.stockQuantity, 7);
+  assert.equal(chai.unitLabel, 'cup');
+  assert.equal(result.products.find((item) => item.productId === 'coffee').unitLabel, null);
   assert.equal(result.products.find((item) => item.productId === 'coffee').stockState, 'unknown');
   assert.equal(result.products.find((item) => item.productId === 'samosa'), undefined);
   assert.equal(result.netDeliveredItemValuePaise, 8500);
@@ -214,9 +216,9 @@ test('product performance rejects unsafe delivered value and reports empty accep
 test('inventory snapshot keeps known, unknown, and unreported quantities distinct and deduplicates movements', () => {
   const events = [
     row(1, { ...empty,
-      stock: [{ productId: 'chai', quantity: 12 }, { productId: 'coffee', quantity: null }],
+      stock: [{ productId: 'chai', quantity: 12, unitLabel: 'cup' }, { productId: 'coffee', quantity: null }],
       stockMovements: [
-        { movementId: 'm-1', productId: 'chai', quantityDelta: -2, orderNumber: 4 },
+        { movementId: 'm-1', productId: 'chai', quantityDelta: -2, orderNumber: 4, unitLabel: 'cup' },
         { movementId: 'm-2', productId: 'sugar', quantityDelta: -1, orderNumber: null }
       ]
     }),
@@ -231,12 +233,14 @@ test('inventory snapshot keeps known, unknown, and unreported quantities distinc
   assert.equal(result.unknownQuantityCount, 1);
   assert.equal(result.unreportedQuantityCount, 1);
   assert.equal(result.products.find((item) => item.productId === 'chai').quantity, 10);
+  assert.equal(result.products.find((item) => item.productId === 'chai').unitLabel, 'cup');
   assert.equal(result.products.find((item) => item.productId === 'coffee').quantityState, 'unknown');
   assert.equal(result.products.find((item) => item.productId === 'sugar').quantityState, 'unreported');
   assert.equal(result.movementCount, 2);
   assert.equal(result.recentMovements[0].movementId, 'm-1');
   assert.equal(result.recentMovements[0].serverRevision, 2);
-  assert.match(result.evidence.quantities, /unit metadata is not in the accepted sync model/);
+  assert.equal(result.recentMovements[0].unitLabel, 'cup');
+  assert.match(result.evidence.quantities, /pack-size conversions are not implemented/);
   assert.match(result.evidence.reconciliation, /does not infer missing sales/);
 });
 

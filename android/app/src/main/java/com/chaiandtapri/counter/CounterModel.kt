@@ -1131,7 +1131,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         nextNumber,
         orders.values.map { CounterOrderRecord(it.number, it.lines.toList(), it.fulfillment, it.payment, it.paidPaise, it.salePosted, it.cancelReason, it.revision, it.creditPaise, it.refundedPaise, it.voided, it.cashRefundedPaise, it.creditReversedPaise, it.createdAtEpochMs) },
         stock.toMap(), appliedCommandIds.toSet(), events.toList(), movements.toList(), credits.toList(), repayments.toList(), paymentEntries.toList(), stockConfirmedProductIds.toSet(),
-        supplierRecords.toList(), purchaseReceipts.toList(), supplierPayments.toList(), purchaseReturns.toList(), expenseRecords.toList(), cashDrawerSessions.toList(), cashDrawerMovements.toList(), cashClosingReviews.toList(), purchaseOrderRecords.toList(), customerSyncIdentities.toMap()
+        supplierRecords.toList(), purchaseReceipts.toList(), supplierPayments.toList(), purchaseReturns.toList(), expenseRecords.toList(), cashDrawerSessions.toList(), cashDrawerMovements.toList(), cashClosingReviews.toList(), purchaseOrderRecords.toList(), customerSyncIdentities.toMap(),
+        productUnitLabels = products().associate { it.productId to it.unitLabel }
     )
 
     private fun ensureCustomerSyncIdentities(before: CounterSnapshot) {

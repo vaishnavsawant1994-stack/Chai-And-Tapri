@@ -13,6 +13,7 @@ const isoAfterHours = (hours) => new Date(Date.now() + hours * 3_600_000);
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const hasExactKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const isText = (value, max = 160) => typeof value === 'string' && value.length > 0 && value.length <= max;
+const isUnitLabel = (value) => typeof value === 'string' && value.length >= 1 && value.length <= 24 && value.trim() === value && !/[\u0000-\u001f\u007f-\u009f]/.test(value);
 const isInt = (value, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) => Number.isSafeInteger(value) && value >= min && value <= max;
 const enumIs = (value, values) => typeof value === 'string' && values.includes(value);
 const STAFF_ROLES = ['manager', 'cashier'];
@@ -25,11 +26,16 @@ const validEmail = (value) => typeof value === 'string' && value.length <= 254 &
 const requireOwner = (actor) => { if (actor?.role !== 'owner') throw new ApiError(403, 'owner_access_required'); };
 
 /** Enforce server-side sync scopes using the authenticated membership, never a client role claim. */
-export function authorizeProjectionForRole(role, payload, stockBefore = new Map(), creditsBefore = new Map(), ordersBefore = new Map()) {
+export function authorizeProjectionForRole(role, payload, stockBefore = new Map(), creditsBefore = new Map(), ordersBefore = new Map(), productUnitLabels = new Map()) {
   if (role === 'owner' || role === 'manager') return true;
   if (role !== 'cashier') throw new ApiError(403, 'business_sync_role_denied');
   const privilegedFamilies = ['expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'];
   if (privilegedFamilies.some((field) => (payload[field] ?? []).length > 0)) throw new ApiError(403, 'cashier_business_permission_denied');
+  const labeledProducts = [
+    ...(payload.orders ?? []).flatMap((order) => order.lines ?? []),
+    ...(payload.stock ?? []), ...(payload.stockMovements ?? [])
+  ].filter((item) => item.unitLabel !== undefined);
+  if (labeledProducts.some((item) => !productUnitLabels.has(item.productId))) throw new ApiError(403, 'cashier_business_permission_denied');
   if ((payload.paymentEntries ?? []).some((entry) => CASHIER_PAYMENT_KINDS.get(entry.kind) !== entry.status || entry.amountPaise <= 0)) throw new ApiError(403, 'cashier_business_permission_denied');
   const currentOrders = new Map((payload.orders ?? []).map((order) => [order.orderNumber, order]));
   const expectedDeliveries = new Map();
@@ -126,6 +132,8 @@ export function validateProjectionDelta(payload) {
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
   const legacyLineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
   const costedLineKeys = [...legacyLineKeys, 'estimatedUnitCostPaise'];
+  const unitLineKeys = [...legacyLineKeys, 'unitLabel'];
+  const costedUnitLineKeys = [...costedLineKeys, 'unitLabel'];
   for (const order of payload.orders) {
     if (!hasExactKeys(order, orderKeys) || !isInt(order.orderNumber, { min: 1 }) ||
       !enumIs(order.fulfillment, ['TAKEN','PREPARING','READY','PARTIALLY_GIVEN','GIVEN','CANCELLED']) ||
@@ -133,19 +141,20 @@ export function validateProjectionDelta(payload) {
       !['paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','revision','createdAtEpochMs'].every((key) => isInt(order[key], { min: 0 })) ||
       typeof order.salePosted !== 'boolean' || typeof order.voided !== 'boolean' || !Array.isArray(order.lines) || order.lines.length > 100) throw new ApiError(400, 'invalid_projection_delta');
     for (const line of order.lines) {
-      if (!(hasExactKeys(line, legacyLineKeys) || hasExactKeys(line, costedLineKeys)) || !isText(line.productId, 120) || !isInt(line.quantity, { min: 1 }) ||
+      if (!(hasExactKeys(line, legacyLineKeys) || hasExactKeys(line, costedLineKeys) || hasExactKeys(line, unitLineKeys) || hasExactKeys(line, costedUnitLineKeys)) || !isText(line.productId, 120) || !isInt(line.quantity, { min: 1 }) ||
         !isInt(line.deliveredQuantity, { min: 0, max: line.quantity }) || !isInt(line.refundedQuantity, { min: 0, max: line.deliveredQuantity }) ||
-        !isInt(line.unitPricePaise, { min: 0 }) || (Object.hasOwn(line, 'estimatedUnitCostPaise') && line.estimatedUnitCostPaise !== null && !isInt(line.estimatedUnitCostPaise, { min: 0, max: 10_000_000 }))) throw new ApiError(400, 'invalid_projection_delta');
+        !isInt(line.unitPricePaise, { min: 0 }) || (Object.hasOwn(line, 'estimatedUnitCostPaise') && line.estimatedUnitCostPaise !== null && !isInt(line.estimatedUnitCostPaise, { min: 0, max: 10_000_000 })) ||
+        (Object.hasOwn(line, 'unitLabel') && !isUnitLabel(line.unitLabel))) throw new ApiError(400, 'invalid_projection_delta');
     }
   }
 
   for (const item of payload.stock) {
-    if (!hasExactKeys(item, ['productId','quantity']) || !isText(item.productId, 120) || (item.quantity !== null && !isInt(item.quantity, { min: 0 }))) throw new ApiError(400, 'invalid_projection_delta');
+    if (!(hasExactKeys(item, ['productId','quantity']) || hasExactKeys(item, ['productId','quantity','unitLabel'])) || !isText(item.productId, 120) || (item.quantity !== null && !isInt(item.quantity, { min: 0 })) || (Object.hasOwn(item, 'unitLabel') && !isUnitLabel(item.unitLabel))) throw new ApiError(400, 'invalid_projection_delta');
   }
   for (const item of payload.stockMovements) {
-    if (!hasExactKeys(item, ['movementId','productId','quantityDelta','orderNumber']) || !isText(item.movementId, 160) ||
+    if (!(hasExactKeys(item, ['movementId','productId','quantityDelta','orderNumber']) || hasExactKeys(item, ['movementId','productId','quantityDelta','orderNumber','unitLabel'])) || !isText(item.movementId, 160) ||
       !isText(item.productId, 120) || !isInt(item.quantityDelta) || item.quantityDelta === 0 ||
-      (item.orderNumber !== null && !isInt(item.orderNumber, { min: 1 }))) throw new ApiError(400, 'invalid_projection_delta');
+      (item.orderNumber !== null && !isInt(item.orderNumber, { min: 1 })) || (Object.hasOwn(item, 'unitLabel') && !isUnitLabel(item.unitLabel))) throw new ApiError(400, 'invalid_projection_delta');
   }
   const customerRecordIds = new Set();
   for (const credit of payload.customerCredits) {
@@ -201,6 +210,24 @@ export function validateProjectionDelta(payload) {
       ((shift.closedAtEpochMs === null) !== (shift.closingCashPaise === null))) throw new ApiError(400, 'invalid_projection_delta');
     shiftIds.add(shift.shiftId);
   }
+  return true;
+}
+
+/** Lock a product's display/count unit after its first synchronized appearance. */
+export function applyProductUnitLabelDelta(labels, payload) {
+  const incoming = new Map();
+  const observe = (productId, label) => {
+    if (label === undefined) return;
+    const previousInDelta = incoming.get(productId);
+    if (previousInDelta !== undefined && previousInDelta !== label) throw new ApiError(409, 'product_unit_label_conflict');
+    const established = labels.get(productId);
+    if (established !== undefined && established !== label) throw new ApiError(409, 'product_unit_label_conflict');
+    incoming.set(productId, label);
+  };
+  for (const order of payload.orders ?? []) for (const line of order.lines ?? []) observe(line.productId, line.unitLabel);
+  for (const item of payload.stock ?? []) observe(item.productId, item.unitLabel);
+  for (const movement of payload.stockMovements ?? []) observe(movement.productId, movement.unitLabel);
+  for (const [productId, label] of incoming) labels.set(productId, label);
   return true;
 }
 
@@ -689,6 +716,7 @@ export class SyncService {
       const stockLedger = new Map();
       const creditState = new Map();
       const orderState = new Map();
+      const productUnitLabels = new Map();
       for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') {
         applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
         applyCustomerLedgerDelta(customerLedger, row.envelope.payload);
@@ -696,6 +724,7 @@ export class SyncService {
         for (const item of row.envelope.payload.stock ?? []) stockLedger.set(item.productId, item.quantity);
         for (const credit of row.envelope.payload.customerCredits ?? []) creditState.set(credit.creditId, credit);
         for (const order of row.envelope.payload.orders ?? []) orderState.set(order.orderNumber, order);
+        applyProductUnitLabelDelta(productUnitLabels, row.envelope.payload);
       }
       const results = [];
       for (const e of events) {
@@ -716,7 +745,9 @@ export class SyncService {
             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.business_id,actor.shop_id,e.eventId,e.commandId,e.deviceId,e.baseRevision,revision,e]);
           results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
         }
-        authorizeProjectionForRole(actor.role, e.payload, stockLedger, creditState, orderState);
+        applyProductUnitLabelDelta(new Map(productUnitLabels), e.payload);
+        authorizeProjectionForRole(actor.role, e.payload, stockLedger, creditState, orderState, productUnitLabels);
+        applyProductUnitLabelDelta(productUnitLabels, e.payload);
         applySupplierLedgerDelta(supplierLedger, e.payload);
         applyCustomerLedgerDelta(customerLedger, e.payload);
         applyStaffShiftLedgerDelta(staffShiftLedger, e.payload);
