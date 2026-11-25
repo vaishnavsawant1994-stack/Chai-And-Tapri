@@ -81,6 +81,30 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
   }
 });
 
+test('accepted unit labels persist in owner projections, reject relabeling, and preserve retry/conflict behavior', { skip: !connection }, async () => {
+  const pool = createPool(connection); const admin = createAdminPool(); const service = new SyncService(pool); const deviceId = randomUUID();
+  let enrollment;
+  try {
+    enrollment = await service.register({ email:`unit-${randomUUID()}@example.test`, password:'Synthetic-Only-Password-2026!', displayName:'Synthetic Owner', businessName:'Synthetic Business', shopName:'Synthetic Shop', deviceId, deviceLabel:'Unit Test Device' });
+    const actor = await service.authenticate(enrollment.token, enrollment.shopId);
+    const event = { type:'business.command.v1', schemaVersion:1, eventId:randomUUID(), commandId:`unit-${randomUUID()}`, businessId:enrollment.businessId, shopId:enrollment.shopId, deviceId, baseRevision:0, payload:{ ...projectionDelta([]), stock:[{ productId:'tea', quantity:4, unitLabel:'cup' }] } };
+    assert.equal((await service.submitEvents(actor, [event])).results[0].status, 'accepted');
+    assert.equal((await service.submitEvents(actor, [event])).results[0].status, 'duplicate');
+
+    const relabel = { ...event, eventId:randomUUID(), commandId:`relabel-${randomUUID()}`, baseRevision:1, payload:{ ...projectionDelta([]), stock:[{ productId:'tea', quantity:4, unitLabel:'piece' }] } };
+    await assert.rejects(service.submitEvents(actor, [relabel]), (error) => error instanceof ApiError && error.code === 'product_unit_label_conflict');
+    const stale = { ...relabel, eventId:randomUUID(), commandId:`stale-${randomUUID()}`, baseRevision:0 };
+    assert.equal((await service.submitEvents(actor, [stale])).results[0].status, 'conflict');
+
+    const inventory = await service.shopInventorySnapshot(actor);
+    assert.equal(inventory.products.find((product) => product.productId === 'tea').unitLabel, 'cup');
+    assert.equal((await service.shopProductPerformance(actor)).products.find((product) => product.productId === 'tea').unitLabel, 'cup');
+  } finally {
+    if (enrollment) await cleanupEnrollment(admin, enrollment);
+    await pool.end(); await admin.end();
+  }
+});
+
 test('authentication rejects malformed identifiers and weak registration passwords before database writes', { skip: !connection }, async()=>{
   const pool=createPool(connection); const service=new SyncService(pool);
   try {

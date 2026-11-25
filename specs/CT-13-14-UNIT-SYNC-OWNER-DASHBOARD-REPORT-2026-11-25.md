@@ -11,18 +11,19 @@
 
 ## Verification
 
-- Backend Node: **32 passed, 0 failed, 5 skipped**. The skipped cases require PostgreSQL and were not run in this invocation (`node --test test/*.test.mjs` from `backend/`).
+- Backend without a database: **32 passed, 0 failed, 6 PostgreSQL-dependent skipped**.
+- Backend against a fresh disposable PostgreSQL 17 cluster with a restricted runtime role: **38 passed, 0 failed, 0 skipped**. This includes the live service test for owner acceptance, exact retry, changed-label rejection, stale-revision conflict, and owner inventory/product projection. The cluster was loopback-only and stopped after the run. Logs: [`backend tests`](../test-evidence/2026-11-25/cat13-unit-sync-postgres/backend-tests-e76b8f1481ad4d0b8ff2524ef1ed33e5.log), [`PostgreSQL startup/shutdown`](../test-evidence/2026-11-25/cat13-unit-sync-postgres/postgres-e76b8f1481ad4d0b8ff2524ef1ed33e5.log).
 - Kotlin JVM: **90 passed, 0 failed** (`:app:testDebugUnitTest`). Includes optional label emission on sale line, stock snapshot and movement, plus legacy no-label payload behavior.
 - Prototype Node: **52 passed, 0 failed** (`node --test *.test.cjs` from `prototype/`).
 - `assembleDebug assembleDebugAndroidTest lintDebug`: **BUILD SUCCESSFUL**. Lint: **0 errors, 189 warnings**.
-- No live PostgreSQL sync integration test or connected Android instrumentation test was completed for this slice.
+- No connected Android instrumentation test was completed specifically for this slice.
 
 ## Regression result and limits
 
 A connected Android regression attempt is **failed/incomplete**, not passed. It recorded 28 passing cases, then `cashierCanSignInThroughAccessScreenAndSeesCounterOnlyMenu` failed because the emulator displayed “System UI isn't responding” instead of the staff sign-in screen. The follow-up XML is at `android/app/build/outputs/androidTest-results/connected/debug/TEST-Medium_Phone_API_37.0(AVD) - 17.xml`. API 37 requires a 4 GB emulator memory allocation, and the host ran low on available memory. This test result does not establish an app defect or pass; the broad suite still needs a stable run.
 
-The label-lock helper has unit coverage, but the PostgreSQL-backed event acceptance path was skipped here. This slice is not production-sync, cross-device recovery, independent security review, field, physical Bluetooth, deployment, or full-product qualification.
+The PostgreSQL-backed event acceptance path passed the synthetic restricted-role integration test described above. This slice is not production-sync, cross-device recovery, independent security review, field, physical Bluetooth, deployment, or full-product qualification.
 
 ## Next executable task
 
-Run the authenticated PostgreSQL integration suite against a disposable database with a synthetic owner/shop/device and test: first accepted unit label, legacy unlabeled history, conflicting subsequent label, duplicate event idempotency, and stale-revision conflict. Then rerun the Android connected regression on an emulator with sufficient host headroom or an API 36 AVD, preserving the existing synthetic data and test artifacts.
+Rerun the Android connected regression on an emulator with sufficient host headroom or an API 36 AVD, preserving the existing synthetic data and test artifacts. Extend the existing PostgreSQL-backed staff-flow integration test to assert that a cashier cannot establish a first unit label but can use the owner-established label in a sale.
