@@ -4553,6 +4553,91 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun managerCanCancelUnhandedRemainderFromOrderDetailsWithoutReversingDeliveredSale() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic owner")
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("cancel_chai", "Cancellation Chai", "Chai", 1000, true, true, true)).contains("Product saved"))
+        assertTrue(model.confirmOpeningStock("cancel_chai", 5, "synthetic order cancellation", "cancel-detail-stock").contains("5 units"))
+        assertTrue(model.apply("cancel-detail-create", ProposedCommand("create", null, "two chai", "cancel_chai", 2)).contains("Order #12 created"))
+        var order = model.allOrders().single()
+        assertTrue(model.apply("cancel-detail-ready", ProposedCommand("ready", 12, "ready", expectedRevision = order.revision)).contains("ready"))
+        order = model.allOrders().single()
+        assertTrue(model.partialHandover(12, mapOf("cancel_chai" to 1), "cancel-detail-partial", order.revision).contains("Handed over"))
+        order = model.allOrders().single()
+        val revisionBeforeCancel = order.revision
+        model.close()
+        LocalSessionState.establishStaff("cancel-detail-manager", "Cancellation Manager", StaffRole.MANAGER)
+
+        val activity = instrumentation.startActivitySync(Intent(context, OrderDetailsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(OrderDetailsActivity.EXTRA_ORDER_NUMBER, 12))
+        try {
+            var cancelButton: Button? = null
+            instrumentation.runOnMainSync {
+                fun visit(view: View) {
+                    if (view is Button && view.text.toString() == "Cancel unhanded remainder") cancelButton = view
+                    if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+                }
+                visit(activity.findViewById(android.R.id.content))
+                assertNotNull("Manager should see the cancel-remainder action", cancelButton)
+                cancelButton!!.performClick()
+            }
+            val ui = instrumentation.uiAutomation
+            fun awaitAndClick(text: String, enterReason: Boolean = false) {
+                var clicked = false
+                var reasonEntered = false
+                repeat(100) {
+                    if (!clicked) {
+                        val root = ui.rootInActiveWindow
+                        if (enterReason && !reasonEntered && root != null) {
+                            fun enter(node: AccessibilityNodeInfo): Boolean {
+                                if (node.className == EditText::class.java.name && node.contentDescription == "Cancellation reason") {
+                                    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Customer cancelled remainder") }
+                                    reasonEntered = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                                    return reasonEntered
+                                }
+                                for (index in 0 until node.childCount) node.getChild(index)?.let { if (enter(it)) return true }
+                                return false
+                            }
+                            enter(root)
+                        }
+                        fun find(node: AccessibilityNodeInfo): Boolean {
+                            if (node.text?.toString().equals(text, ignoreCase = true)) return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            for (index in 0 until node.childCount) node.getChild(index)?.let { if (find(it)) return true }
+                            return false
+                        }
+                        if (root != null) clicked = find(root)
+                        if (!clicked) Thread.sleep(100)
+                    }
+                }
+                assertTrue("Dialog action '$text' should appear${if (enterReason) " after entering the required reason" else ""}", clicked)
+                instrumentation.waitForIdleSync()
+                Thread.sleep(250)
+            }
+            awaitAndClick("Review cancellation", enterReason = true)
+            awaitAndClick("Record cancellation")
+
+            SqliteCounterPersistence(context).use { db ->
+                val snapshot = db.load() ?: error("Cancelled snapshot missing")
+                val cancelled = snapshot.orders.single { it.number == 12 }
+                assertEquals(Fulfillment.CANCELLED, cancelled.fulfillment)
+                assertEquals(revisionBeforeCancel + 1, cancelled.revision)
+                assertEquals(1000, cancelled.lines.single { it.productId == "cancel_chai" }.deliveredQuantity * cancelled.lines.single { it.productId == "cancel_chai" }.unitPricePaise)
+                assertEquals("Customer cancelled remainder", cancelled.cancelReason)
+                assertEquals(1, snapshot.stockMovements.count { it.orderNumber == 12 && it.quantityDelta < 0 })
+                assertTrue(snapshot.paymentEntries.none { it.orderNumber == 12 })
+                assertTrue(db.loadAuditRecords().any { it.commandId.startsWith("order-cancel-") && it.event.contains("reason=Customer cancelled remainder") && it.actorId == "cancel-detail-manager" })
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.establish("Synthetic test owner") }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun cashierCanAddConfiguredItemFromOpenOrderDetailsWithoutPostingSaleOrStock() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

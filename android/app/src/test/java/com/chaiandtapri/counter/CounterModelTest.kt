@@ -427,6 +427,39 @@ class CounterModelTest {
         assertTrue(model.cancelPurchaseOrder(order.purchaseOrderId, 1, "again", "po-cancel-again").contains("already cancelled"))
     }
 
+    @Test fun cancellingUnhandedRemainderRequiresBoundedReasonAndPreservesDeliveredSaleAndStock() {
+        LocalSessionState.clear()
+        val model = CounterModel()
+        assertTrue(model.apply("cancel-remainder-create", ProposedCommand("create", null, "two cutting chai", "cutting_chai", 2)).contains("Order #12 created"))
+        var order = model.allOrders().single()
+        assertTrue(model.apply("cancel-remainder-ready", ProposedCommand("ready", 12, "ready", expectedRevision = order.revision)).contains("ready"))
+        order = model.allOrders().single()
+        assertTrue(model.partialHandover(12, mapOf("cutting_chai" to 1), "cancel-remainder-partial", order.revision).contains("Handed over"))
+        order = model.allOrders().single()
+        val revisionBeforeCancel = order.revision
+        val movementsBefore = model.stockMovements().toList()
+        val paymentsBefore = model.paymentHistory().toList()
+
+        assertTrue(model.cancelOrder(12, "  ", "cancel-remainder-blank", order.revision).contains("3–120 characters"))
+        assertTrue(model.cancelOrder(12, "ok", "cancel-remainder-short", order.revision).contains("3–120 characters"))
+        assertTrue(model.cancelOrder(12, "unsafe\nreason", "cancel-remainder-control", order.revision).contains("3–120 characters"))
+        assertEquals(Fulfillment.PARTIALLY_GIVEN, model.allOrders().single().fulfillment)
+        assertEquals(order.revision, model.allOrders().single().revision)
+
+        assertTrue(model.cancelOrder(12, "Customer cancelled remaining cup", "cancel-remainder-valid", revisionBeforeCancel).contains("cancelled"))
+        val cancelled = model.allOrders().single()
+        assertEquals(Fulfillment.CANCELLED, cancelled.fulfillment)
+        assertEquals(1_000, cancelled.salePaise)
+        assertEquals(1_000, cancelled.duePaise)
+        assertEquals(0, cancelled.paidPaise)
+        assertEquals(movementsBefore, model.stockMovements())
+        assertEquals(paymentsBefore, model.paymentHistory())
+        assertTrue(model.auditEvents().any { it.contains("order.cancelled #12 reason=Customer cancelled remaining cup") })
+        assertTrue(model.cancelOrder(12, "stale follow-up", "cancel-remainder-stale", revisionBeforeCancel).contains("revision conflict"))
+        model.close()
+        LocalSessionState.clear()
+    }
+
     @Test fun syncProjectionDeltaUsesAllowListedFieldsAndBlocksUnsupportedEntities() {
         val persistence = MemoryPersistence()
         val model = CounterModel(persistence)

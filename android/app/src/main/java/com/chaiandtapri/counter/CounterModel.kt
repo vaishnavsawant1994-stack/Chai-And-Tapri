@@ -842,9 +842,10 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if(expectedRevision != null && expectedRevision != order.revision) return "Order revision conflict. Refresh and review the order before retrying."
         if(order.fulfillment==Fulfillment.GIVEN) return "A handed-over order requires an authorized refund. No change made."
         if(order.fulfillment==Fulfillment.CANCELLED || order.voided) return "Order is already cancelled. No change made."
-        if(reason.isBlank()) return "A correction reason is required."
-        order.fulfillment=Fulfillment.CANCELLED; order.cancelReason=reason.trim(); order.salePosted=order.salePaise>0
-        return commitMutation(before, commandId, "Order #$number cancelled with correction reason.", "order.cancelled #$number reason=${reason.trim()}", order)
+        val correctionReason = reason.trim()
+        if(correctionReason.length !in 3..120 || correctionReason.any(Char::isISOControl)) return "A correction reason of 3–120 characters is required. No change made."
+        order.fulfillment=Fulfillment.CANCELLED; order.cancelReason=correctionReason; order.salePosted=order.salePaise>0
+        return commitMutation(before, commandId, "Order #$number cancelled with correction reason.", "order.cancelled #$number reason=$correctionReason", order)
     }
 
     /** Refunds delivered line quantities only. Returnability is shop policy; omitted products are never restocked. */

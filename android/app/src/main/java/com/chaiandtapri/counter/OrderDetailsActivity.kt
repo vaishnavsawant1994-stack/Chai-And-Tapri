@@ -56,6 +56,11 @@ class OrderDetailsActivity : Activity() {
                     chooseProductToAdd(order.number, order.revision, order.totalPaise)
                 })
             }
+            if (LocalSessionState.isManager && !order.voided && order.fulfillment in setOf(Fulfillment.TAKEN, Fulfillment.PREPARING, Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) {
+                content.addView(button("Cancel unhanded remainder") {
+                    confirmCancelUnhandedRemainder(order.number, order.revision, order.fulfillment == Fulfillment.PARTIALLY_GIVEN)
+                })
+            }
             order.lines.forEach { line ->
                 content.addView(label("${line.name} · ordered ${line.quantity} · handed over ${line.deliveredQuantity} · returned ${line.refundedQuantity}", 15f))
                 content.addView(label("Unit ${money(line.unitPricePaise)} · delivered value ${money(line.deliveredQuantity * line.unitPricePaise)}", 13f))
@@ -212,6 +217,57 @@ class OrderDetailsActivity : Activity() {
                 ) ?: "Order details are unavailable. No change was made."
                 dialog.dismiss()
                 render(result)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun confirmCancelUnhandedRemainder(orderNumber: Int, expectedRevision: Int, hasDeliveredItems: Boolean) {
+        if (!LocalSessionState.isManager) {
+            render("Manager access is required to cancel an order. No change was made.")
+            return
+        }
+        val reason = EditText(this).apply {
+            hint = "Reason for cancellation (3-120 characters)"
+            contentDescription = "Cancellation reason"
+            setSingleLine(true)
+            filters = arrayOf(android.text.InputFilter.LengthFilter(120))
+        }
+        val deliveredPolicy = if (hasDeliveredItems) "Previously handed-over items remain sold; their payments, credit and stock movements are unchanged." else "No item has been handed over, so this records no sale, payment or stock reversal."
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Cancel unhanded remainder · Order #$orderNumber")
+            .setMessage("This stops the remaining items from being handed over. $deliveredPolicy No refund is issued by this action. Enter a short reason for the audit record; do not include personal information.")
+            .setView(reason)
+            .setNegativeButton("Keep order", null)
+            .setPositiveButton("Review cancellation", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val value = reason.text.toString().trim()
+                if (value.length !in 3..120 || value.any(Char::isISOControl)) {
+                    reason.error = "Enter a short reason (3-120 characters)"
+                    return@setOnClickListener
+                }
+                if (!LocalSessionState.isManager) {
+                    dialog.dismiss()
+                    render("Manager access is required to cancel an order. No change was made.")
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm order cancellation")
+                    .setMessage("Cancel only the unhanded remainder of order #$orderNumber? $deliveredPolicy")
+                    .setNegativeButton("Go back", null)
+                    .setPositiveButton("Record cancellation") { _, _ ->
+                        if (!LocalSessionState.isManager) {
+                            render("Manager access is required to cancel an order. No change was made.")
+                            return@setPositiveButton
+                        }
+                        val result = model?.cancelOrder(orderNumber, value, "order-cancel-${java.util.UUID.randomUUID()}", expectedRevision)
+                            ?: "Order details are unavailable. No change was made."
+                        render(result)
+                    }
+                    .show()
             }
         }
         dialog.show()
