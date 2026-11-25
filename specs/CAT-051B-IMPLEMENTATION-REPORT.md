@@ -1,5 +1,9 @@
 # CAT-051B - Backup, Restore, Recovery UI and Failure Qualification
 
+## Current-source shop-identity preflight - 25 November 2026
+
+Backup verification now compares the authenticated archive identity against the active shop before the UI offers replacement confirmation. This closes a preflight gap: previously a valid foreign-shop archive could be labeled “Backup verified” before the restore transaction rejected it. Verification now reports the mismatch early and preserves active records; same-shop restore and trusted same-shop key-loss recovery remain supported. Evidence: [focused report](CAT-051B-SHOP-IDENTITY-PREFLIGHT-REPORT-2026-11-25.md). Four focused API 37 tests passed 1/1 individually (UI mismatch, service mismatch/preservation, same-shop SAF export/restore, and trusted key-loss preview/recovery); Kotlin JVM 96/96; debug/instrumentation APK assembly passed; lint 0 errors / 189 warnings. The full connected Android suite was not rerun. This does not close CAT-051B's physical interruption, real storage exhaustion, device/key invalidation, cross-device/person or independent-review gates.
+
 ## Current-source API 37 recovery qualification — 25 November 2026
 
 On `Tapri_Recovery_Isolated` (`emulator-5554`), the current-source `ownerBackupMenuCreatesEncryptedSyntheticBackupThroughSafUi` test passed **1/1** (69.806 s). It created the encrypted synthetic archive through Android's CreateDocument picker, verified and restored it through the UI, then asserted orders, payment/refund/credit/repayment state, inventory and idempotent replay. The non-empty archive `cat051b-saf-roundtrip-1795562624457.ctbackup` (303,228 bytes) remained under `/sdcard/Download`, outside app-private storage.

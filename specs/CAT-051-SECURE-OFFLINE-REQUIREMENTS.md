@@ -11,6 +11,10 @@
 - Android Auto Backup, cloud backup and device transfer are disabled/excluded for databases, shared preferences, files and external files.
 - CAT-051B adds SAF `CreateDocument`/`OpenDocument` launchers, recovery-secret confirmation and clearing, metadata preflight, explicit replacement confirmation, restore progress/result states, write maintenance UI, an exclusive process-wide barrier, staged recovery with a durable cutover journal, and read-only business snapshot reconciliation.
 
+### Current-source shop-identity preflight — 25 November 2026
+
+The authenticated backup verification path now compares the archive identity with the active local shop before the UI offers replacement confirmation. Mismatched foreign-shop backup validation fails while preserving active orders. If the local encryption key is unavailable, preflight permits recovery only when the authenticated archive identity matches the trusted same-install identity binding; the restore transaction repeats the binding check. The UI mismatch callback, service rejection, same-shop SAF restore, and trusted key-loss recovery passed focused API 37 tests. See [CAT-051B identity-preflight report](CAT-051B-SHOP-IDENTITY-PREFLIGHT-REPORT-2026-11-25.md). The test is synthetic emulator evidence; real device/key invalidation, cross-device/person, hard power-loss/storage exhaustion, independent review, and production qualification remain open.
+
 ## Security and recovery boundaries
 
 - Device-local Keystore keys are device/app-install bound and are not portable. The separately held recovery secret is required to open a portable export on a replacement installation; it must not be stored alongside the snapshot.

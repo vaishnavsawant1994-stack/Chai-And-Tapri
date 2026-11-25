@@ -150,6 +150,10 @@ class PortableSnapshotBackup(
                 verifyBusiness(helper)
                 helper.shopIdentity().also { identity -> require(container.shopIdentity == null || container.shopIdentity == identity) { "Backup shop identity does not match the encrypted shop data." } }
             } finally { helper.close() }
+            // Do not label a valid archive as restorable until its authenticated shop
+            // identity is compatible with the active local shop. The UI presents this
+            // result before asking the owner to approve replacement.
+            verifyRestoreTarget(shopIdentity, container.shopIdentity != null, allowUnreadablePreview = true)
             return SnapshotMetadata(SqliteCounterPersistence.DATABASE_VERSION, android.util.Base64.encodeToString(container.backupId, android.util.Base64.NO_WRAP).takeLast(8), temp.length(), shopIdentity.takeLast(8), container.formatVersion)
         } finally {
             key.fill(0)
@@ -246,12 +250,17 @@ class PortableSnapshotBackup(
         }
     }
 
-    private fun verifyRestoreTarget(importedShopIdentity: String, hasAuthenticatedContainerIdentity: Boolean, replacingUnreadableStore: Boolean = false) {
+    private fun verifyRestoreTarget(
+        importedShopIdentity: String,
+        hasAuthenticatedContainerIdentity: Boolean,
+        replacingUnreadableStore: Boolean = false,
+        allowUnreadablePreview: Boolean = false
+    ) {
         val active = appContext.getDatabasePath(databaseName)
         if (!active.exists()) return
         val helper = try { SqliteCounterPersistence(appContext, databaseName, keyNamespace) }
         catch (error: Exception) {
-            if (replacingUnreadableStore && hasAuthenticatedContainerIdentity) {
+            if ((replacingUnreadableStore || allowUnreadablePreview) && hasAuthenticatedContainerIdentity) {
                 val boundIdentity = SqliteCounterPersistence.locallyBoundShopIdentity(appContext, databaseName, keyNamespace)
                 require(boundIdentity != null && boundIdentity == importedShopIdentity) {
                     "Cannot verify that this backup belongs to the unreadable local shop. Existing encrypted data was not changed."

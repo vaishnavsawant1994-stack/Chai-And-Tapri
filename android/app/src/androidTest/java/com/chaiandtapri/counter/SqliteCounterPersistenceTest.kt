@@ -1499,6 +1499,78 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun recoveryUiRejectsAuthenticatedBackupFromAnotherShopBeforeReplacementConfirmation() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val defaultDatabase = SqliteCounterPersistence.DATABASE_NAME
+        val foreignDatabase = "ct051b-foreign-${java.util.UUID.randomUUID()}.db"
+        val foreignNamespace = "ct051b-foreign-${java.util.UUID.randomUUID()}"
+        context.deleteDatabase(defaultDatabase)
+        context.deleteDatabase(foreignDatabase)
+
+        val active = CounterModel(SqliteCounterPersistence(context))
+        assertTrue(active.apply("ct051b-active-shop-order", ProposedCommand("create", null, "active shop chai", "chai", 1)).contains("Order #"))
+        val activeOrderNumber = active.allOrders().single().number
+        active.close()
+        val foreign = CounterModel(SqliteCounterPersistence(context, foreignDatabase, foreignNamespace))
+        assertTrue(foreign.apply("ct051b-foreign-shop-order", ProposedCommand("create", null, "foreign shop samosa", "samosa", 1)).contains("Order #"))
+        foreign.close()
+
+        val recoverySecret = "ct051b-foreign-shop-secret".toCharArray()
+        val backup = java.io.ByteArrayOutputStream()
+        PortableSnapshotBackup(context, foreignDatabase, foreignNamespace).export(backup, recoverySecret.copyOf())
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "ct051b-foreign-${System.currentTimeMillis()}.ctbackup")
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("Could not create synthetic foreign-shop SAF backup fixture.")
+        var activity: MainActivity? = null
+        try {
+            context.contentResolver.openOutputStream(uri, "w")!!.use { it.write(backup.toByteArray()) }
+            context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+            val statusField = MainActivity::class.java.getDeclaredField("status").apply { isAccessible = true }
+            var status: TextView? = null
+            repeat(120) {
+                instrumentation.runOnMainSync { status = runCatching { statusField.get(activity) as TextView }.getOrNull() }
+                if (status != null) return@repeat
+                Thread.sleep(100)
+            }
+            assertNotNull("Owner counter should be ready for backup identity preflight", status)
+            val verifyMethod = MainActivity::class.java.getDeclaredMethod("verifyBackup", Uri::class.java, CharArray::class.java).apply { isAccessible = true }
+            instrumentation.runOnMainSync { verifyMethod.invoke(activity, uri, recoverySecret) }
+            var result = ""
+            repeat(900) {
+                instrumentation.runOnMainSync { result = status!!.text.toString() }
+                if (result.startsWith("Backup verification failed") || result.startsWith("Backup verified")) return@repeat
+                Thread.sleep(100)
+            }
+            assertTrue("A foreign authenticated shop must fail before the UI presents replacement confirmation: $result",
+                result.startsWith("Backup verification failed") && result.contains("different or unverified shop identity"))
+            val after = CounterModel(SqliteCounterPersistence(context))
+            try {
+                assertEquals(1, after.allOrders().size)
+                val surviving = after.allOrders().single()
+                assertEquals(activeOrderNumber, surviving.number)
+                assertTrue("The active shop's order must remain intact", surviving.items.contains("Chai"))
+            } finally { after.close() }
+            var recoveryBusy = true
+            instrumentation.runOnMainSync { recoveryBusy = MainActivity::class.java.getDeclaredField("recoveryBusy").apply { isAccessible = true }.getBoolean(activity) }
+            assertFalse("Failed identity preflight should release the recovery busy state", recoveryBusy)
+        } finally {
+            recoverySecret.fill('\u0000')
+            instrumentation.runOnMainSync { activity?.finish() }
+            context.contentResolver.delete(uri, null, null)
+            context.deleteDatabase(defaultDatabase)
+            context.deleteDatabase(foreignDatabase)
+            context.getSharedPreferences("chai_tapri_shop_identity_guard", Context.MODE_PRIVATE)
+                .edit().remove("$foreignNamespace:$foreignDatabase").commit()
+        }
+    }
+
     @Test fun recoveryActivityCompletesBackupVerificationCallbackForSafContentUri() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -6481,6 +6553,8 @@ class SqliteCounterPersistenceTest {
 
         context.getSharedPreferences("chai_tapri_shop_identity_guard", android.content.Context.MODE_PRIVATE)
             .edit().putString("$namespace:$databaseName", identity).commit()
+        val preview = PortableSnapshotBackup(context, databaseName, namespace).verify(output.toByteArray().inputStream(), secret.copyOf())
+        assertEquals("A trusted same-shop binding should permit recovery preflight after local-key loss", identity.takeLast(8), preview.shopIdentitySuffix)
         val oldEnvelope = SecureDatabaseKeyManager(context, databaseFile, namespace).envelopeSnapshot()
         try {
             PortableSnapshotBackup(context, databaseName, namespace, BackupFaultInjector { point ->
@@ -7165,6 +7239,17 @@ class SqliteCounterPersistenceTest {
         otherShop.close()
         val otherIdentity = SqliteCounterPersistence(context).use { it.shopIdentity() }
         assertTrue(sourceIdentity != otherIdentity)
+
+        try {
+            PortableSnapshotBackup(context).verify(backup.toByteArray().inputStream(), secret.copyOf())
+            throw AssertionError("Preflight verification must reject another shop before replacement confirmation")
+        } catch (error: IllegalArgumentException) {
+            assertTrue(error.message.orEmpty().contains("different or unverified shop identity"))
+        }
+        val afterRejectedPreflight = CounterModel(SqliteCounterPersistence(context))
+        assertEquals("Preflight identity rejection must preserve active records", 1, afterRejectedPreflight.allOrders().size)
+        assertTrue(afterRejectedPreflight.allOrders().single().items.contains("Samosa"))
+        afterRejectedPreflight.close()
 
         try {
             PortableSnapshotBackup(context).restore(backup.toByteArray().inputStream(), secret.copyOf(), true)

@@ -1,4 +1,8 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
+## Latest continuation - CAT-051B shop-identity preflight - 25 November 2026
+
+Portable backup verification now checks authenticated backup identity against the active local shop before UI replacement confirmation. A different-shop snapshot fails early and preserves the active record; same-shop SAF recovery and trusted key-loss recovery remain usable. Four focused API 37 tests passed 1/1 in separate invocations; Kotlin JVM 96/96; APK assembly passed; lint 0 errors / 189 warnings. Full connected suite not rerun. See `CAT-051B-SHOP-IDENTITY-PREFLIGHT-REPORT-2026-11-25.md`; CAT-051B remains open for physical/interruption, cross-device/person, independent security and production qualification.
+
 ## Latest continuation - CT-12 open-order cancellation confirmation - 25 November 2026
 
 Added focused API 37 UI coverage for CT-12 cancellation and its manager gate. A manager completes the reasoned/confirmed cancellation; the audit records the manager actor, with no tender/refund or stock movement. A cashier is redirected from the protected screen. Two focused instrumentation tests passed in separate invocations; Kotlin JVM 96/96; APK assembly passed; lint 0 errors / 189 warnings. This is not full role-matrix or cancellation/refund qualification. Report: `CT-12-OPEN-ORDER-CANCELLATION-REPORT-2026-11-25.md`.

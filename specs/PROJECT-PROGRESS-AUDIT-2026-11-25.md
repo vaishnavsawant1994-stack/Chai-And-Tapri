@@ -2,6 +2,10 @@
 
 **Updated:** 25 November 2026
 
+## CAT-051B shop-identity preflight — 25 November 2026
+
+Backup verification now rejects an authenticated snapshot whose shop identity differs from the active business before replacement confirmation. The actual MainActivity verification callback test shows the early failure and confirms the active order remains. Service mismatch rejection, same-shop SAF export/restore, and trusted same-shop key-loss preview/recovery also passed in separate API 37 invocations (1/1 each). Kotlin JVM **96/96**, debug/instrumentation APK builds passed, lint 0 errors / 189 warnings. This scoped run did not execute the full Android suite. Cross-device/person recovery, physical storage/power/key invalidation, independent review, and production gates remain open. See [CAT-051B report](CAT-051B-SHOP-IDENTITY-PREFLIGHT-REPORT-2026-11-25.md).
+
 ## CT-12 open-order cancellation UI — 25 November 2026
 
 Added synthetic API 37 UI tests for CT-12 cancellation and its manager gate. The manager completes the reasoned and confirmed cancellation; the persisted audit event carries the manager actor, with no payment/refund or stock event. A cashier is redirected from CT-12. Both focused tests passed in separate invocations; Kotlin JVM suite freshly rerun at 96/96; APK assembly passed; lint reported 0 errors / 189 warnings. A first attempt exposed a test-only audit-ID prefix assumption; the final assertion checks the persisted cancellation event and passed. This is not a full-suite or role-matrix qualification. See [CT-12 cancellation report](CT-12-OPEN-ORDER-CANCELLATION-REPORT-2026-11-25.md).
