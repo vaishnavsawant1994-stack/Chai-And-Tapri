@@ -557,6 +557,86 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun refundCorrectionScreenRequiresReasonAndConfirmsOpenOrderCancellation() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val seed = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(seed.saveProduct(TapriProduct("ct12_cancel_tea", "CT12 Cancellation Tea", "Chai", 1000, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(seed.apply("ct12-cancel-create", ProposedCommand("create", null, "one cancellation tea", "ct12_cancel_tea", 1)).contains("Order #"))
+        val orderNumber = seed.allOrders().single().number
+        seed.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, RefundCorrectionActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(RefundCorrectionActivity.EXTRA_ORDER_NUMBER, orderNumber))
+        try {
+            val ui = instrumentation.uiAutomation
+            fun findNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+                fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                    if (node == null) return null
+                    if (predicate(node)) return node
+                    for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
+                    return null
+                }
+                return visit(ui.rootInActiveWindow)
+            }
+            fun awaitNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo {
+                repeat(100) {
+                    findNode(predicate)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Expected CT-12 cancellation control did not appear")
+            }
+            fun click(text: String) {
+                repeat(100) {
+                    val node = findNode { it.text?.toString()?.equals(text, ignoreCase = true) == true }
+                    var target = node
+                    while (target != null) {
+                        if (target.isClickable && target.isEnabled && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
+                        target = target.parent
+                    }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Could not click CT-12 control: $text")
+            }
+
+            awaitNode { it.text?.toString()?.contains("Order #$orderNumber") == true }
+            click("Cancel open order #$orderNumber")
+            awaitNode { it.hintText?.toString()?.contains("Required reason") == true }
+            click("Review cancellation")
+            val reason = awaitNode { it.hintText?.toString()?.contains("Required reason") == true }
+            val reasonArgs = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "Customer cancelled before preparation") }
+            assertTrue("Cancellation reason must be entered before review", reason.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, reasonArgs))
+            instrumentation.runOnMainSync {
+                val imm = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+            }
+            instrumentation.waitForIdleSync()
+            click("Review cancellation")
+            awaitNode { it.text?.toString()?.contains("Customer cancelled before preparation") == true }
+            click("Record cancellation")
+            awaitNode { it.text?.toString()?.contains("CANCELLED") == true }
+
+            SqliteCounterPersistence(context).use { db ->
+                val snapshot = db.load() ?: error("Cancelled order snapshot missing")
+                val cancelled = snapshot.orders.single { it.number == orderNumber }
+                assertEquals(Fulfillment.CANCELLED, cancelled.fulfillment)
+                assertEquals("Customer cancelled before preparation", cancelled.cancelReason)
+                assertEquals(0, cancelled.lines.sumOf { it.deliveredQuantity * it.unitPricePaise })
+                assertTrue("Cancellation before handover must not create tender/refund events", snapshot.paymentEntries.none { it.orderNumber == orderNumber })
+                assertTrue("No stock was committed for an unfulfilled order", snapshot.stockMovements.none { it.orderNumber == orderNumber })
+                val audit = db.loadAuditRecords()
+                assertTrue("Cancellation audit entry should retain reason and command identity: ${audit.joinToString { "${it.commandId}:${it.event}" }}",
+                    audit.any { it.event.contains("order.cancelled") && it.event.contains("reason=Customer cancelled before preparation") })
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun salesHistoryRefundsSplitTenderReceivableBeforeCashWithoutRestocking() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

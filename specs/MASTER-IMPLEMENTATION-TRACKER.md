@@ -1,4 +1,8 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
+## Latest continuation - CT-12 open-order cancellation confirmation - 25 November 2026
+
+Added focused API 37 UI coverage for cancellation from Refund & Correction. A synthetic unfulfilled order remains unchanged when cancellation is reviewed without a reason; entering a reason, reviewing and confirming persists `CANCELLED`, the reason, and an audit event, with no tender/refund or stock movement. Focused instrumentation passed 1/1; Kotlin JVM freshly rerun 96/96; APK assembly passed; lint 0 errors / 189 warnings. This test qualifies one CT-12 UI path only; it does not qualify full cancellation/refund behavior or role authorization. Report: `CT-12-OPEN-ORDER-CANCELLATION-REPORT-2026-11-25.md`.
+
 ## Latest continuation - CT-07 reviewed-transcript safety - 25 November 2026
 ## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
 ## Latest continuation - CT-08 multi-line partial handover - 25 November 2026

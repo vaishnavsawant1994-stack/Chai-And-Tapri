@@ -2,6 +2,10 @@
 
 **Updated:** 25 November 2026
 
+## CT-12 open-order cancellation UI — 25 November 2026
+
+Added a synthetic API 37 UI test for cancelling an open order from CT-12. Reviewing with a blank reason leaves the dialog available; a supplied reason followed by explicit confirmation persists the cancelled state and an audit event. The persisted order has zero delivered quantity, and no tender/refund or stock event is created. Focused instrumentation passed 1/1; Kotlin JVM suite freshly rerun at 96/96; APK assembly passed; lint reported 0 errors / 189 warnings. A first attempt exposed a test-only audit-ID prefix assumption; the final assertion checks the persisted cancellation event and passed. This is one emulator workflow, not a full-suite or role-matrix qualification. See [CT-12 cancellation report](CT-12-OPEN-ORDER-CANCELLATION-REPORT-2026-11-25.md).
+
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
 ## CT-11 payment-event date filtering
