@@ -782,4 +782,4 @@ OW-13 follow-up: PostgreSQL-backed authenticated E2E assertions were added to th
 
 ### CT-05 Shop Home daily metrics — 25 November 2026
 
-Implementation: date-scoped metrics are now shown using the existing local daily projection. Verification: Kotlin JVM 82/82, debug/test APK build PASS, focused API 37 screen test 1/1 PASS, lint 0 errors / 186 warnings. Evidence/report: `specs/CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md`. Limit: full Android regression not run; date relies on device clock; profit, verified UPI, bank settlement and full daily close are not established.
+Implementation: date-scoped metrics are now shown using the existing local daily projection. Verification: Kotlin JVM 82/82, debug/test APK build PASS, focused API 37 screen test 1/1 PASS, full API 37 connected instrumentation 140/140 PASS (0 failures/errors/skips), lint 0 errors / 186 warnings. Evidence/report: `specs/CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md`. Limit: date relies on device clock; profit, verified UPI, bank settlement and full daily close are not established.

@@ -33,4 +33,4 @@ The broader last recorded test baselines are in [the 24 November audit](PROJECT-
 
 ## CT-05 Shop Home daily metrics — 25 November 2026
 
-Implemented and emulator-tested a date-scoped activity section using the existing ledger projection. Kotlin JVM 82/82; APK builds pass; focused API 37 Shop Home instrumentation 1/1; lint 0 errors / 186 warnings. Date attribution remains device-local; this does not qualify a full daily close, profit reporting, the complete Android screen, or the full connected regression. Details: [CT-05 report](CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md).
+Implemented and emulator-tested a date-scoped activity section using the existing ledger projection. Kotlin JVM 82/82; APK builds pass; focused API 37 Shop Home instrumentation 1/1; full API 37 connected instrumentation 140/140 (0 failures/errors/skips); lint 0 errors / 186 warnings. Date attribution remains device-local; this does not qualify a full daily close, profit reporting, or the complete screen. Details: [CT-05 report](CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md).

@@ -19,9 +19,10 @@ The screen labels the local-date basis and explicitly says that it does not show
 - Debug APK: **PASS** (`assembleDebug`).
 - Android test APK: **PASS** (`assembleDebugAndroidTest`).
 - Focused API 37 Shop Home instrumentation: **1/1 passed**, 0 failures/errors/skips.
+- Full API 37 connected instrumentation regression after the change: **140/140 passed**, 0 failures/errors/skips.
 - Android lint: **PASS**, 0 errors / 186 warnings.
 - Instrumentation XML: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` (local generated build output).
 
 ## Scope limits
 
-This focused UI test verifies the daily metrics appear in the real emulator screen. The date-scoped arithmetic is covered by the existing `DailyReportProjectionTest`. No full connected instrumentation regression was run for this slice. Device time and timezone remain the source of date attribution. Current pending balances are point-in-time values; this does not establish a complete daily-close workflow or profit calculation.
+The focused and full UI tests verify the daily metrics appear in the real emulator screen. The date-scoped arithmetic is covered by the existing `DailyReportProjectionTest`. Device time and timezone remain the source of date attribution. Current pending balances are point-in-time values; this does not establish a complete daily-close workflow or profit calculation. The full emulator regression result is in the local XML artifact noted above.
