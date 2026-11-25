@@ -82,6 +82,30 @@ test('projection contract requires exact order, line and integer paise fields', 
   invalid(payload);
 });
 
+test('cashier may sync a split of cash and staff-declared UPI when tenders reconcile to the order delta', () => {
+  const previousOrder = {
+    orderNumber:12,fulfillment:'GIVEN',payment:'UNPAID',paidPaise:0,creditPaise:0,refundedPaise:0,cashRefundedPaise:0,
+    creditReversedPaise:0,salePosted:true,voided:false,revision:2,createdAtEpochMs:1000,
+    lines:[{productId:'chai',quantity:1,deliveredQuantity:1,refundedQuantity:0,unitPricePaise:1500}]
+  };
+  const updatedOrder = { ...previousOrder,payment:'STAFF_DECLARED',paidPaise:1500,revision:3 };
+  const payload = {
+    ...emptyDelta(),
+    orders:[updatedOrder],
+    paymentEntries:[
+      {entryId:'split-cash',orderNumber:12,customerId:null,amountPaise:500,method:'cash',status:'staff_declared',kind:'order_collection',relatedEntryId:null},
+      {entryId:'split-upi',orderNumber:12,customerId:null,amountPaise:1000,method:'upi',status:'staff_declared',kind:'order_collection',relatedEntryId:null}
+    ]
+  };
+  assert.equal(validateProjectionDelta(payload), true);
+  assert.equal(authorizeProjectionForRole('cashier', payload, new Map(), new Map(), new Map([[12, previousOrder]])), true);
+
+  const unreconciled = structuredClone(payload);
+  unreconciled.paymentEntries[1].amountPaise = 999;
+  assert.throws(() => authorizeProjectionForRole('cashier', unreconciled, new Map(), new Map(), new Map([[12, previousOrder]])),
+    (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_business_permission_denied');
+});
+
 test('projection contract accepts opaque customer ledgers and rejects local identifiers', () => {
   const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const creditId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

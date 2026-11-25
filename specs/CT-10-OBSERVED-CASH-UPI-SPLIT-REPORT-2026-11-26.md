@@ -8,7 +8,8 @@ The command validates that the order is finished and has a positive due, the cas
 
 ## Verification
 
-- Kotlin JVM: **102/102 passed** across 14 suites, including new settlement/idempotency and invalid amount, stale revision, pending-UPI conflict, and rollback cases.
+- Kotlin JVM: **102/102 passed** across 14 suites, including settlement/idempotency, invalid amount, stale revision, pending-UPI conflict, rollback, and outbox projection assertions. The generated sendable delta contains order `paidPaise=1500` plus the 500-paise cash and 1,000-paise staff-declared UPI entries.
+- Backend contract: **34 passed / 6 PostgreSQL-dependent skipped / 0 failed**. A new cashier-role contract test accepts those two entries when they reconcile to the order's paid-amount delta and rejects a one-paise mismatch. Log: `../backend/test-evidence/2026-11-26/ct10-contract-followup.log`.
 - API 37 emulator: focused Payment screen test **1/1 passed**. It created a synthetic ₹15 order, used the real screen to review and confirm ₹5 cash + ₹10 observed UPI, reopened the encrypted database, and verified a zero due, two staff-declared payment events, no pending/verified event, unchanged stock, and one audit record.
 - `assembleDebug`: PASS.
 - `assembleDebugAndroidTest`: PASS.
@@ -19,4 +20,4 @@ During test development, a rollback assertion initially held a mutable order ref
 
 ## Scope limits
 
-The UPI event represents the operator's observation only; there is no acquiring-bank or provider verification. This focused synthetic workflow does not establish broad Android regression, manual usability, staff authorization-policy completeness, physical payment integration, real-shop suitability, or release readiness. CT-10 and the six delivery waves remain partial.
+The UPI event represents the operator's observation only; there is no acquiring-bank or provider verification. The Kotlin encoder and backend role/amount contract were tested separately; this does not demonstrate live Android-to-PostgreSQL delivery for the new split. The focused synthetic workflow does not establish broad Android regression, manual usability, staff authorization-policy completeness, physical payment integration, real-shop suitability, or release readiness. CT-10 and the six delivery waves remain partial.

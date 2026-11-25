@@ -1282,6 +1282,11 @@ class CounterModelTest {
         assertTrue(model.paymentHistory().all { it.status == "staff_declared" })
         assertEquals(0, model.paymentHistory().count { it.status == "verified" })
         assertEquals(1, model.auditEvents().count { it.startsWith("cash-upi-observed-split ") })
+        val sync = storage.lastSyncPayload
+        assertTrue("A supported cash+UPI split should produce a sendable projection delta", sync?.sendable == true)
+        assertTrue(sync!!.json!!.contains("\"paidPaise\":1500"))
+        assertTrue(sync.json!!.contains("\"amountPaise\":500,\"method\":\"cash\",\"status\":\"staff_declared\",\"kind\":\"order_collection\""))
+        assertTrue(sync.json!!.contains("\"amountPaise\":1000,\"method\":\"upi\",\"status\":\"staff_declared\",\"kind\":\"order_collection\""))
         assertEquals("Duplicate command ignored.", model.recordCashUpiReceivedSplit(12, 500, "cash-upi-observed-split", settled.revision))
         assertEquals(2, model.paymentHistory().size)
     }
