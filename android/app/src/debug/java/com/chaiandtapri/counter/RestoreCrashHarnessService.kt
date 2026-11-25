@@ -23,7 +23,10 @@ internal class RestoreCrashHarnessService : Service() {
                     message.data.getString(EXTRA_STAGED_DATABASE_NAME),
                     token
                 )
-                WHAT_RECOVER_AND_REPORT -> recoverAndReport(token)
+                WHAT_RECOVER_AND_REPORT -> {
+                    recoverAndReport(token)
+                    message.replyTo?.send(Message.obtain(null, WHAT_RECOVERY_COMPLETED))
+                }
                 else -> error("Unsupported restore crash checkpoint.")
             }
             true
@@ -107,6 +110,7 @@ internal class RestoreCrashHarnessService : Service() {
         const val WHAT_CRASH_AFTER_PRESERVE = 1
         const val WHAT_RECOVER_AND_REPORT = 2
         const val WHAT_CRASH_AFTER_REPLACEMENT = 3
+        const val WHAT_RECOVERY_COMPLETED = 4
         const val EXTRA_DATABASE_NAME = "database_name"
         const val EXTRA_STAGED_DATABASE_NAME = "staged_database_name"
         const val EXTRA_TOKEN = "test_token"

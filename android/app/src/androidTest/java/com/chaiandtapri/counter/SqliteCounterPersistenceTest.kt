@@ -16,6 +16,7 @@ import android.os.Environment
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Messenger
 import android.os.Message
 import android.provider.MediaStore
@@ -6966,9 +6967,16 @@ class SqliteCounterPersistenceTest {
 
         // A new process gets a fresh preferences cache and runs the ordinary startup recovery path.
         val (recoveryConnection, recoveryHarness) = bindHarness()
+        val recoveryComplete = java.util.concurrent.CountDownLatch(1)
+        val recoveryReply = Messenger(Handler(Looper.getMainLooper()) { message ->
+            if (message.what == RestoreCrashHarnessService.WHAT_RECOVERY_COMPLETED) recoveryComplete.countDown()
+            true
+        })
         recoveryHarness.send(Message.obtain(null, RestoreCrashHarnessService.WHAT_RECOVER_AND_REPORT).apply {
             data = Bundle().apply { putString(RestoreCrashHarnessService.EXTRA_TOKEN, token) }
+            replyTo = recoveryReply
         })
+        assertTrue("Fresh process must complete startup recovery before disconnect", recoveryComplete.await(15, java.util.concurrent.TimeUnit.SECONDS))
         context.unbindService(recoveryConnection)
         val recoveryDeadline = System.currentTimeMillis() + 15_000
         while (!recoveryReport.exists() && System.currentTimeMillis() < recoveryDeadline) Thread.sleep(50)
@@ -7065,13 +7073,20 @@ class SqliteCounterPersistenceTest {
         assertTrue("Previous encrypted database must remain available for rollback", previous.exists())
 
         val (recoveryConnection, recoveryHarness) = bindHarness()
+        val recoveryComplete = java.util.concurrent.CountDownLatch(1)
+        val recoveryReply = Messenger(Handler(Looper.getMainLooper()) { message ->
+            if (message.what == RestoreCrashHarnessService.WHAT_RECOVERY_COMPLETED) recoveryComplete.countDown()
+            true
+        })
         recoveryHarness.send(Message.obtain(null, RestoreCrashHarnessService.WHAT_RECOVER_AND_REPORT).apply {
             data = Bundle().apply { putString(RestoreCrashHarnessService.EXTRA_TOKEN, token) }
+            replyTo = recoveryReply
         })
+        assertTrue("Fresh process must complete rollback recovery before disconnect", recoveryComplete.await(15, java.util.concurrent.TimeUnit.SECONDS))
+        context.unbindService(recoveryConnection)
         val recoveryDeadline = System.currentTimeMillis() + 15_000
         while (!recoveryReport.exists() && System.currentTimeMillis() < recoveryDeadline) Thread.sleep(50)
         assertTrue("Fresh process must recover original data", recoveryReport.exists())
-        context.unbindService(recoveryConnection)
 
         val report = recoveryReport.readText(Charsets.US_ASCII).lines()
         assertEquals(originalOrder.number.toString(), report[0])

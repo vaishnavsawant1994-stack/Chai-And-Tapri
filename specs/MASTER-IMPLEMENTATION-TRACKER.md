@@ -1,4 +1,8 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
+
+## Latest continuation - CAT-051B real process-crash recovery - 26 November 2026
+
+Two API 37 process-death checkpoints passed individually after fixing a test-only recovery-service completion race: original-store recovery after death before replacement activation, and original-store rollback after death following replacement activation but before its commit marker. The harness verifies a different process starts recovery. Kotlin JVM 98/98; debug/test APK builds pass; lint 0 errors / 191 warnings. Latest broad Android attempt is incomplete and has no final result; the prior 151/151 complete suite is historical. CAT-051B remains partial for physical failure/recovery and independent-review gates. See `CAT-051B-REAL-PROCESS-CRASH-RECOVERY-REPORT-2026-11-26.md` and local JUnit artifacts under `../test-evidence/2026-11-26/cat051b-process-crash/`.
 ## Latest continuation - OW-11 sync conflict review - 26 November 2026
 
 ## Latest continuation - CT-28 closing follow-up navigation - 26 November 2026
