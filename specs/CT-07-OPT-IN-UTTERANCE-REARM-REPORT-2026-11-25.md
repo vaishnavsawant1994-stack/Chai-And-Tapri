@@ -13,7 +13,7 @@ This is repeated single-utterance capture, not uninterrupted or background conti
 - Prototype Node: **52/52 passed**.
 - Backend Node: **33 passed, 6 skipped** (all six require PostgreSQL; 0 failed).
 - `assembleDebug`, `assembleDebugAndroidTest`, and `lintDebug`: **BUILD SUCCESSFUL**. Android lint reported **0 errors / 191 warnings**.
-- The latest broad Android regression remains **149/150** from the prior run, with the documented Quick Sale activity-launch timeout; this focused test does not change that result.
+- A subsequent full current-source API 37 regression passed **151/151** (0 failures/errors/skips) in 43m21s, including this feature. This supersedes the previously reported 149/150 result. See `ANDROID-REGRESSION-RERUN-2026-11-25.md` and its 26 November addendum.
 
 ## Limitations
 

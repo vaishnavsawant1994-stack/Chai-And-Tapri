@@ -40,3 +40,9 @@ Post-run triage tried replacing `startActivitySync` with an activity-monitor lau
 - v30 and v25 migration assertions compare against the current schema version rather than hardcoding v31.
 
 This does not qualify physical Bluetooth audio, real-shop operation, cross-device recovery, production storage, or independent security review. The complete Android suite should be rerun on an emulator with adequate sustained resources before broad Android regression is marked green.
+
+## Superseding full API 37 regression — 26 November 2026
+
+The full current-source `connectedDebugAndroidTest` run completed **151/151, 0 failures, 0 errors, 0 skipped** on `emulator-5554` (Tapri_Recovery_Isolated API 37). Gradle reported `BUILD SUCCESSFUL` in 43m21s. This includes the new opt-in voice re-arm instrumentation case and replaces the prior 149/150 result; the earlier Quick Sale timeout did not recur. JUnit evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` (151 tests, 0 failures/errors/skips).
+
+The same source verification also has Kotlin JVM 98/98, prototype Node 52/52, backend Node 33 passed / 6 PostgreSQL-dependent skipped, APK builds successful, and Android lint 0 errors / 191 warnings. PostgreSQL-dependent tests were skipped in the backend invocation; no new production environment was used. These are emulator and automated test qualifications only. Physical headset/microphone, noisy shop, separate device/person recovery, independent security review, and production deployment remain open.

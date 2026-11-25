@@ -1238,3 +1238,11 @@ The 150-test API 37 serial run completed 149/150. Supplier UPI UI timing is corr
 ## 25 November 2026 — CT-07 voice counter follow-up
 
 Implemented opt-in automatic re-arming between distinct Android single-utterance speech sessions after manual Apply/Reject, no-match, or timeout. Ambiguous transcripts require operator correction. Stop, Pause, backgrounding, route loss, recovery maintenance, and opt-out cancel pending captures. JVM policy tests 98/98 and focused API 37 UI instrumentation 1/1; Node prototype 52/52; backend 33 passed / 6 PostgreSQL-dependent skipped. This does not implement uninterrupted continuous listening or prove headset microphone routing. See specs/CT-07-OPT-IN-UTTERANCE-REARM-REPORT-2026-11-25.md.
+
+## Full API 37 regression — 26 November 2026
+
+The complete current-source Android instrumentation suite passed 151/151 with zero failures/errors/skips in 43m21s on the isolated API 37 AVD. This supersedes the previous 149/150 run and includes CT-07 opt-in re-arming. Kotlin JVM 98/98, Node prototype 52/52, backend 33 passed / 6 PostgreSQL-dependent skipped; APK builds passed; lint has 0 errors / 191 warnings. See `specs/ANDROID-REGRESSION-RERUN-2026-11-25.md` and `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. This is test/emulator qualification only; the product and six waves remain in progress.
+
+## 26 November 2026 — CAT-052 background sync process restart
+
+A two-phase emulator E2E now verifies a queued WorkManager upload survives explicit app process force-stop and resumes under a new PID. Synthetic opening-stock and cash-sale events were acknowledged once by loopback HTTPS/PostgreSQL; local outbox cleared and cursor advanced to server revision 2. Backend PostgreSQL tests 39/39 passed; direct Android prepare/resume phases each reported OK (1 test). The isolated DB/runtime login and test services were removed/stopped. See specs/CAT-052-PROCESS-RESTART-QUALIFICATION-2026-11-26.md. This does not qualify production synchronization, multi-device conflict resolution or field operation.
