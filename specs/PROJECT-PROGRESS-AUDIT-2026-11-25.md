@@ -30,3 +30,7 @@ Evidence: [CT-07 reviewed transcript report](CT-07-REVIEWED-TRANSCRIPT-INVALIDAT
 CT-07 remains a one-utterance, review-before-apply prototype. Continuous recognition, physical Bluetooth microphone routing, noisy-shop speech qualification, full MVP screen coverage, browser visual verification, independent security review and production deployment remain unqualified. The recent fixture test does not change those statuses.
 
 The broader last recorded test baselines are in [the 24 November audit](PROJECT-PROGRESS-AUDIT-2026-11-24.md) and subsequent CAT-052/Android qualification entries in [PROJECT_PLAN.md](../PROJECT_PLAN.md). They are historical suite results, not rerun by this focused change.
+
+## CT-05 Shop Home daily metrics — 25 November 2026
+
+Implemented and emulator-tested a date-scoped activity section using the existing ledger projection. Kotlin JVM 82/82; APK builds pass; focused API 37 Shop Home instrumentation 1/1; lint 0 errors / 186 warnings. Date attribution remains device-local; this does not qualify a full daily close, profit reporting, the complete Android screen, or the full connected regression. Details: [CT-05 report](CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md).

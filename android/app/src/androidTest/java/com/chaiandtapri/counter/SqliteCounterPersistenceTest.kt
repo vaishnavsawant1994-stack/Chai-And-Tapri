@@ -218,6 +218,11 @@ class SqliteCounterPersistenceTest {
                 throw AssertionError("Shop Home setup action not found: $text")
             }
             await("First-sale setup")
+            assertNotNull(find("Today's recorded activity"))
+            assertNotNull(find("Sales from orders created today"))
+            assertNotNull(find("Cash collections recorded today"))
+            assertNotNull(find("Current UPI due on today's orders"))
+            assertNotNull(find("Profit, verified UPI, bank settlement"))
             assertNotNull(find("Shop identity"))
             assertNotNull(find("Sellable products"))
             assertNotNull(find("Physical opening stock"))

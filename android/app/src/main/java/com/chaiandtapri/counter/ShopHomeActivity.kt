@@ -8,8 +8,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import java.time.LocalDate
+import java.time.ZoneId
 
-/** CT-05 local dashboard. It deliberately reports lifetime local ledger totals, not unverified daily profit. */
+/** CT-05 local dashboard. Date-scoped and lifetime local ledger summaries; no unverified profit claim. */
 class ShopHomeActivity : ComponentActivity() {
     private lateinit var content: LinearLayout
     private var model: CounterModel? = null
@@ -42,7 +44,24 @@ class ShopHomeActivity : ComponentActivity() {
             val profile = model!!.shopProfile()
             val shop = profile.shopName.ifBlank { "Shop not set up" }
             content.addView(label("$shop · Shop Home", 25f))
-            content.addView(label("Local encrypted records · lifetime totals on this device · sync not configured", 14f))
+            content.addView(label("Local encrypted records · device-local date · sync not configured", 14f))
+            val zone = ZoneId.systemDefault()
+            val today = LocalDate.now(zone)
+            val products = model!!.products().associateBy { it.productId }
+            val daily = DailyReportProjectionCalculator.calculate(
+                today, zone, model!!.allOrders(), model!!.paymentHistory(), model!!.customerCredits(),
+                model!!.expenseHistory(), products.mapValues { it.value.name }, 0L
+            )
+            content.addView(label("Today's recorded activity · $today", 18f))
+            content.addView(metric("Sales from orders created today", money(daily.salesPaise), "Net of current recorded refunds; based on this device's date"))
+            content.addView(metric("Cash collections recorded today", money(daily.cashCollectionsPaise), "Staff-declared entries by payment date; not externally verified"))
+            content.addView(metric("Current UPI due on today's orders", money(daily.pendingUpiPaise), "Current pending balance for orders created today; not confirmed collections"))
+            content.addView(metric("Current receivables on today's orders", money(daily.receivablesPaise), "Open customer credit for orders created today"))
+            content.addView(metric("Operating expenses recorded today", money(daily.expensesPaise), "Dated local entries; supplier purchases are not included"))
+            if (daily.undatedRecords > 0) {
+                content.addView(label("${daily.undatedRecords} legacy record(s) without dates are excluded from today's totals.", 13f))
+            }
+            content.addView(label("Today's figures use the device clock and local timestamps. Profit, verified UPI, bank settlement and a completed daily close are not shown here.", 13f))
             content.addView(label("First-sale setup", 18f))
             content.addView(label("${if (profile.shopName.isNotBlank()) "✓" else "○"} Shop identity${if (profile.shopName.isNotBlank()) " · ${profile.businessType}" else " · needs setup"}", 14f))
             content.addView(label("${if (summary.productCount > 0) "✓" else "○"} Sellable products · ${summary.productCount}", 14f))
