@@ -154,6 +154,13 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,shopId);
         return json(res,200,await service.shopAuditHistory(actor,limit,beforeRevision));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/conflicts') {
+        const shopId=url.searchParams.get('shopId');
+        const limit=Number(url.searchParams.get('limit')??'100');
+        if(!Number.isInteger(limit)||limit<1||limit>100) throw new ApiError(400,'invalid_conflict_limit');
+        const actor=await service.authenticate(token,shopId);
+        return json(res,200,await service.shopSyncConflicts(actor,limit));
+      }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/shifts') {
         const shopId=url.searchParams.get('shopId');
         const actor=await service.authenticate(token,shopId);

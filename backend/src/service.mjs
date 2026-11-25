@@ -696,6 +696,44 @@ export class SyncService {
     });
   }
 
+  async shopSyncConflicts(actor, limit = 100) {
+    if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'invalid_conflict_limit');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const result = await c.query(`SELECT conflict_id,event_id,command_id,device_id,expected_revision,current_revision,created_at,envelope
+        FROM sync_conflicts WHERE shop_id=$1 AND resolved_at IS NULL ORDER BY created_at DESC,conflict_id DESC LIMIT $2`, [actor.shop_id, limit + 1]);
+      const hasMore = result.rows.length > limit;
+      const rows = result.rows.slice(0, limit);
+      return {
+        shopId: actor.shop_id, shopName: shop.rows[0].display_name, serverRevision: Number(shop.rows[0].server_revision),
+        openConflictCount: rows.length, hasMore,
+        conflicts: rows.map((row) => {
+          const payload = row.envelope?.payload;
+          return {
+            conflictId: row.conflict_id, eventId: row.event_id, commandId: row.command_id, deviceId: row.device_id,
+            expectedRevision: Number(row.expected_revision), currentRevision: Number(row.current_revision),
+            createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+            changeCounts: payload?.kind === 'projection_delta.v1' ? {
+              orders: payload.orders?.length ?? 0, stock: payload.stock?.length ?? 0,
+              payments: payload.paymentEntries?.length ?? 0, expenses: payload.expenses?.length ?? 0,
+              purchases: (payload.purchaseReceipts?.length ?? 0) + (payload.purchaseReturns?.length ?? 0),
+              customerRecords: (payload.customerCredits?.length ?? 0) + (payload.repayments?.length ?? 0)
+            } : { unknown: true }
+          };
+        }),
+        evidence: {
+          scope: 'Open stale-revision submissions stored by the server for this authenticated shop.',
+          privacy: 'Raw event payloads, product identifiers, customer details and payment details are not returned.',
+          action: 'This queue is review-only. No conflicted event is automatically merged, replayed or accepted. Resolve it on the originating device or through an explicitly authorized correction workflow.',
+          limitation: 'A stored conflict is evidence of a rejected revision, not proof that the proposed business activity occurred.'
+        }
+      };
+    });
+  }
+
   async shopStaffShifts(actor) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     return withTransaction(this.pool, async (c) => {

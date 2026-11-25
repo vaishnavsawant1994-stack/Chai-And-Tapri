@@ -18,6 +18,10 @@ The **Export current report** action downloads a CSV snapshot of the currently d
 
 The owner application also includes authenticated supplier balances (OW-07), customer balances (OW-08), recorded cashflow (OW-04), profit readiness (OW-03), and accepted event history (OW-12). OW-07 and OW-08 use privacy-minimized opaque identifiers and display only server-accepted, synchronized event projections. Recorded settlements are staff-declared, not provider-verified. These views do not constitute complete accounting, do not include unsynchronized local activity, and are not browser-visually qualified. See the corresponding CAT-052 and OW reports in specs/.
 
+## OW-11 sync conflict review — 26 November 2026
+
+The owner dashboard has a read-only `Sync conflicts` view backed by `GET /v1/dashboard/conflicts`. It is owner-only, scoped to the authenticated shop and reports only the newest 100 unresolved stale-revision records. The API returns conflict/device/event identifiers, revision values, server receipt time, and allow-listed change counts; raw event payloads and product/customer/payment details are omitted. The endpoint stores no resolution decision and never merges or replays an event. The runtime DB role needs `SELECT` on `sync_conflicts`; apply the updated `backend/ops/runtime-grants.sql` when upgrading an existing development database. Backend PostgreSQL suite passed 39/39 with the least-privilege runtime role. Browser interaction and visual review remain unqualified. See [`OW-11 report`](../specs/OW-11-SYNC-CONFLICT-REVIEW-REPORT-2026-11-26.md).
+
 ## Owner cashflow update - 24 November 2026
 
 OW-04's recorded money movement projection now includes accepted, staff-declared supplier settlements as a separate daily outflow column and includes them in partial net recorded movement. Payment IDs are deduplicated. The UI states these are not bank-verified; they are not treated as purchase expense or cost of goods sold. PostgreSQL-backed/Android E2E for this added field and authorized visual review remain pending.

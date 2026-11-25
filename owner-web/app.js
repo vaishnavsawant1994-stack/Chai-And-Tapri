@@ -53,9 +53,10 @@ import { formatQuantity } from './quantity-format.mjs';
     const cashflow = view === 'cashflow';
     const profit = view === 'profit';
     const audit = view === 'audit';
+    const conflicts = view === 'conflicts';
     const shifts = view === 'shifts';
     const staff = view === 'staff';
-    $('refresh-button').textContent = overview ? 'Refresh' : insights ? 'Refresh insights' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : shifts ? 'Refresh shifts' : 'Refresh staff access';
+    $('refresh-button').textContent = overview ? 'Refresh' : insights ? 'Refresh insights' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : conflicts ? 'Refresh sync conflicts' : shifts ? 'Refresh shifts' : 'Refresh staff access';
     $('overview-view').classList.toggle('hidden', !overview);
     $('insights-view').classList.toggle('hidden', !insights);
     $('products-view').classList.toggle('hidden', !products);
@@ -66,6 +67,7 @@ import { formatQuantity } from './quantity-format.mjs';
     $('cashflow-view').classList.toggle('hidden', !cashflow);
     $('profit-view').classList.toggle('hidden', !profit);
     $('audit-view').classList.toggle('hidden', !audit);
+    $('conflicts-view').classList.toggle('hidden', !conflicts);
     $('shifts-view').classList.toggle('hidden', !shifts);
     $('staff-view').classList.toggle('hidden', !staff);
     $('overview-tab').classList.toggle('active', overview);
@@ -88,6 +90,8 @@ import { formatQuantity } from './quantity-format.mjs';
     $('profit-tab').setAttribute('aria-current', profit ? 'page' : 'false');
     $('audit-tab').classList.toggle('active', audit);
     $('audit-tab').setAttribute('aria-current', audit ? 'page' : 'false');
+    $('conflicts-tab').classList.toggle('active', conflicts);
+    $('conflicts-tab').setAttribute('aria-current', conflicts ? 'page' : 'false');
     $('shifts-tab').classList.toggle('active', shifts);
     $('shifts-tab').setAttribute('aria-current', shifts ? 'page' : 'false');
     $('staff-tab').classList.toggle('active', staff);
@@ -550,6 +554,34 @@ import { formatQuantity } from './quantity-format.mjs';
     } finally { $('refresh-button').disabled = false; olderButton.disabled = false; }
   }
 
+  async function loadConflicts() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    setStatus($('conflicts-status'), 'Loading stored conflict metadata…');
+    try {
+      const data = await request(`/v1/dashboard/conflicts?shopId=${encodeURIComponent(activeShopId)}&limit=100`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      $('conflicts-scope').textContent = `${data.evidence.scope} ${data.evidence.action}`;
+      const rows = data.conflicts.map((conflict) => {
+        const row = document.createElement('tr');
+        const others = conflict.changeCounts.expenses + conflict.changeCounts.purchases + conflict.changeCounts.customerRecords;
+        const values = [new Date(conflict.createdAt).toLocaleString(), conflict.conflictId, conflict.deviceId,
+          String(conflict.expectedRevision), String(conflict.currentRevision), String(conflict.changeCounts.orders),
+          String(conflict.changeCounts.stock), String(conflict.changeCounts.payments), String(others)];
+        for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 9; cell.className = 'empty-row'; cell.textContent = 'No unresolved synchronization conflicts are recorded.'; row.append(cell); rows.push(row); }
+      $('conflicts-rows').replaceChildren(...rows);
+      $('conflicts-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+      setStatus($('conflicts-status'), `${data.openConflictCount} conflict(s) shown through server revision ${data.serverRevision}${data.hasMore ? '; showing the newest 100.' : '.'}`, 'success');
+    } catch (error) {
+      setStatus($('conflicts-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   async function loadShifts() {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
@@ -715,6 +747,7 @@ import { formatQuantity } from './quantity-format.mjs';
     else if (!$('cashflow-view').classList.contains('hidden')) loadCashflow();
     else if (!$('profit-view').classList.contains('hidden')) loadProfitReadiness();
     else if (!$('audit-view').classList.contains('hidden')) loadAuditHistory();
+    else if (!$('conflicts-view').classList.contains('hidden')) loadConflicts();
     else if (!$('shifts-view').classList.contains('hidden')) loadShifts();
     else if (!$('staff-view').classList.contains('hidden')) loadStaff();
     else loadOverview();
@@ -748,6 +781,7 @@ import { formatQuantity } from './quantity-format.mjs';
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
+  $('conflicts-tab').addEventListener('click', () => { setView('conflicts'); loadConflicts(); });
   $('audit-older-button').addEventListener('click', () => loadAuditHistory({ append: true }));
   $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
   $('staff-tab').addEventListener('click', () => { setView('staff'); loadStaff(); });

@@ -26,7 +26,7 @@ async function cleanupEnrollment(pool, enrollment) {
 test('authenticated tenant sync journal preserves idempotency and exposes revision conflicts', { skip: !connection }, async () => {
   const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool);
   const suffix=randomUUID(); const deviceId=randomUUID();
-  let enrollment; let otherEnrollment;
+  let enrollment; let otherEnrollment; let server;
   try {
     enrollment=await service.register({email:`owner-${suffix}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'Synthetic Owner',businessName:'Synthetic Business',shopName:'Synthetic Shop',deviceId,deviceLabel:'Jest Device'});
     const actor=await service.authenticate(enrollment.token,enrollment.shopId);
@@ -62,6 +62,19 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
     const stale={...event,eventId:randomUUID(),commandId:`refund-${randomUUID()}`};
     const conflict=await service.submitEvents(actor,[stale]);
     assert.equal(conflict.results[0].status,'conflict'); assert.equal(conflict.currentRevision,3);
+    const conflictQueue=await service.shopSyncConflicts(actor,10);
+    assert.equal(conflictQueue.openConflictCount,1);
+    assert.equal(conflictQueue.conflicts[0].eventId,stale.eventId);
+    assert.equal(conflictQueue.conflicts[0].expectedRevision,0);
+    assert.equal(conflictQueue.conflicts[0].currentRevision,3);
+    assert.equal(conflictQueue.conflicts[0].changeCounts.orders,0);
+    assert.equal(Object.hasOwn(conflictQueue.conflicts[0],'envelope'),false);
+    assert.equal(JSON.stringify(conflictQueue).includes('chai'),false,'conflict review must not expose product identifiers');
+    await assert.rejects(service.shopSyncConflicts(actor,101),(e)=>e instanceof ApiError&&e.code==='invalid_conflict_limit');
+    server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const conflictResponse=await fetch(`http://127.0.0.1:${server.address().port}/v1/dashboard/conflicts?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(conflictResponse.status,200);
+    assert.equal((await conflictResponse.json()).openConflictCount,1);
     const otherDevice=randomUUID();
     otherEnrollment=await service.register({email:`other-${suffix}@example.test`,password:'Synthetic-Only-Password-2026!',displayName:'Other Owner',businessName:'Other Business',shopName:'Other Shop',deviceId:otherDevice,deviceLabel:'Other Device'});
     const otherActor=await service.authenticate(otherEnrollment.token,otherEnrollment.shopId);
@@ -83,6 +96,7 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
     await service.logout(enrollment.token);
     await assert.rejects(service.authenticate(enrollment.token,enrollment.shopId),(e)=>e instanceof ApiError&&e.status===401);
   } finally {
+    if(server) await new Promise(resolve=>server.close(resolve));
     await cleanupEnrollment(admin,enrollment); await cleanupEnrollment(admin,otherEnrollment);
     await pool.end(); await admin.end();
   }
@@ -165,6 +179,7 @@ test('owner staff invitations create least-privilege memberships and removal rev
     await assert.rejects(service.acceptStaffInvitation({invitationToken:invitation.invitationToken,displayName:'Duplicate',password,deviceId:randomUUID(),deviceLabel:'Duplicate Device'}),(e)=>e instanceof ApiError&&e.status===401);
     const staffActor=await service.authenticate(accepted.token,owner.shopId);
     assert.equal(staffActor.role,'cashier');
+    await assert.rejects(service.shopSyncConflicts(staffActor),(e)=>e instanceof ApiError&&e.status===403&&e.code==='owner_access_required');
     const deniedExpense={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`cashier-expense-${randomUUID()}`,businessId:owner.businessId,shopId:owner.shopId,deviceId:staffDeviceId,baseRevision:0,payload:{...projectionDelta([]),expenses:[{expenseId:'cashier-expense',category:'transport',amountPaise:500,method:'cash',status:'staff_declared'}]}};
     await assert.rejects(service.submitEvents(staffActor,[deniedExpense]),(e)=>e instanceof ApiError&&e.status===403&&e.code==='cashier_business_permission_denied');
     const afterDenied=await withTransaction(pool,async(c)=>{await c.query("SELECT set_config('app.current_shop',$1,true)",[owner.shopId]);return c.query('SELECT server_revision FROM shops WHERE shop_id=$1',[owner.shopId]);});
