@@ -1,10 +1,14 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
 
+## Follow-up — CT-27 authenticated shift UI — 25 November 2026
+
+The API 37 instrumentation suite now includes a UI-driven authenticated shift start and handover. The focused flow passed 1/1, then the complete serial-pinned suite passed **138/138** in 12m57s with no failures/errors/ignored tests. The workflow verifies actor ID, cash count, receiving label/note and durable audit events. The suite still represents synthetic emulator qualification only. Current JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. Other latest verified checks remain Node 52/52, Kotlin JVM 81/81, backend 30 passed / 5 PostgreSQL-dependent skipped, APK build tasks passed, lint 0 errors / 182 warnings. Staff attendance/payroll, multiple registers, physical hardware and shop trials, independent security review, cross-device recovery, visual browser authorization and production deployment remain open.
+
 ## Follow-up — CAT-051B clean-install recovery — 25 November 2026
 
 The current-source API 37 SAF export/restore UI passed 1/1, followed by an opt-in restore from a clean app installation passing 1/1. The restore used the generated 303,228-byte encrypted synthetic archive in emulator Downloads and verified orders, payment/refund/credit/repayment, pending UPI, inventory, audit/payment/outbox records, replay idempotency and new local Keystore material. Two earlier attempts hit an Android System UI ANR dialog; the focused rerun passed after choosing Wait. This supports same-emulator synthetic recovery. Cross-device/person recovery, physical storage/power-loss and hardware key-loss scenarios, OEM transfer behavior and independent security review remain open. Details: [CAT-051B report](CAT-051B-IMPLEMENTATION-REPORT.md).
 
-## Superseding emulator regression — 24 November 2026
+## Historical emulator regression — 24 November 2026
 
 The previous 137-test run was contaminated by a stale Android System UI “not responding” dialog. After rebooting the disposable AVD, reinstalling the debug and instrumentation APKs, and running `android/scripts/run-isolated-connected-tests.cmd emulator-5554`, the full API 37 suite passed **137/137** with 0 failures, 0 errors, 0 skips. The sales-history export test that failed in the contaminated run also passed alone (1/1) after reboot. All five CT-27 staff/migration/backup cases passed in the full run. This is synthetic AVD qualification only. Latest other checks: prototype Node 52/52; Kotlin JVM 81/81; backend Node 30 passed / 5 PostgreSQL-dependent skipped; APK build tasks pass; lint 0 errors / 182 warnings. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. See [Android qualification](ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md). Physical Bluetooth and field trials, browser visual authorization, cross-device recovery, independent security review and production release remain open.
 

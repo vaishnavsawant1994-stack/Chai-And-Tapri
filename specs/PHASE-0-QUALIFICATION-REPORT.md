@@ -1,5 +1,11 @@
 # Chai And Tapri OS Ã¢â‚¬â€ Phase 0 Qualification Report
 
+## Current qualification update — 25 November 2026
+
+The serial-pinned API 37 instrumentation suite passed **138/138** in 12m57s on `Tapri_Recovery_Isolated` (`emulator-5554`). This includes the new CT-27 UI test that starts and ends an authenticated cashier shift through the actual screen and verifies actor, cash, handover and audit persistence. The same session separately passed current-source SAF encrypted backup/restore UI (1/1) and opt-in clean-install restore UI (1/1) using synthetic records. Current full-suite JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`.
+
+Latest host checks: prototype Node 52/52; backend Node 30 passed, 5 PostgreSQL-dependent tests skipped; Kotlin JVM 81/81; APK build tasks passed; Android lint 0 errors / 182 warnings. These qualify documented local synthetic and emulator scenarios only. Continuous Bluetooth/microphone routing, noisy-shop and physical-device trials, cross-device recovery, independent security review, browser visual authorization and production deployment remain open. Phase 0 and the six-wave product remain incomplete.
+
 ## Current-source live sync/recovery barrier E2E — 23 November 2026
 
 The API 37 live integration test held a WorkManager sync response after the isolated PostgreSQL server committed the event batch. Backup/recovery maintenance closed new-operation admission and waited; a competing worker returned retry without sending another request. After releasing the response, the admitted worker persisted the local acknowledgment and completed its ordered outbox work before maintenance acquired the barrier. The test verified server accepted-event count, local cursor/outbox state, one synthetic sale, stock, and re-opened operation admission. Focused instrumentation: 1/1; Kotlin JVM: 59/59; debug and instrumentation APK tasks: pass. This scenario is not a full emulator regression or production sync/recovery qualification. See [CAT-051B report](CAT-051B-SYNC-WRITE-BARRIER-REPORT-2026-11-23.md) and ignored evidence at `../test-evidence/2026-11-23/cat051b-sync-maintenance-e2e/`.

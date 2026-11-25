@@ -4,6 +4,8 @@ This directory contains the native Android shopkeeper application. It now connec
 
 ## Superseding current-source regression — 24 November 2026
 
+**Latest 25 November result:** the serial-pinned API 37 instrumentation suite now passes **138/138** (12m57s), including the new CT-27 authenticated shift start/handover UI journey. This supersedes the 137-test count below. The run used `android/scripts/run-isolated-connected-tests.cmd emulator-5554`; see the current [qualification report](../specs/ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md).
+
 After rebooting the disposable API 37 AVD, the serial-pinned full instrumentation suite passed **137/137** with 0 failures, errors, or skips. Node prototype tests passed 52/52, Kotlin JVM tests 81/81, and backend Node tests passed 30 with 5 PostgreSQL-dependent skips. Debug and instrumentation APK build tasks passed; lint reported 0 errors and 182 warnings. See [`ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md`](../specs/ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md) and the current [project progress audit](../specs/PROJECT-PROGRESS-AUDIT-2026-11-24.md).
 
 This result supersedes older counts in this README. It covers only the listed synthetic emulator flows. Bluetooth hardware, noisy-shop trials, independent security review, cross-device recovery, visual browser review, and production deployment remain unqualified.

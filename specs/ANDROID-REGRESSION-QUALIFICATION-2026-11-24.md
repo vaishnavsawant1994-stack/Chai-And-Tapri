@@ -1,6 +1,12 @@
 # Android Regression Qualification — 24 November 2026
 
-## Superseding result — serial-pinned API 37 rerun
+## Latest result — 25 November 2026
+
+The serial-pinned API 37 instrumentation suite passed **138/138**, with 0 failures, errors, or ignored tests in 12m57s. It ran on `Tapri_Recovery_Isolated` (`emulator-5554`) using `android/scripts/run-isolated-connected-tests.cmd emulator-5554`. The new `authenticatedStaffShiftCanStartAndEndThroughNativeUi` test exercises CT-27 shift start and handover through the actual screen and verifies authenticated actor, counted cash and audit persistence. The current JUnit result is `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`.
+
+This supersedes the 137/137 full-suite result below. It qualifies only the synthetic tests in that API 37 emulator suite; it does not qualify physical devices, Bluetooth microphones, field conditions, cross-device recovery, independent security review, or production readiness.
+
+## Historical result — 24 November 2026
 
 After rebooting the disposable AVD from a stale Android System UI dialog, the current-source serial-pinned instrumentation suite passed **137/137** with 0 failures, errors, or skips. The sales-history export test that failed in the earlier contaminated run passed 1/1 on its own before the clean full rerun. All five CT-27 shift/migration/backup cases passed in that 137-test run. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; invocation: `android/scripts/run-isolated-connected-tests.cmd emulator-5554`.
 

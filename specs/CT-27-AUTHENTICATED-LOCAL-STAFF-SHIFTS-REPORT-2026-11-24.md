@@ -1,6 +1,6 @@
 # CT-27 — Authenticated Local Staff Shifts
 
-**Status:** Implemented and emulator-qualified for the documented synthetic flows. The latest serial-pinned full API 37 instrumentation run passed 137/137. An earlier run had become unstable with a stale System UI dialog; after rebooting the disposable AVD, the previously failing sales-history export case passed alone and the complete suite passed. This remains a local shift/cash workflow, not complete attendance or staff accountability.
+**Status:** Implemented and emulator-qualified for the documented synthetic flows. On 25 November, the added UI-level shift start/handover test passed 1/1, and the full serial-pinned API 37 instrumentation suite passed 138/138. This remains a local shift/cash workflow, not complete attendance or staff accountability.
 
 ## Changes
 
@@ -16,7 +16,9 @@
 - `cd backend; npm.cmd test`: 30 passed, 5 PostgreSQL-dependent skipped, 0 failed.
 - `android/gradlew.bat testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug --console=plain`: passed. Kotlin JVM reports 81 passed, 0 failed; APK packaging passed; lint 0 errors, 182 warnings.
 - Focused API 37 run: 5 passed, 0 failed. It covered authenticated actor persistence; denying a different cashier's shift-close attempt without changing the active shift; preserving an existing shift through the v29-to-v30 migration; existing drawer projection behavior; and synthetic recovery snapshot behavior.
-- Full serial-pinned offline API 37 run using `android/scripts/run-isolated-connected-tests.cmd emulator-5554`: 137 passed, 0 failed, 0 errors, 0 skipped, including all five shift/migration/backup cases. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; HTML: `android/app/build/reports/androidTests/connected/debug/index.html`.
+- Added `authenticatedStaffShiftCanStartAndEndThroughNativeUi`: the API 37 test starts and ends a shift via CT-27 controls, then verifies signed-in actor ID, opening/closing cash, receiving label/note and audit events in encrypted persistence. Focused test passed 1/1.
+- Full serial-pinned offline API 37 run using `android/scripts/run-isolated-connected-tests.cmd emulator-5554`: **138 passed, 0 failed, 0 errors, 0 skipped** in 12m57s, including all CT-27 shift/migration/backup tests and the new shift UI test. JUnit: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; HTML: `android/app/build/reports/androidTests/connected/debug/index.html`.
+- Test-development note: initial attempts at the new test selected the “Start shift” dialog title before its exact action and assumed single-line/currency text. The instrumentation selectors were adjusted to match the exact button and existing multi-line screen text. The final focused and full suite passes; the business implementation was not changed.
 - Failed-first-attempt provenance: a previous run used the same AVD while it was left on a System UI “not responding” dialog and recorded 99/137. The AVD was rebooted, both APKs reinstalled, the originally failing sales-history export test passed 1/1, and the clean full run above passed. The failed attempt is not the current qualification result.
 - `git diff --check`: passed.
 

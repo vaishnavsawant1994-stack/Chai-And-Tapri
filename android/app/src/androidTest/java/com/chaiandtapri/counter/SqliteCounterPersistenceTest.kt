@@ -2965,6 +2965,113 @@ class SqliteCounterPersistenceTest {
         LocalSessionState.establish("Test Owner")
     }
 
+    @Test fun authenticatedStaffShiftCanStartAndEndThroughNativeUi() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establishStaff("shift-ui-owner-id", "Morning Cashier", StaffRole.CASHIER)
+        val activity = instrumentation.startActivitySync(
+            Intent(context, StaffShiftsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        try {
+            fun find(textPrefix: String? = null, hintPrefix: String? = null): AccessibilityNodeInfo? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    val text = node.text?.toString().orEmpty()
+                    val hint = node.hintText?.toString().orEmpty()
+                    if ((textPrefix != null && text.startsWith(textPrefix, ignoreCase = true)) ||
+                        (hintPrefix != null && hint.startsWith(hintPrefix, ignoreCase = true))) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { match -> return match } }
+                    return null
+                }
+                return visit(root)
+            }
+            fun await(textPrefix: String? = null, hintPrefix: String? = null): AccessibilityNodeInfo {
+                val deadline = System.currentTimeMillis() + 15_000
+                while (System.currentTimeMillis() < deadline) {
+                    find(textPrefix, hintPrefix)?.let { return it }
+                    instrumentation.uiAutomation.rootInActiveWindow?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                val visible = mutableListOf<String>()
+                instrumentation.uiAutomation.rootInActiveWindow?.let { root ->
+                    fun collect(node: AccessibilityNodeInfo) {
+                        node.text?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                        node.hintText?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                    }
+                    collect(root)
+                }
+                throw AssertionError("Shift UI control not found: text=$textPrefix hint=$hintPrefix; visible=${visible.joinToString(" | ")}")
+            }
+            fun awaitExact(text: String): AccessibilityNodeInfo {
+                val deadline = System.currentTimeMillis() + 15_000
+                while (System.currentTimeMillis() < deadline) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                        if (node.text?.toString()?.equals(text, ignoreCase = true) == true) return node
+                        for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { match -> return match } }
+                        return null
+                    }
+                    root?.let(::visit)?.let { return it }
+                    root?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                val visible = mutableListOf<String>()
+                instrumentation.uiAutomation.rootInActiveWindow?.let { root ->
+                    fun collect(node: AccessibilityNodeInfo) {
+                        node.text?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                        node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(visible::add)
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                    }
+                    collect(root)
+                }
+                throw AssertionError("Exact shift action not found: $text; visible=${visible.joinToString(" | ")}")
+            }
+            fun click(text: String) {
+                val node = awaitExact(text)
+                assertTrue("Could not activate $text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
+                    node.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+            }
+            fun enter(hint: String, value: String) {
+                val node = await(hintPrefix = hint)
+                val arguments = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+                }
+                assertTrue("Could not enter $hint", node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments))
+            }
+
+            click("Start shift for Morning Cashier")
+            enter("Counted opening cash in rupees", "50.00")
+            click("Start")
+            await(textPrefix = "Morning Cashier · Signed-in local account")
+            val started = SqliteCounterPersistence(context).use { it.load()!! }
+            assertEquals("shift-ui-owner-id", started.cashDrawerSessions.single().staffActorId)
+            assertEquals(5_000, started.cashDrawerSessions.single().openingCashPaise)
+
+            click("End shift and record handover")
+            enter("Counted cash in rupees", "50.00")
+            enter("Receiving staff label", "Evening Cashier")
+            enter("Handover note", "Till counted at shift change")
+            click("Record handover")
+            await(textPrefix = "Morning Cashier · ENDED")
+
+            val finished = SqliteCounterPersistence(context).use { it.load()!! }
+            val shift = finished.cashDrawerSessions.single()
+            assertNotNull(shift.closedAt)
+            assertEquals("shift-ui-owner-id", shift.staffActorId)
+            assertEquals("Evening Cashier", shift.handoverToLabel)
+            assertEquals("Till counted at shift change", shift.handoverNote)
+            assertEquals(5_000, shift.closingCashPaise)
+            assertTrue(finished.auditEvents.any { it.contains("staff_shift.started") && it.contains("shift-ui-owner-id") })
+            assertTrue(finished.auditEvents.any { it.contains("staff_shift.ended") && it.contains("Evening Cashier") })
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun schemaV29AddsShiftActorIdWithoutChangingExistingShiftRecords() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
