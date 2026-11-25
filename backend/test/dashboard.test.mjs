@@ -471,7 +471,7 @@ test('owner overview route requires authentication and serves only owner static 
     async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
     async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; },
     async shopAuditHistory(actor, limit, beforeRevision) { return { ...fixture, shopId: actor.shop_id, limit, beforeRevision, hasMore: beforeRevision === null, nextBeforeRevision: beforeRevision === null ? 4 : null, returnedEventCount: 0, events: [], evidence: { limitation: 'not a complete employee audit trail' } }; },
-    async shopSyncConflicts(actor, limit) { return { ...fixture, shopId: actor.shop_id, limit, openConflictCount: 0, hasMore: false, conflicts: [], evidence: { action: 'review only' } }; },
+    async shopSyncConflicts(actor, limit, before) { return { ...fixture, shopId: actor.shop_id, limit, before, returnedConflictCount: 0, hasMore: false, conflicts: [], evidence: { action: 'review only' } }; },
     async shopStaffShifts(actor) { return { ...fixture, shopId: actor.shop_id, shiftCount: 0, shifts: [], evidence: { limitation: 'not attendance or payroll' } }; },
     async shopStaffMembers(actor) { return { shopId: actor.shop_id, members: [] }; },
     async shopStaffInvitations(actor) { return { shopId: actor.shop_id, invitations: [] }; },
@@ -514,6 +514,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /Accepted event history/);
   assert.match(pageText, /Sync conflicts/);
   assert.match(pageText, /id="conflicts-rows"/);
+  assert.match(pageText, /id="conflicts-older-button"/);
   assert.match(pageText, /Shift &amp; drawer sessions/);
   assert.match(pageText, /id="shifts-rows"/);
   assert.match(pageText, /Staff access/);
@@ -564,9 +565,11 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(deniedConflicts.status, 401);
   const invalidConflictLimit = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1&limit=101`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(invalidConflictLimit.status, 400);
+  const invalidConflictCursor = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1&beforeCreatedAt=2026-11-26T00%3A00%3A00.000Z`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(invalidConflictCursor.status, 400);
   const conflictResponse = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1&limit=10`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(conflictResponse.status, 200);
-  assert.equal((await conflictResponse.json()).openConflictCount, 0);
+  assert.equal((await conflictResponse.json()).returnedConflictCount, 0);
   assert.equal((await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`)).status, 401);
   const insights = await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(insights.status, 200);

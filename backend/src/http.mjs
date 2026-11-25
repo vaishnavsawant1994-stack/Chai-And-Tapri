@@ -158,8 +158,12 @@ export function createApiServer(service) {
         const shopId=url.searchParams.get('shopId');
         const limit=Number(url.searchParams.get('limit')??'100');
         if(!Number.isInteger(limit)||limit<1||limit>100) throw new ApiError(400,'invalid_conflict_limit');
+        const rawBeforeCreatedAt=url.searchParams.get('beforeCreatedAt');
+        const beforeConflictId=url.searchParams.get('beforeConflictId');
+        if((rawBeforeCreatedAt===null)!==(beforeConflictId===null)) throw new ApiError(400,'invalid_conflict_cursor');
+        const before=rawBeforeCreatedAt===null?null:{createdAt:rawBeforeCreatedAt,conflictId:beforeConflictId};
         const actor=await service.authenticate(token,shopId);
-        return json(res,200,await service.shopSyncConflicts(actor,limit));
+        return json(res,200,await service.shopSyncConflicts(actor,limit,before));
       }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/shifts') {
         const shopId=url.searchParams.get('shopId');

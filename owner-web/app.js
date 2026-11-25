@@ -10,6 +10,7 @@ import { formatQuantity } from './quantity-format.mjs';
   let activeShopId = null;
   let activeView = 'overview';
   let auditBeforeRevision = null;
+  let conflictsBefore = null;
   const reportSnapshots = new Map();
 
   const money = (paise) => new Intl.NumberFormat('en-IN', {
@@ -554,12 +555,17 @@ import { formatQuantity } from './quantity-format.mjs';
     } finally { $('refresh-button').disabled = false; olderButton.disabled = false; }
   }
 
-  async function loadConflicts() {
+  async function loadConflicts({ append = false } = {}) {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    const olderButton = $('conflicts-older-button');
+    olderButton.disabled = true;
     setStatus($('conflicts-status'), 'Loading stored conflict metadata…');
     try {
-      const data = await request(`/v1/dashboard/conflicts?shopId=${encodeURIComponent(activeShopId)}&limit=100`, {
+      const before = append ? conflictsBefore : null;
+      if (append && !before) return;
+      const cursor = before ? `&beforeCreatedAt=${encodeURIComponent(before.createdAt)}&beforeConflictId=${encodeURIComponent(before.conflictId)}` : '';
+      const data = await request(`/v1/dashboard/conflicts?shopId=${encodeURIComponent(activeShopId)}&limit=100${cursor}`, {
         headers: { authorization: `Bearer ${session.token}` }
       });
       $('conflicts-scope').textContent = `${data.evidence.scope} ${data.evidence.action}`;
@@ -573,13 +579,18 @@ import { formatQuantity } from './quantity-format.mjs';
         return row;
       });
       if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 9; cell.className = 'empty-row'; cell.textContent = 'No unresolved synchronization conflicts are recorded.'; row.append(cell); rows.push(row); }
-      $('conflicts-rows').replaceChildren(...rows);
+      if (append && $('conflicts-rows').querySelector('tr.empty-row')) $('conflicts-rows').replaceChildren();
+      if (!append) $('conflicts-rows').replaceChildren(...rows);
+      else if (data.conflicts.length) $('conflicts-rows').append(...rows);
+      conflictsBefore = data.nextBefore ?? null;
+      olderButton.hidden = !data.hasMore || !conflictsBefore;
       $('conflicts-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
-      setStatus($('conflicts-status'), `${data.openConflictCount} conflict(s) shown through server revision ${data.serverRevision}${data.hasMore ? '; showing the newest 100.' : '.'}`, 'success');
+      const displayed = $('conflicts-rows').querySelectorAll('tr:not(.empty-row)').length;
+      setStatus($('conflicts-status'), `${displayed} unresolved conflict(s) displayed through server revision ${data.serverRevision}${data.hasMore ? '; older conflicts are available.' : '.'}`, 'success');
     } catch (error) {
       setStatus($('conflicts-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
-    } finally { $('refresh-button').disabled = false; }
+    } finally { $('refresh-button').disabled = false; olderButton.disabled = false; }
   }
 
   async function loadShifts() {
@@ -782,6 +793,7 @@ import { formatQuantity } from './quantity-format.mjs';
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
   $('conflicts-tab').addEventListener('click', () => { setView('conflicts'); loadConflicts(); });
+  $('conflicts-older-button').addEventListener('click', () => loadConflicts({ append: true }));
   $('audit-older-button').addEventListener('click', () => loadAuditHistory({ append: true }));
   $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
   $('staff-tab').addEventListener('click', () => { setView('staff'); loadStaff(); });

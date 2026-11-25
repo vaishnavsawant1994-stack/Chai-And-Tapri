@@ -1,7 +1,7 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 ## Latest continuation - OW-11 sync conflict review - 26 November 2026
 
-Added a read-only owner conflict queue at `GET /v1/dashboard/conflicts`, backed by shop-scoped RLS and the updated runtime `SELECT, INSERT` grant. The API omits raw submitted payloads and exposes only conflict/device/event IDs, revision mismatch, server receipt time and allow-listed record counts. The owner page renders this view and clearly says no automatic merge/replay/resolution occurs. Restricted-role PostgreSQL suite: **39/39 passed**, including route visibility, stale conflict, payload minimization, limit validation and cashier denial. Static JS syntax checks pass. Browser UI automation was unavailable; OW-11 stays partial, and current deployment DBs must receive the grant update. See `OW-11-SYNC-CONFLICT-REVIEW-REPORT-2026-11-26.md`.
+Added a read-only owner conflict queue at `GET /v1/dashboard/conflicts`, backed by shop-scoped RLS and the updated runtime `SELECT, INSERT` grant. The API omits raw submitted payloads and exposes only conflict/device/event IDs, revision mismatch, server receipt time and allow-listed record counts. The owner page has stable cursor paging and clearly says no automatic merge/replay/resolution occurs. Restricted-role PostgreSQL suite: **39/39 passed**, including route visibility, stale conflict, payload minimization, same-timestamp cursor paging, limit/cursor validation and cashier denial. Static JS syntax checks pass. Browser UI automation was unavailable; OW-11 stays partial, and current deployment DBs must receive the grant update. See `OW-11-SYNC-CONFLICT-REVIEW-REPORT-2026-11-26.md`.
 
 ## Latest continuation - CAT-051B shop-identity preflight - 25 November 2026
 
