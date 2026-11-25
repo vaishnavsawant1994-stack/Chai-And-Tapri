@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-08 multi-line fulfillment
+
+Live Orders can hand over quantities from several product lines in one validated transaction. Focused API 37 multi-line and single-line UI cases passed 1/1 each; Kotlin JVM 82/82; APK and lint tasks passed; lint reports 186 warnings. Full suite: 139/140, with one Order Details launch timeout that passed focused retest; the broad suite is not green/qualified. See [CT-08 report](CT-08-MULTI-LINE-PARTIAL-HANDOVER-REPORT-2026-11-25.md).
+
 ## CT-06 Quick Sale receipt handoff
 
 Quick Sale now shows a receipt sourced from the committed order and payment ledger after checkout and provides a direct route to Order Details. Focused API 37 cash/UPI UI-to-ledger-to-order-details test passed **1/1**; the full default Android regression passed **139/139**; Kotlin JVM **80/80**; APK tasks passed; `lintDebug` passed with 183 warnings. Details: [CT-06 receipt report](CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md).

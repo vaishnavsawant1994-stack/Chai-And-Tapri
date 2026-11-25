@@ -1,6 +1,11 @@
 # Chai And Tapri OS â€” Master Implementation Tracker
 ## Latest continuation - CT-07 reviewed-transcript safety - 25 November 2026
 ## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
+## Latest continuation - CT-08 multi-line partial handover - 25 November 2026
+
+Live Orders supports multi-line/quantity partial handovers via one validated atomic domain commit. JVM test covers rollback, duplicate replay and stale revision; API 37 multi-line and single-line UI tests each passed 1/1. Kotlin JVM 82/82, APK tasks and lint pass (186 warnings). Full default emulator suite was 139/140: the single 45-second Order Details activity-launch timeout passed focused 1/1 afterward; broad suite remains unqualified. See [report](CT-08-MULTI-LINE-PARTIAL-HANDOVER-REPORT-2026-11-25.md).
+
+## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
 
 CT-06 now presents the committed order and tender evidence after checkout and links directly to CT-09. Cash, pending UPI and Udhar are labeled according to their actual ledger status. Kotlin JVM **80/80**; focused API 37 receipt/ledger/order-detail test **1/1**; full default instrumentation **139/139**; debug/instrumentation APK tasks and `lintDebug` PASS (183 warnings). See [report](CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md). CT-06 remains partial.
 

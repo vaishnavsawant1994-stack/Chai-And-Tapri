@@ -9,6 +9,7 @@ import android.text.TextWatcher
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -131,50 +132,50 @@ class LiveOrdersActivity : Activity() {
             return
         }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 4, 20, 0) }
-        val item = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(
-                this@LiveOrdersActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                remaining.map { line -> "${line.name} · ${line.quantity - line.deliveredQuantity} remaining" }
-            )
+        val controls = remaining.map { line ->
+            val available = line.quantity - line.deliveredQuantity
+            val check = CheckBox(this).apply {
+                text = "${line.name} · $available remaining"
+                contentDescription = "Select ${line.name} for handover"
+            }
+            val count = EditText(this).apply {
+                hint = if (remaining.size == 1) "Quantity to hand over" else "Quantity for ${line.name}"
+                contentDescription = hint
+                inputType = InputType.TYPE_CLASS_NUMBER
+                setSingleLine(true)
+                setText("1")
+            }
+            form.addView(check)
+            form.addView(count)
+            Triple(line, check, count)
         }
-        val count = EditText(this).apply {
-            hint = "Quantity to hand over"
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setSingleLine(true)
-            setText("1")
-        }
-        form.addView(label("Select the ready item", 14f))
-        form.addView(item)
-        form.addView(count)
+        form.addView(label("Select ready items and enter each handover quantity. Unselected items remain on the order.", 14f), 0)
         val dialog = AlertDialog.Builder(this)
             .setTitle("Partial handover · Order #${order.number}")
-            .setMessage("Only the selected quantity will be marked as given and deducted from confirmed stock. The order sale is recorded when all items have been handed over.")
+            .setMessage("Selected quantities are recorded together as one atomic action. Only those items are marked given and deducted from confirmed stock. The sale is posted when all items have been handed over.")
             .setView(form)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Record handover", null)
             .create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val selected = remaining.getOrNull(item.selectedItemPosition)
-                val available = selected?.let { it.quantity - it.deliveredQuantity } ?: 0
-                val quantity = count.text.toString().trim().toIntOrNull()
-                if (selected == null || quantity == null || quantity !in 1..available) {
-                    count.error = "Enter a quantity from 1 to $available"
+                val selections = linkedMapOf<String, Int>()
+                for ((line, check, count) in controls) {
+                    if (!check.isChecked) continue
+                    val available = line.quantity - line.deliveredQuantity
+                    val quantity = count.text.toString().trim().toIntOrNull()
+                    if (quantity == null || quantity !in 1..available) {
+                        count.error = "Enter a quantity from 1 to $available"
+                        return@setOnClickListener
+                    }
+                    selections[line.productId] = quantity
+                }
+                if (selections.isEmpty()) {
+                    status.text = "Select at least one item to hand over. No order changed."
                     return@setOnClickListener
                 }
+                val result = model.partialHandover(order.number, selections, "ui-partial-handover-${java.util.UUID.randomUUID()}", order.revision)
                 dialog.dismiss()
-                val result = model.apply(
-                    "ui-partial-handover-${java.util.UUID.randomUUID()}",
-                    ProposedCommand(
-                        type = "partial_given",
-                        orderNumber = order.number,
-                        description = "Hand over $quantity × ${selected.name} for order #${order.number}",
-                        productId = selected.productId,
-                        quantity = quantity,
-                        expectedRevision = order.revision
-                    )
-                )
                 status.text = result
                 render()
             }

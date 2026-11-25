@@ -1,4 +1,8 @@
 # Chai And Tapri OS
+## Latest continuation - CT-08 multi-line partial handover - 25 November 2026
+
+Live Orders can now record selected quantities across multiple order lines in one validated transaction. Validation precedes mutation; invalid quantities roll back, revisions are checked, duplicate command IDs do not repeat stock changes, and one commit creates the audit/outbox effects. Kotlin JVM **82/82**, debug/instrumentation APK tasks PASS; new multi-line UI and legacy single-line UI focused tests each **1/1**; `lintDebug` PASS with 186 warnings. Full API 37 regression attempted: **139/140 passed**, 1 unrelated Order Details activity launch timeout; that case passed focused 1/1, so the full suite remains unqualified. See [CT-08 report](specs/CT-08-MULTI-LINE-PARTIAL-HANDOVER-REPORT-2026-11-25.md).
+
 ## Latest continuation - CT-06 Quick Sale receipt handoff - 25 November 2026
 
 After a successful sale, Quick Sale now presents the committed order, lines, sale total, payment evidence labels and outstanding balance, plus direct navigation to Order Details. Cash remains staff-declared, UPI pending is not verified, and Udhar is shown as a receivable. Kotlin JVM tests passed **80/80**, debug and instrumentation APK tasks passed, focused receipt UI test **1/1** passed, and the full default API 37 instrumentation suite passed **139/139** with no failures/errors/skips. `lintDebug` passed with 183 warnings. CT-06 and the Android MVP remain partial. Details: [CT-06 receipt report](specs/CT-06-QUICK-SALE-RECEIPT-REPORT-2026-11-25.md).

@@ -5298,6 +5298,7 @@ class SqliteCounterPersistenceTest {
                 throw AssertionError("UI control not found: prefix=$prefix hint=$hint")
             }
             assertTrue(awaitNode(prefix = "Hand over selected items").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(awaitNode(prefix = "Partial UI Tea ·").performAction(AccessibilityNodeInfo.ACTION_CLICK))
             val quantity = awaitNode(hint = "Quantity to hand over")
             assertTrue(quantity.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "1")
@@ -5321,6 +5322,69 @@ class SqliteCounterPersistenceTest {
                 assertEquals(4, model.stockLevels()["partial_ui_tea"])
                 assertEquals(1, model.stockMovements().count { it.orderNumber == handed.number && it.reason == "partial_handover" })
                 assertEquals(Fulfillment.PARTIALLY_GIVEN, model.allOrders().single().fulfillment)
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
+    @Test fun liveOrdersPartialHandoverCanSelectMultipleLinesAtomically() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { setup ->
+            assertTrue(setup.saveProduct(TapriProduct("multi_handover_tea", "Multi Handover Tea", "Chai", 1200, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(setup.saveProduct(TapriProduct("multi_handover_snack", "Multi Handover Snack", "Snacks", 2000, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(setup.confirmOpeningStock("multi_handover_tea", 5, "synthetic multi-line handover tea", "multi-handover-tea-stock").contains("5 units"))
+            assertTrue(setup.confirmOpeningStock("multi_handover_snack", 5, "synthetic multi-line handover snack", "multi-handover-snack-stock").contains("5 units"))
+            assertTrue(setup.apply("multi-handover-create", ProposedCommand("create", null, "Create order", "multi_handover_tea", 2)).startsWith("Order #"))
+            val created = setup.allOrders().single()
+            assertTrue(setup.apply("multi-handover-add", ProposedCommand("add", created.number, "Add snack", "multi_handover_snack", 2, expectedRevision = created.revision)).startsWith("Added"))
+            val beforeReady = setup.allOrders().single()
+            assertTrue(setup.apply("multi-handover-ready", ProposedCommand("ready", beforeReady.number, "Mark ready", expectedRevision = beforeReady.revision)).contains("ready"))
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, LiveOrdersActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as LiveOrdersActivity
+        try {
+            fun awaitNode(prefix: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+                        if (node == null) return null
+                        if ((prefix == null || node.text?.toString()?.startsWith(prefix, true) == true) &&
+                            (hint == null || node.hintText?.toString()?.equals(hint, true) == true)) return node
+                        for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
+                        return null
+                    }
+                    find(root)?.let { return it }
+                    Thread.sleep(100)
+                }
+                throw AssertionError("UI node not found: prefix=$prefix hint=$hint")
+            }
+            fun enter(hint: String, value: String) {
+                assertTrue(awaitNode(hint = hint).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+                }))
+            }
+            assertTrue(awaitNode(prefix = "Hand over selected items").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(awaitNode(prefix = "Multi Handover Tea ·").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(awaitNode(prefix = "Multi Handover Snack ·").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            enter("Quantity for Multi Handover Tea", "1")
+            enter("Quantity for Multi Handover Snack", "2")
+            assertTrue(awaitNode(prefix = "Record handover").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { verify ->
+                val order = verify.allOrders().single()
+                assertEquals(Fulfillment.PARTIALLY_GIVEN, order.fulfillment)
+                assertFalse(order.salePosted)
+                assertEquals(1, order.lines.single { it.productId == "multi_handover_tea" }.deliveredQuantity)
+                assertEquals(2, order.lines.single { it.productId == "multi_handover_snack" }.deliveredQuantity)
+                assertEquals(4, verify.stockLevels()["multi_handover_tea"])
+                assertEquals(3, verify.stockLevels()["multi_handover_snack"])
+                val movements = verify.stockMovements().filter { it.orderNumber == order.number }
+                assertEquals(2, movements.size)
+                assertTrue(movements.all { it.reason == "partial_handover" })
+                assertEquals(1, verify.auditEvents().count { it.contains("order.partial_handover #${order.number}") })
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

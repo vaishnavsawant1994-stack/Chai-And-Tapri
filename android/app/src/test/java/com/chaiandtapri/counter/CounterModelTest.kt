@@ -987,6 +987,42 @@ class CounterModelTest {
         assertEquals(2, model.stockMovements().sumOf { -it.quantityDelta })
     }
 
+    @Test fun multiLinePartialHandoverIsAtomicAuditedAndIdempotent() {
+        val model = CounterModel()
+        model.apply("batch-create", model.parse("Naya order, do chai")!!)
+        model.apply("batch-add", ProposedCommand("add", 12, "add snacks", "samosa", 2))
+        model.apply("batch-ready", ProposedCommand("ready", 12, "mark ready", expectedRevision = model.allOrders().single().revision))
+        val revision = model.allOrders().single().revision
+        val beforeInvalidBatch = model.allOrders().single().let { it.copy(lines = it.lines.toMutableList()) }
+        val stockBeforeInvalidBatch = model.stockLevels()
+        val movementsBeforeInvalidBatch = model.stockMovements()
+        assertTrue(model.partialHandover(12, mapOf("chai" to 1, "samosa" to 3), "invalid-batch", revision).contains("exceeds remaining"))
+        assertEquals(beforeInvalidBatch, model.allOrders().single())
+        assertEquals(stockBeforeInvalidBatch, model.stockLevels())
+        assertEquals(movementsBeforeInvalidBatch, model.stockMovements())
+
+        val result = model.partialHandover(12, mapOf("chai" to 1, "samosa" to 2), "batch-handover", revision)
+        assertTrue(result.contains("1 × Regular Chai"))
+        assertTrue(result.contains("2 × Samosa"))
+        val order = model.allOrders().single()
+        assertEquals(Fulfillment.PARTIALLY_GIVEN, order.fulfillment)
+        assertFalse(order.salePosted)
+        assertEquals(5500, order.salePaise)
+        assertEquals(1, order.lines.single { it.productId == "chai" }.deliveredQuantity)
+        assertEquals(2, order.lines.single { it.productId == "samosa" }.deliveredQuantity)
+        assertEquals(99, model.stockLevels()["chai"])
+        assertEquals(98, model.stockLevels()["samosa"])
+        assertEquals(2, model.stockMovements().count { it.orderNumber == 12 })
+        assertTrue(model.auditEvents().any { it.contains("order.partial_handover #12") })
+
+        val snapshot = model.allOrders().single().let { it to model.stockLevels().toMap() to model.stockMovements().toList() }
+        assertEquals("Duplicate command ignored.", model.partialHandover(12, mapOf("chai" to 1), "batch-handover", order.revision))
+        assertEquals(snapshot.first.first, model.allOrders().single())
+        assertEquals(snapshot.first.second, model.stockLevels())
+        assertEquals(snapshot.second, model.stockMovements())
+        assertTrue(model.partialHandover(12, mapOf("chai" to 1), "stale-batch", revision).contains("revision conflict"))
+    }
+
     @Test fun udharAndRepaymentsMaintainCustomerBalanceAndOrderPaymentState() {
         val model = CounterModel()
         model.apply("create", model.parse("Naya order, one chai")!!)

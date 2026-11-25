@@ -946,6 +946,40 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun recordCash(orderNumber: Int, amountPaise: Int?, commandId: String, expectedRevision: Int? = null): String =
         apply(commandId, ProposedCommand("cash", orderNumber, "Record staff-declared cash", amountPaise = amountPaise, expectedRevision = expectedRevision))
 
+    /** Atomically hands over selected quantities across one or more order lines. */
+    fun partialHandover(orderNumber: Int, selectedQuantities: Map<String, Int>, commandId: String, expectedRevision: Int? = null): String {
+        if (commandId.isBlank()) return "Command ID is required. No handover recorded."
+        if (commandId in appliedCommandIds) return "Duplicate command ignored."
+        if (selectedQuantities.isEmpty() || selectedQuantities.keys.any(String::isBlank)) return "Select at least one valid item. No handover recorded."
+        val order = orders[orderNumber] ?: return "Order not found. No handover recorded."
+        if (expectedRevision != null && order.revision != expectedRevision) return "Order revision conflict. Refresh and review the order before retrying."
+        if (order.voided || order.fulfillment !in setOf(Fulfillment.READY, Fulfillment.PARTIALLY_GIVEN)) return "Mark the order ready before handover."
+        val selected = mutableListOf<Pair<Int, Int>>()
+        for ((productId, quantity) in selectedQuantities) {
+            val index = order.lines.indexOfFirst { it.productId == productId }
+            if (index < 0) return "Selected item is not part of this order. No handover recorded."
+            val line = order.lines[index]
+            val remaining = line.quantity - line.deliveredQuantity
+            if (quantity !in 1..remaining) return "Handover quantity exceeds remaining ${line.name}. No handover recorded."
+            if (requireConfiguredProducts && productId !in stockConfirmedProductIds) return "Opening stock is not confirmed for ${line.name}. No handover recorded."
+            if ((stock[productId] ?: 0) < quantity) return "Insufficient stock for ${line.name}. No handover or stock movement recorded."
+            selected += index to quantity
+        }
+        val before = snapshot()
+        selected.forEach { (index, quantity) ->
+            val line = order.lines[index]
+            order.lines[index] = line.copy(deliveredQuantity = line.deliveredQuantity + quantity)
+            stock[line.productId] = (stock[line.productId] ?: 0) - quantity
+            movements += StockMovement("$commandId:${line.productId}", line.productId, -quantity, "partial_handover", order.number)
+        }
+        val allGiven = order.lines.all { it.deliveredQuantity == it.quantity }
+        order.fulfillment = if (allGiven) Fulfillment.GIVEN else Fulfillment.PARTIALLY_GIVEN
+        order.salePosted = allGiven
+        val summary = selected.joinToString("; ") { (index, quantity) -> "${quantity} × ${order.lines[index].name}" }
+        val result = "Handed over $summary · ${if (allGiven) "order complete; sale recorded ${money(order.salePaise)}" else "more items remain"}."
+        return commitMutation(before, commandId, result, "order.partial_handover #${order.number} items=${selected.joinToString(",") { (index, quantity) -> "${order.lines[index].productId}:$quantity" }}", order)
+    }
+
     fun recordUpiPending(orderNumber: Int, commandId: String, expectedRevision: Int? = null): String =
         apply(commandId, ProposedCommand("upi", orderNumber, "Record UPI pending", expectedRevision = expectedRevision))
 
