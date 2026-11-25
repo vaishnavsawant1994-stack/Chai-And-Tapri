@@ -175,9 +175,21 @@ class DailyClosingActivity : Activity() {
         if (review == null) content.addView(button("Acknowledge review and note follow-up") { reviewDialog(session.sessionId, variance) })
 
         content.addView(label("Current shop items to follow up (not limited to this drawer session)", 18f))
-        content.addView(label("Open orders: ${current.currentOpenOrderCount()}", 15f))
-        content.addView(label("UPI pending: ${money(current.currentPendingUpiPaise())} · not verified collection", 15f))
-        content.addView(label("Customer credit outstanding: ${money(current.currentCustomerReceivablePaise())}", 15f))
+        val openOrders = current.currentOpenOrderCount()
+        val pendingUpi = current.currentPendingUpiPaise()
+        val receivable = current.currentCustomerReceivablePaise()
+        content.addView(label("Open orders: $openOrders", 15f))
+        if (openOrders > 0) content.addView(button("Review open orders | CT-08") {
+            startActivity(Intent(this, LiveOrdersActivity::class.java))
+        })
+        content.addView(label("UPI pending: ${money(pendingUpi)} · not verified collection", 15f))
+        if (pendingUpi > 0) content.addView(button("Review pending payments | CT-10") {
+            startActivity(Intent(this, PaymentActivity::class.java))
+        })
+        content.addView(label("Customer credit outstanding: ${money(receivable)}", 15f))
+        if (receivable > 0) content.addView(button("Review customer credit | CT-23") {
+            startActivity(Intent(this, CustomerCreditActivity::class.java))
+        })
         content.addView(label("Acknowledging this review does not clear a cash difference, collect UPI, close open orders or settle customer credit.", 14f))
     }
 

@@ -3691,6 +3691,7 @@ class SqliteCounterPersistenceTest {
         assertTrue(model.quickSale(listOf("closing_chai" to 1), "cash", commandId = "closing-cash-sale").startsWith("Quick sale"))
         assertTrue(model.recordExpense("cleaning", 200, "cash", "soap", "closing-expense").startsWith("Expense recorded"))
         assertTrue(model.quickSale(listOf("closing_chai" to 1), "upi_pending", commandId = "closing-upi").startsWith("Quick sale"))
+        assertTrue(model.quickSale(listOf("closing_chai" to 1), "udhar", "closing-customer", "closing-credit-sale").startsWith("Quick sale"))
         assertTrue(model.apply("closing-open-order", ProposedCommand("create", null, "draft chai", "closing_chai", 1)).contains("Order #"))
         assertTrue(model.closeCashDrawer(6_000, "closing-close").contains("unresolved variance"))
         model.close()
@@ -3713,6 +3714,10 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("Cash difference: -₹3.00 · unresolved") })
         assertTrue(strings.any { it.contains("Open orders: 1") })
         assertTrue(strings.any { it.contains("UPI pending: ₹15.00") })
+        assertTrue(strings.any { it.contains("Customer credit outstanding: ₹15.00") })
+        assertTrue(strings.contains("Review open orders | CT-08"))
+        assertTrue(strings.contains("Review pending payments | CT-10"))
+        assertTrue(strings.contains("Review customer credit | CT-23"))
         assertTrue(strings.any { it.contains("Review status: not acknowledged") })
         fun awaitClosingNode(text: String? = null, className: String? = null): AccessibilityNodeInfo {
             var labels = ""
@@ -3748,6 +3753,15 @@ class SqliteCounterPersistenceTest {
             }
             throw AssertionError("Daily closing input not found for hint=$hint")
         }
+        fun verifyFollowUpNavigation(buttonText: String, destinationTitle: String) {
+            assertTrue("$buttonText should open its related workflow", awaitClosingNode(text = buttonText).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            awaitClosingNode(text = destinationTitle)
+            instrumentation.uiAutomation.executeShellCommand("input keyevent 4").close()
+            awaitClosingNode(text = buttonText)
+        }
+        verifyFollowUpNavigation("Review open orders | CT-08", "Live Orders")
+        verifyFollowUpNavigation("Review pending payments | CT-10", "Payments · CT-10")
+        verifyFollowUpNavigation("Review customer credit | CT-23", "Customers & Udhar Ledger · CT-21/23")
         fun setClosingText(node: AccessibilityNodeInfo, value: String) {
             assertTrue("Daily closing field should accept text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             assertTrue("Daily closing field text should update", node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
