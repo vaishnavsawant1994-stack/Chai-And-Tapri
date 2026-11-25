@@ -5526,12 +5526,14 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             val customerActivity = instrumentation.startActivitySync(Intent(context, CustomerCreditActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             try {
-                fun awaitCustomerNode(prefix: String? = null, hint: String? = null): AccessibilityNodeInfo {
+                fun awaitCustomerNode(prefix: String? = null, hint: String? = null, containsText: String? = null): AccessibilityNodeInfo {
                     repeat(100) {
                         val root = instrumentation.uiAutomation.rootInActiveWindow
                         fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
                             if (node == null) return null
-                            if ((prefix == null || node.text?.toString()?.startsWith(prefix, ignoreCase = true) == true) &&
+                            val text = node.text?.toString().orEmpty()
+                            if ((prefix == null || text.startsWith(prefix, ignoreCase = true)) &&
+                                (containsText == null || text.contains(containsText, ignoreCase = true)) &&
                                 (hint == null || node.hintText?.toString()?.startsWith(hint, ignoreCase = true) == true)) return node
                             for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
                             return null
@@ -5539,7 +5541,7 @@ class SqliteCounterPersistenceTest {
                         find(root)?.let { return it }
                         Thread.sleep(100)
                     }
-                    throw AssertionError("Customer repayment control not found: ${prefix ?: hint}")
+                    throw AssertionError("Customer repayment control not found: ${prefix ?: containsText ?: hint}")
                 }
                 fun clickCustomer(prefix: String) = assertTrue("Could not tap $prefix", awaitCustomerNode(prefix = prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 clickCustomer("Record repayment")
@@ -5550,6 +5552,10 @@ class SqliteCounterPersistenceTest {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "4.00")
                 }))
                 clickCustomer("Record repayment")
+                assertNotNull("A repayment should display its allocation receipt", awaitCustomerNode(prefix = "Repayment recorded"))
+                assertNotNull("Receipt should retain explicit UPI evidence limits", awaitCustomerNode(containsText = "Staff-declared UPI"))
+                assertNotNull("Receipt should identify the credit order allocation", awaitCustomerNode(containsText = "Order #12: ₹4.00"))
+                clickCustomer("Done")
 
                 var afterRepayment: CounterModel? = null
                 for (attempt in 0 until 100) {

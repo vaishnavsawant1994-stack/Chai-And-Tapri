@@ -120,8 +120,20 @@ class CustomerDetailsActivity : Activity() {
                     .getOrNull()?.takeIf { it in 1..duePaise }
                 if (paise == null) render("Enter a valid positive amount no greater than the outstanding balance. No change was made.")
                 else {
-                    val result = model?.repayCredit(customerId, paise, "ct22-repayment-${UUID.randomUUID()}", method)
+                    val commandId = "ct22-repayment-${UUID.randomUUID()}"
+                    val current = model
+                    val before = current?.customerCredits().orEmpty().filter { it.customerId == customerId }
+                    val result = current?.repayCredit(customerId, paise, commandId, method)
+                    val receipt = if (result?.contains("allocated") == true) {
+                        current?.paymentHistory()?.firstOrNull { it.entryId == commandId }?.let {
+                            CustomerRepaymentReceipt.create(customerId, before, current?.customerCredits().orEmpty(), it)
+                        }
+                    } else null
                     render(result ?: "Repayment was not recorded.")
+                    receipt?.let { saved ->
+                        AlertDialog.Builder(this).setTitle("Repayment recorded")
+                            .setMessage(saved.displayText()).setPositiveButton("Done", null).show()
+                    }
                 }
             }.show()
     }

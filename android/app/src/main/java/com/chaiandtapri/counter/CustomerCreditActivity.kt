@@ -179,11 +179,23 @@ class CustomerCreditActivity : Activity() {
                 if (paise == null) content.addView(label("Enter a positive amount with no fractions smaller than one paisa. No change made.", 14f), 0)
                 else {
                     val current = model
-                    val result = current?.repayCredit(customerId, paise, "ui-repayment-${java.util.UUID.randomUUID()}", method)
+                    val commandId = "ui-repayment-${java.util.UUID.randomUUID()}"
+                    val before = current?.customerCredits().orEmpty().filter { it.customerId == customerId }
+                    val result = current?.repayCredit(customerId, paise, commandId, method)
+                    val receipt = if (result?.contains("allocated") == true) {
+                        val payment = current?.paymentHistory()?.firstOrNull { it.entryId == commandId }
+                        payment?.let { CustomerRepaymentReceipt.create(customerId, before, current?.customerCredits().orEmpty(), it) }
+                    } else null
                     render()
                     content.addView(label(result ?: "Repayment was not recorded.", 14f), 1)
+                    receipt?.let(::showRepaymentReceipt)
                 }
             }.show()
+    }
+
+    private fun showRepaymentReceipt(receipt: CustomerRepaymentReceipt) {
+        AlertDialog.Builder(this).setTitle("Repayment recorded")
+            .setMessage(receipt.displayText()).setPositiveButton("Done", null).show()
     }
 
     private fun parsePaise(raw: String): Int? = runCatching {
