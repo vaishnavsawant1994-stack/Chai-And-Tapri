@@ -29,6 +29,7 @@ class SalesHistoryActivity : ComponentActivity() {
     private lateinit var exportStatus: TextView
     private var exportCsv: String? = null
     private var model: CounterModel? = null
+    private var unitLabels: Map<String, String> = emptyMap()
 
     private val createHistoryLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         val csv = exportCsv
@@ -70,6 +71,7 @@ class SalesHistoryActivity : ComponentActivity() {
         content.removeAllViews()
         try {
             model = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
+            unitLabels = model!!.products().associate { it.productId to it.unitLabel }
             content.addView(label("Sales & Order History", 25f))
             content.addView(label("Local records only · date range uses order creation date. Payment event dates are not available yet.", 14f))
             val orders = model!!.allOrders()
@@ -117,8 +119,9 @@ class SalesHistoryActivity : ComponentActivity() {
         val query = searchQuery.trim().lowercase(Locale.ROOT)
         val filtered = orders.filter { order ->
             val events = payments.filter { it.orderNumber == order.number }
+            val items = formatSalesHistoryItems(order, unitLabels)
             val textMatches = query.isEmpty() || listOf(
-                order.number.toString(), order.items, order.fulfillment.name, order.payment.name,
+                order.number.toString(), items, order.fulfillment.name, order.payment.name,
                 order.cancelReason.orEmpty(), events.joinToString(" ") { "${it.method} ${it.status} ${it.kind}" }
             ).any { it.lowercase(Locale.ROOT).contains(query) }
             val dateMatches = OrderHistoryDateRange.contains(order.createdAtEpochMs, fromDateStartMillis, throughDateEndMillis)
@@ -131,11 +134,11 @@ class SalesHistoryActivity : ComponentActivity() {
             return
         }
         val paymentByOrder = payments.filter { it.orderNumber != null }.groupBy { it.orderNumber }
-        exportCsv = SalesHistoryCsv.render(filtered.map { order -> SalesHistoryCsvRow(order, paymentByOrder[order.number].orEmpty()) })
+        exportCsv = SalesHistoryCsv.render(filtered.map { order -> SalesHistoryCsvRow(order, paymentByOrder[order.number].orEmpty(), unitLabels) })
         if (::exportButton.isInitialized) exportButton.isEnabled = true
         filtered.forEach { order ->
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 14, 12, 14) }
-                card.addView(label("Order #${order.number} · ${order.items}", 18f))
+                card.addView(label("Order #${order.number} · ${formatSalesHistoryItems(order, unitLabels)}", 18f))
                 card.addView(label(if (order.createdAtEpochMs > 0L) "Order date: ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(order.createdAtEpochMs))}" else "Order date unavailable · legacy record", 13f))
                 card.addView(label("Sale ${money(order.salePaise)} · paid ${money(order.paidPaise)} · Udhar ${money(order.creditPaise)} · refunded ${money(order.refundedPaise)} · due ${money(order.duePaise)}", 14f))
                 card.addView(label("${order.fulfillment} / ${order.payment} · revision ${order.revision}${if (order.voided) " · cancelled: ${order.cancelReason.orEmpty()}" else ""}", 13f))

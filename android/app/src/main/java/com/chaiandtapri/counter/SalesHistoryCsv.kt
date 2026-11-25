@@ -1,7 +1,17 @@
 package com.chaiandtapri.counter
 
 /** One row per order; its payment events are summarized without exporting customer identity. */
-data class SalesHistoryCsvRow(val order: CounterOrder, val payments: List<PaymentEntry>)
+data class SalesHistoryCsvRow(
+    val order: CounterOrder,
+    val payments: List<PaymentEntry>,
+    val unitLabels: Map<String, String> = emptyMap()
+)
+
+fun formatSalesHistoryItems(order: CounterOrder, unitLabels: Map<String, String>): String =
+    order.lines.joinToString(" + ") { line ->
+        val unit = unitLabels[line.productId]?.takeIf(String::isNotBlank) ?: "unit not recorded"
+        "${line.quantity} $unit × ${line.name}"
+    }
 
 object SalesHistoryCsv {
     fun render(rows: List<SalesHistoryCsvRow>): String = buildString {
@@ -13,7 +23,7 @@ object SalesHistoryCsv {
             }
             append(listOf(
                 order.number.toString(), order.createdAtEpochMs.takeIf { it > 0L }?.toString().orEmpty(),
-                order.items, order.fulfillment.name, order.payment.name, order.salePaise.toString(),
+                formatSalesHistoryItems(order, row.unitLabels), order.fulfillment.name, order.payment.name, order.salePaise.toString(),
                 order.paidPaise.toString(), order.creditPaise.toString(), order.refundedPaise.toString(),
                 order.duePaise.toString(), order.voided.toString(), order.cancelReason.orEmpty(),
                 row.payments.size.toString(), events,

@@ -727,6 +727,8 @@ class SqliteCounterPersistenceTest {
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         val model = CounterModel(SqliteCounterPersistence(context))
+        val samosaProduct = model.products().first { it.productId == "samosa" }
+        assertTrue(model.saveProduct(samosaProduct.copy(unitLabel = "piece")).contains("Product saved"))
         model.confirmOpeningStock("chai", 10, "CT-11 search synthetic stock", "ct11-search-stock-chai")
         model.confirmOpeningStock("samosa", 10, "CT-11 search synthetic stock", "ct11-search-stock-samosa")
         assertTrue(model.quickSale(listOf("chai" to 1), "cash", commandId = "ct11-search-cash").startsWith("Quick sale"))
@@ -755,6 +757,7 @@ class SqliteCounterPersistenceTest {
         strings.clear()
         instrumentation.runOnMainSync { collect(activity.findViewById(android.R.id.content)) }
         assertTrue(strings.any { it.contains("Order #$upiOrder") })
+        assertTrue("History should display the configured sale unit", strings.any { it.contains("piece × Samosa") })
         assertTrue(strings.none { it.contains("Order #$cashOrder") })
         assertTrue(strings.any { it.contains("UPI") || it.contains("upi") })
 
