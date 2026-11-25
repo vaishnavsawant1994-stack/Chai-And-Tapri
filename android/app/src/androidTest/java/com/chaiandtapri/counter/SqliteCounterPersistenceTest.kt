@@ -3057,6 +3057,27 @@ class SqliteCounterPersistenceTest {
         LocalSessionState.establish("Test Owner")
     }
 
+    @Test fun staffShiftHandoverCanBindEnabledReceivingAccountAndSurvivesReopen() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic test owner")
+        assertTrue(LocalStaffAuth.create(context, "receiver01", "Receiving Cashier", StaffRole.CASHIER, "456789".toCharArray()))
+        LocalSessionState.establishStaff("shift-owner-01", "Opening Cashier", StaffRole.CASHIER)
+        var model = CounterModel(SqliteCounterPersistence(context))
+        assertTrue(model.startAuthenticatedStaffShift(2_000, "verified-handover-open").contains("Shift started"))
+        assertTrue(model.endStaffShift(2_000, "Wrong Name", commandId = "verified-handover-mismatch", handoverToStaffId = "receiver01").contains("does not match"))
+        assertNull(model.activeCashDrawer()?.closedAt)
+        assertTrue(model.endStaffShift(2_000, "Receiving Cashier", commandId = "verified-handover-close", handoverToStaffId = "receiver01").contains("matched"))
+        model.close()
+        model = CounterModel(SqliteCounterPersistence(context))
+        val session = model.cashDrawerHistory().single()
+        assertEquals("receiver01", session.handoverToStaffId)
+        assertEquals("Receiving Cashier", session.handoverToLabel)
+        assertTrue(model.auditEvents().any { it.contains("handover_to_staff_id=receiver01") })
+        model.close()
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+    }
+
     @Test fun authenticatedStaffShiftCanStartAndEndThroughNativeUi() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -3181,7 +3202,7 @@ class SqliteCounterPersistenceTest {
 
         model = CounterModel(SqliteCounterPersistence(context))
         val restored = model.cashDrawerHistory().single()
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(original.sessionId, restored.sessionId)
         assertEquals(original.staffLabel, restored.staffLabel)
         assertEquals(original.openingCashPaise, restored.openingCashPaise)
@@ -3558,7 +3579,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.purchaseHistory().size)
         assertEquals(null, model.purchaseHistory().single().supplierInvoiceReference)
         assertEquals(3, model.stockLevels()["invoice_migration_tea"])
@@ -3651,7 +3672,7 @@ class SqliteCounterPersistenceTest {
         simulatedV20.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(4, model.stockLevels()["tea_order_migration"])
         assertEquals(500L, model.supplierPayablePaise("po_migration_supplier"))
         assertEquals(1, model.purchaseHistory().size)
@@ -4434,7 +4455,7 @@ class SqliteCounterPersistenceTest {
         legacy.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(null, model.products().single { it.productId == "migration_tea" }.reorderThreshold)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
@@ -4465,7 +4486,7 @@ class SqliteCounterPersistenceTest {
         oldStore.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
         assertEquals(1, model.allOrders().size)
         assertEquals(2400, model.allOrders().single().salePaise)
         assertEquals(2400, model.creditBalance("legacy-account"))
@@ -6096,8 +6117,8 @@ class SqliteCounterPersistenceTest {
         old.close()
 
         model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
-        assertEquals(31, SqliteCounterPersistence.DATABASE_VERSION)
-        assertEquals(31, SqliteCounterPersistence(context).use { it.readableDatabase.version })
+        assertEquals(32, SqliteCounterPersistence.DATABASE_VERSION)
+        assertEquals(32, SqliteCounterPersistence(context).use { it.readableDatabase.version })
         assertNull(model.products().single { it.productId == "scan_migration_tea" }.scanCode)
         assertEquals(1, model.allOrders().size)
         assertEquals(1500, model.allOrders().single().salePaise)

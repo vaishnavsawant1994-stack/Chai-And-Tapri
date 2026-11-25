@@ -4,6 +4,8 @@ import android.app.AlertDialog
 import android.os.Bundle
 import android.text.InputType
 import android.widget.Button
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -55,7 +57,7 @@ class StaffShiftsActivity : ComponentActivity() {
             history.forEach { shift ->
                 val expected = current.expectedCashPaise(shift.sessionId) ?: 0L
                 val state = if (shift.closedAt == null) "ACTIVE" else "ENDED · handed over ${money(shift.closingCashPaise!!.toLong())} · variance ${money(shift.closingCashPaise.toLong() - expected)}"
-                val handover = shift.handoverToLabel?.let { "\nHandover label: $it" }.orEmpty()
+                val handover = shift.handoverToLabel?.let { "\nHandover ${if (shift.handoverToStaffId == null) "label (unverified)" else "account ${shift.handoverToStaffId}"}: $it" }.orEmpty()
                 val note = shift.handoverNote.takeIf(String::isNotBlank)?.let { "\nNote: $it" }.orEmpty()
                 content.addView(label("${shift.staffLabel} · $state\nOpening ${money(shift.openingCashPaise.toLong())} · expected ${money(expected)}$handover$note", 14f))
             }
@@ -85,14 +87,23 @@ class StaffShiftsActivity : ComponentActivity() {
     private fun endDialog(sessionId: String, expected: Long) {
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 8, 18, 8) }
         val count = EditText(this).apply { hint = "Counted cash in rupees · expected ${money(expected)}"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
-        val next = EditText(this).apply { hint = "Receiving staff label"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS; setSingleLine(true) }
+        val staffAccounts = runCatching { SqliteCounterPersistence(this).use { it.listStaffAccounts().filter(StaffAccount::enabled) } }.getOrDefault(emptyList())
+        val next = AutoCompleteTextView(this).apply {
+            hint = if (staffAccounts.isEmpty()) "Receiving staff label (unverified)" else "Receiving staff account or label"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            setSingleLine(true)
+            setAdapter(ArrayAdapter(this@StaffShiftsActivity, android.R.layout.simple_dropdown_item_1line, staffAccounts.map { it.displayName }))
+            threshold = 1
+        }
         val note = EditText(this).apply { hint = "Handover note (optional)"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; setSingleLine(true); filters = arrayOf(android.text.InputFilter.LengthFilter(160)) }
         form.addView(count); form.addView(next); form.addView(note)
         AlertDialog.Builder(this).setTitle("End shift and hand over cash").setView(form).setNegativeButton("Cancel", null).setPositiveButton("Record handover", null).create().also { dialog ->
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val amount = toPaise(count.text.toString())
                 if (amount == null || next.text.toString().trim().length !in 2..60) { count.error = if (amount == null) "Enter a valid cash count" else null; next.error = if (next.text.toString().trim().length !in 2..60) "Enter receiving staff label" else null; return@setOnClickListener }
-                val result = model?.endStaffShift(amount, next.text.toString(), note.text.toString()) ?: "Local storage is unavailable."
+                val recipientName = next.text.toString().trim()
+                val recipientId = staffAccounts.firstOrNull { it.displayName.equals(recipientName, ignoreCase = true) }?.staffId
+                val result = model?.endStaffShift(amount, recipientName, note.text.toString(), handoverToStaffId = recipientId) ?: "Local storage is unavailable."
                 dialog.dismiss(); android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show(); render()
             } }
             dialog.show()

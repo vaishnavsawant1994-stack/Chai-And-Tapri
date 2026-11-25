@@ -394,29 +394,31 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         cashDrawerMovements += CashDrawerMovement(commandId, session.sessionId, kind, amountPaise, note.trim())
         return commitMutation(before, commandId, "${if (kind == "cash_in") "Cash added" else "Cash removed"}: ${money(amountPaise)}.", "cash_drawer.$kind session=${session.sessionId} amount=${amountPaise}p reason=${note.trim()}")
     }
-    fun closeCashDrawer(countedCashPaise: Int, commandId: String = "drawer-close-${java.util.UUID.randomUUID()}", handoverToLabel: String? = null, handoverNote: String = ""): String {
+    fun closeCashDrawer(countedCashPaise: Int, commandId: String = "drawer-close-${java.util.UUID.randomUUID()}", handoverToLabel: String? = null, handoverNote: String = "", handoverToStaffId: String? = null): String {
         if (persistence == null) return "Cash drawer requires durable shop storage."
         if (commandId.isBlank()) return "Command ID is required. No drawer closed."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         val session = activeCashDrawer() ?: return "There is no open cash drawer session."
         if (countedCashPaise !in 0..100_000_000) return "Counted cash must be between Rs 0 and Rs 1,000,000. No drawer closed."
         if (handoverToLabel?.trim()?.length?.let { it !in 2..60 } == true || handoverNote.trim().length > 160) return "Check the handover name and note lengths. No drawer closed."
-        if ((handoverToLabel != null || handoverNote.isNotBlank()) && session.staffLabel == null) return "Handover details require a staff shift. No drawer closed."
+        if ((handoverToLabel != null || handoverNote.isNotBlank() || handoverToStaffId != null) && session.staffLabel == null) return "Handover details require a staff shift. No drawer closed."
+        val recipient = handoverToStaffId?.let { id -> persistence?.loadStaffCredential(id)?.account?.takeIf { it.enabled && it.displayName.equals(handoverToLabel?.trim(), ignoreCase = true) } }
+        if (handoverToStaffId != null && recipient == null) return "Selected receiving staff account is unavailable or does not match the label. No drawer closed."
         val expected = expectedCashPaise(session.sessionId) ?: return "Cash session is unavailable. No drawer closed."
         val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val index = cashDrawerSessions.indexOfFirst { it.sessionId == session.sessionId }
-        cashDrawerSessions[index] = session.copy(closingCashPaise = countedCashPaise, closedAt = System.currentTimeMillis(), handoverToLabel = handoverToLabel?.trim(), handoverNote = handoverNote.trim())
+        cashDrawerSessions[index] = session.copy(closingCashPaise = countedCashPaise, closedAt = System.currentTimeMillis(), handoverToLabel = handoverToLabel?.trim(), handoverNote = handoverNote.trim(), handoverToStaffId = recipient?.staffId)
         val variance = countedCashPaise.toLong() - expected
         val kind = if (session.staffLabel == null) "cash_drawer.closed" else "staff_shift.ended"
         val result = if (session.staffLabel == null) "Cash drawer closed. Expected ${money(expected)}; counted ${money(countedCashPaise)}; ${if (variance == 0L) "matched" else "unresolved variance ${money(variance)}"}." else "Shift ended for ${session.staffLabel}. Expected ${money(expected)}; handed over ${money(countedCashPaise)}; ${if (variance == 0L) "matched" else "unresolved variance ${money(variance)}"}."
-        return commitMutation(before, commandId, result, "$kind session=${session.sessionId} expected=${expected}p counted=${countedCashPaise}p variance=${variance}p staff_label=${session.staffLabel ?: "none"} staff_actor_id=${session.staffActorId ?: "unverified"} handover_to=${handoverToLabel?.trim() ?: "none"} note=${handoverNote.trim()}")
+        return commitMutation(before, commandId, result, "$kind session=${session.sessionId} expected=${expected}p counted=${countedCashPaise}p variance=${variance}p staff_label=${session.staffLabel ?: "none"} staff_actor_id=${session.staffActorId ?: "unverified"} handover_to=${handoverToLabel?.trim() ?: "none"} handover_to_staff_id=${recipient?.staffId ?: "unverified"} note=${handoverNote.trim()}")
     }
-    fun endStaffShift(countedCashPaise: Int, handoverToLabel: String, note: String = "", commandId: String = "shift-end-${java.util.UUID.randomUUID()}"): String {
+    fun endStaffShift(countedCashPaise: Int, handoverToLabel: String, note: String = "", commandId: String = "shift-end-${java.util.UUID.randomUUID()}", handoverToStaffId: String? = null): String {
         val shift = activeCashDrawer()?.takeIf { it.staffLabel != null } ?: return "There is no active staff shift. No handover recorded."
         if (LocalSessionState.authenticated && !LocalSessionState.isManager && shift.staffActorId != LocalSessionState.actorId) return "Only the shift owner or a manager can close this shift. No handover recorded."
         if (handoverToLabel.trim().length !in 2..60) return "Enter the receiving staff label (2 to 60 characters). No shift ended."
         if (note.trim().length > 160) return "Handover note must be 160 characters or fewer. No shift ended."
-        return closeCashDrawer(countedCashPaise, commandId, handoverToLabel, note)
+        return closeCashDrawer(countedCashPaise, commandId, handoverToLabel, note, handoverToStaffId)
     }
     fun recordCashClosingReview(sessionId: String, note: String = "", commandId: String = "cash-close-review-${java.util.UUID.randomUUID()}"): String {
         if (persistence == null) return "Closing review requires durable shop storage."

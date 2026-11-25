@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-27 local handover recipient binding
+
+Shift handovers can now optionally identify a receiving person by an enabled local staff account. Schema v32 adds a nullable account ID through an additive v31→v32 migration; legacy text labels remain unverified. A mismatched/unknown account is rejected without closing the drawer. Kotlin JVM **94/94**; focused API 37 instrumentation **1/1**; debug and instrumentation APK builds passed; lint 0 errors. Prototype Node **52/52** was run; backend and full Android suites were not rerun. This associates a local directory entry only and does not prove recipient acknowledgement or cash receipt. See [CT-27 report](CT-27-VERIFIED-HANDOVER-RECIPIENT-REPORT-2026-11-25.md).
+
 ## CT-09 pre-fulfillment price correction
 
 An owner/manager can adjust an order-line unit price only before any fulfillment or financial event. The UI requires a paise-precise decimal rupee price, reason, review, explicit confirmation, and current revision. It changes the line snapshot only; catalogue price, stock, payment and credit ledgers stay unchanged. The reason is local audit data and is excluded from the outbound projection. Kotlin JVM **86/86**; focused API 37 UI **1/1**; debug and Android-test APK builds passed; lint 0 errors / 187 warnings. Full Android and Node suites were not rerun. Evidence: [report](CT-09-ORDER-PRICE-CORRECTION-REPORT-2026-11-25.md), [focused XML](../test-evidence/2026-11-25/ct09-price-correction-focused-instrumentation.xml). Repricing after partial fulfillment remains unsupported.
