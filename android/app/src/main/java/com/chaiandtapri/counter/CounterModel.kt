@@ -109,10 +109,11 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val catalogue = configuredProductsOrNull() ?: return maintenanceRejection()
         val existingProduct = catalogue.firstOrNull { it.productId == product.productId }
         val normalizedUnit = product.unitLabel.trim()
+        val productHasPurchaseOrder = purchaseOrderRecords.any { po -> po.lines.any { it.productId == product.productId } }
         if (existingProduct != null && (existingProduct.unitLabel != normalizedUnit ||
             existingProduct.purchaseUnitLabel != product.purchaseUnitLabel.trim() || existingProduct.baseUnitsPerPurchaseUnit != product.baseUnitsPerPurchaseUnit) &&
             (allOrders().any { order -> order.lines.any { it.productId == product.productId } } ||
-                stockMovements().any { it.productId == product.productId })) {
+                stockMovements().any { it.productId == product.productId } || productHasPurchaseOrder)) {
             return "This product's unit cannot change after an order or stock movement exists. Create a new product ID; conversion changes are not supported after history exists."
         }
         if (product.unitPricePaise !in 0..10_000_000) return "Enter a valid price in rupees."
@@ -484,7 +485,9 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         quantities: Map<String, Int>,
         unitCostsPaise: Map<String, Int>,
         purchaseOrderId: String = "po-${java.util.UUID.randomUUID()}",
-        commandId: String = "purchase-order-${java.util.UUID.randomUUID()}"
+        commandId: String = "purchase-order-${java.util.UUID.randomUUID()}",
+        purchaseInputAudit: String? = null,
+        expectedPurchaseConversions: Map<String, Triple<String, Int, String>>? = null
     ): String {
         barrierRejectionIfActive()?.let { return it }
         if (persistence == null) return "Purchase orders require durable shop storage."
@@ -494,6 +497,10 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (supplierRecords.none { it.supplierId == supplierId }) return "Choose an existing supplier. No order saved."
         if (quantities.isEmpty() || quantities.size !in 1..50 || quantities.keys != unitCostsPaise.keys) return "Add 1 to 50 products with quantity and estimated unit cost. No order saved."
         val products = (configuredProductsOrNull() ?: return maintenanceRejection()).associateBy { it.productId }
+        expectedPurchaseConversions?.forEach { (productId, expected) ->
+            val product = products[productId] ?: return "Product $productId changed before the purchase order was saved. No order saved."
+            if (Triple(product.purchaseUnitLabel, product.baseUnitsPerPurchaseUnit, product.unitLabel) != expected) return "Purchase conversion changed before the order was saved. Refresh and try again. No order saved."
+        }
         val lines = quantities.toSortedMap().map { (productId, quantity) ->
             val product = products[productId]?.takeIf { it.active } ?: return "Active catalogue product $productId was not found. No order saved."
             val cost = unitCostsPaise[productId] ?: return "Estimated unit cost is missing. No order saved."
@@ -505,7 +512,33 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         purchaseOrderRecords += PurchaseOrderDraft(purchaseOrderId, supplierId, lines, PurchaseOrderStatus.DRAFT, createdAtEpochMs = System.currentTimeMillis())
         return commitMutation(before, commandId, "Purchase order draft $purchaseOrderId saved; no stock or payable was changed.",
-            "purchase_order.draft_saved id=$purchaseOrderId supplier=$supplierId estimated_total=${total}p")
+            "purchase_order.draft_saved id=$purchaseOrderId supplier=$supplierId estimated_total=${total}p" + (purchaseInputAudit?.let { " purchase_units=$it" } ?: ""))
+    }
+
+    fun createPurchaseOrderDraftInPurchaseUnits(
+        supplierId: String,
+        purchaseQuantities: Map<String, Int>,
+        unitCostsPaise: Map<String, Int>,
+        purchaseOrderId: String = "po-${java.util.UUID.randomUUID()}",
+        commandId: String = "purchase-order-${java.util.UUID.randomUUID()}"
+    ): String {
+        if (purchaseQuantities.isEmpty() || purchaseQuantities.keys != unitCostsPaise.keys) return "Add purchase-unit quantities and matching base-unit costs. No order saved."
+        val products = (configuredProductsOrNull() ?: return maintenanceRejection()).associateBy { it.productId }
+        val baseQuantities = linkedMapOf<String, Int>()
+        val expectedConversions = linkedMapOf<String, Triple<String, Int, String>>()
+        for ((productId, purchaseQuantity) in purchaseQuantities) {
+            val product = products[productId]?.takeIf { it.active } ?: return "Active catalogue product $productId was not found. No order saved."
+            if (purchaseQuantity !in 1..100_000) return "Enter a valid positive purchase quantity. No order saved."
+            val converted = purchaseQuantity.toLong() * product.baseUnitsPerPurchaseUnit
+            if (converted !in 1..Int.MAX_VALUE.toLong()) return "Converted purchase quantity exceeds the supported range. No order saved."
+            baseQuantities[productId] = converted.toInt()
+            expectedConversions[productId] = Triple(product.purchaseUnitLabel, product.baseUnitsPerPurchaseUnit, product.unitLabel)
+        }
+        val detail = purchaseQuantities.toSortedMap().entries.joinToString(",") { (id, quantity) ->
+            val product = products.getValue(id)
+            "$id:$quantity:${product.purchaseUnitLabel}:${product.baseUnitsPerPurchaseUnit}:${baseQuantities.getValue(id)}:${product.unitLabel}"
+        }
+        return createPurchaseOrderDraft(supplierId, baseQuantities, unitCostsPaise, purchaseOrderId, commandId, detail, expectedConversions)
     }
 
     fun markPurchaseOrderSent(purchaseOrderId: String, expectedRevision: Int, commandId: String = "purchase-order-sent-${java.util.UUID.randomUUID()}"): String {
@@ -546,6 +579,32 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (order.status != PurchaseOrderStatus.SENT) return "Only a sent purchase order can be received. No receipt recorded."
         val costs = order.lines.associate { it.productId to it.unitCostPaise }.filterKeys { it in receivedQuantities }
         return receivePurchase(order.supplierId, receivedQuantities, costs, commandId, purchaseOrderId, supplierInvoiceReference)
+    }
+
+    fun receivePurchaseOrderInPurchaseUnits(purchaseOrderId: String, receivedPurchaseQuantities: Map<String, Int>, commandId: String = "purchase-receipt-${java.util.UUID.randomUUID()}", supplierInvoiceReference: String? = null): String {
+        val order = purchaseOrderRecords.firstOrNull { it.purchaseOrderId == purchaseOrderId }
+            ?: return "Purchase order was not found. No receipt recorded."
+        if (order.status != PurchaseOrderStatus.SENT) return "Only a sent purchase order can be received. No receipt recorded."
+        if (receivedPurchaseQuantities.isEmpty()) return "Enter at least one positive received purchase quantity. No receipt recorded."
+        val products = (configuredProductsOrNull() ?: return maintenanceRejection()).associateBy { it.productId }
+        val baseQuantities = linkedMapOf<String, Int>()
+        val costs = linkedMapOf<String, Int>()
+        val expectedConversions = linkedMapOf<String, Triple<String, Int, String>>()
+        for ((productId, purchaseQuantity) in receivedPurchaseQuantities) {
+            val line = order.lines.firstOrNull { it.productId == productId } ?: return "Product $productId is not on this order. No receipt recorded."
+            val product = products[productId] ?: return "Product $productId is no longer in the catalogue. No receipt recorded."
+            if (purchaseQuantity !in 1..100_000) return "Enter a valid positive received purchase quantity. No receipt recorded."
+            val converted = purchaseQuantity.toLong() * product.baseUnitsPerPurchaseUnit
+            if (converted !in 1..Int.MAX_VALUE.toLong()) return "Converted receipt quantity exceeds the supported range. No receipt recorded."
+            baseQuantities[productId] = converted.toInt()
+            costs[productId] = line.unitCostPaise
+            expectedConversions[productId] = Triple(product.purchaseUnitLabel, product.baseUnitsPerPurchaseUnit, product.unitLabel)
+        }
+        val detail = receivedPurchaseQuantities.toSortedMap().entries.joinToString(",") { (id, quantity) ->
+            val product = products.getValue(id)
+            "$id:$quantity:${product.purchaseUnitLabel}:${product.baseUnitsPerPurchaseUnit}:${baseQuantities.getValue(id)}:${product.unitLabel}"
+        }
+        return receivePurchase(order.supplierId, baseQuantities, costs, commandId, purchaseOrderId, supplierInvoiceReference, detail, expectedConversions)
     }
 
     fun saveSupplier(supplierId: String, name: String, commandId: String = "supplier-${java.util.UUID.randomUUID()}", phone: String? = null): String {

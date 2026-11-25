@@ -409,6 +409,32 @@ class CounterModelTest {
         reopened.close()
     }
 
+    @Test fun purchaseOrderDraftConvertsPurchasePacksAndLocksConversionForReceiptConsistency() {
+        val persistence = MemoryPersistence()
+        val model = CounterModel(persistence, requireConfiguredProducts = true)
+        val product = TapriProduct("crate_water", "Water Bottle", "Drinks", 2000, priceConfirmed = true,
+            unitLabel = "bottle", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 12)
+        assertTrue(model.saveProduct(product).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("crate_water", 5, "counted bottles", "crate-po-opening").startsWith("Opening stock"))
+        assertTrue(model.saveSupplier("crate_dealer", "Crate Dealer", "crate-po-supplier").startsWith("Supplier saved"))
+
+        assertTrue(model.createPurchaseOrderDraftInPurchaseUnits("crate_dealer", mapOf("crate_water" to 2), mapOf("crate_water" to 125), "crate-po-1", "crate-po-create").contains("no stock or payable"))
+        val draft = model.purchaseOrderDrafts().single()
+        assertEquals(24, draft.lines.single().orderedQuantity)
+        assertEquals(3000L, draft.totalPaise)
+        assertEquals(5, model.stockLevels()["crate_water"])
+        assertEquals(0L, model.supplierPayablePaise("crate_dealer"))
+        assertTrue(model.auditEvents().any { it.contains("purchase_units=crate_water:2:crate:12:24:bottle") })
+        assertTrue(model.saveProduct(product.copy(baseUnitsPerPurchaseUnit = 6)).contains("conversion changes are not supported"))
+
+        assertTrue(model.markPurchaseOrderSent("crate-po-1", 0, "crate-po-send").contains("marked sent"))
+        assertTrue(model.receivePurchaseOrder("crate-po-1", mapOf("crate_water" to 12), "crate-po-partial").startsWith("Received"))
+        assertEquals(17, model.stockLevels()["crate_water"])
+        assertEquals(1500L, model.supplierPayablePaise("crate_dealer"))
+        assertEquals("PARTIALLY RECEIVED", model.purchaseOrderState(model.purchaseOrderDrafts().single()))
+        assertTrue(model.auditEvents().any { it.contains("purchase_order.draft_saved") && it.contains("purchase_units=crate_water:2:crate:12:24:bottle") })
+    }
+
     @Test fun directPurchaseUnitsConvertToSellableStockAndAuditOriginalPackQuantity() {
         val persistence = MemoryPersistence()
         val model = CounterModel(persistence, requireConfiguredProducts = true)

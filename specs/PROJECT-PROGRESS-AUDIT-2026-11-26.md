@@ -24,6 +24,10 @@ The Android Daily Closing screen now offers a privacy-minimized SAF CSV for a se
 
 ## Six-wave status
 
+### CT-17 purchase-order purchase-unit input follow-up — 26 November 2026
+
+Purchase-order draft quantities can now be entered in configured purchase units and are converted to persisted base-unit quantities. Audits retain the original pack input; unit conversion locks after a product is used in an order. Kotlin JVM **104/104**, APK builds pass, lint 0 errors / 197 warnings. The test verifies draft-only (no stock/payable) and one-pack partial receipt accounting. No UI instrumentation was run for this sub-slice because the API 37 headless AVDs showed launcher/System UI ANRs in the adjacent Procurement flow. Details: `CT-17-PURCHASE-ORDER-UNIT-CONVERSION-REPORT-2026-11-26.md`. CT-17 remains partial.
+
 ### CT-13/14 purchase-unit conversion follow-up — 26 November 2026
 
 Added configurable integer conversion from direct purchase units to product base/count units, with additive encrypted DB migration v33→v34. Kotlin JVM 103/103, APK build tasks PASS, lint 0 errors / 194 warnings. Focused migration/converted receipt/encrypted reopen passed 1/1. The direct Procurement UI test failed/unqualified on two headless API 37 AVDs because Android launcher/System UI became unresponsive before the target screen appeared; see `CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md` and ignored screenshots in `../test-evidence/2026-11-26/ct13-unit-conversion/`. A full exact-source Android run after the final stale-configuration guard is still not qualified (one attempt ended after ADB loss). No full feature/module or production readiness is claimed.

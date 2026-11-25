@@ -90,9 +90,11 @@ class ProcurementActivity : Activity() {
             purchaseOrders.forEach { purchaseOrder ->
                 val supplier = suppliers.firstOrNull { it.supplierId == purchaseOrder.supplierId }?.name ?: purchaseOrder.supplierId
                 val received = current.purchaseOrderReceivedQuantities(purchaseOrder.purchaseOrderId)
+                val catalogue = current.products().associateBy { it.productId }
                 val lines = purchaseOrder.lines.joinToString { line ->
                     val count = received[line.productId] ?: 0
-                    "${line.productName}: $count/${line.orderedQuantity} received @ ${money(line.unitCostPaise.toLong())}"
+                    val product = catalogue[line.productId]
+                    "${line.productName}: ${quantitySummary(line.orderedQuantity, product)} ordered; ${quantitySummary(count, product)} received @ ${money(line.unitCostPaise.toLong())}/${product?.unitLabel ?: "unit"}"
                 }
                 content.addView(label("$supplier · ${purchaseOrder.purchaseOrderId} · ${current.purchaseOrderState(purchaseOrder)} · estimated ${money(purchaseOrder.totalPaise)}\n$lines", 14f))
                 if (purchaseOrder.status == PurchaseOrderStatus.DRAFT) {
@@ -171,15 +173,26 @@ class ProcurementActivity : Activity() {
             val productPicker = Spinner(this).apply {
                 adapter = ArrayAdapter(this@ProcurementActivity, android.R.layout.simple_spinner_dropdown_item, products.map { "${it.name} (${it.productId})" })
             }
-            val quantity = EditText(this).apply { hint = "Ordered quantity"; inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true) }
-            val unitCost = EditText(this).apply { hint = "Estimated unit cost in rupees"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
-            row.addView(productPicker); row.addView(quantity); row.addView(unitCost)
+            val conversion = label("", 13f)
+            val quantity = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true) }
+            val unitCost = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
+            fun updateUnits(position: Int) {
+                val product = products.getOrNull(position) ?: return
+                quantity.hint = "Ordered quantity in ${product.purchaseUnitLabel}"
+                unitCost.hint = "Estimated cost per ${product.unitLabel} in rupees"
+                conversion.text = "1 ${product.purchaseUnitLabel} = ${product.baseUnitsPerPurchaseUnit} ${product.unitLabel}; draft quantities are stored in ${product.unitLabel}."
+            }
+            productPicker.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = updateUnits(position)
+            }
+            row.addView(productPicker); row.addView(conversion); row.addView(quantity); row.addView(unitCost)
             lines.addView(row); rows += ReceiptRow(productPicker, quantity, unitCost)
         }
         addLine()
         root.addView(button("Add product line") { addLine() })
         val dialog = AlertDialog.Builder(this).setTitle("Draft purchase order")
-            .setMessage("Estimated costs are planning values. Saving a draft changes no stock or supplier payable.")
+            .setMessage("Enter requested quantities in each product's purchase unit and estimated cost per base unit. Draft quantities convert to the base unit. Estimated costs are planning values; saving changes no stock or supplier payable.")
             .setView(ScrollView(this).apply { addView(root) })
             .setNegativeButton("Cancel", null).setPositiveButton("Save draft", null).create()
         dialog.setOnShowListener {
@@ -194,7 +207,7 @@ class ProcurementActivity : Activity() {
                     else { quantities[productId] = quantity; costs[productId] = cost }
                 }
                 if (invalid || quantities.isEmpty()) { status.text = "Complete each used line with a distinct product, quantity and positive estimated cost. No draft saved."; return@setOnClickListener }
-                val result = model?.createPurchaseOrderDraft(suppliers[supplierPicker.selectedItemPosition].supplierId, quantities, costs) ?: "Storage is unavailable."
+                val result = model?.createPurchaseOrderDraftInPurchaseUnits(suppliers[supplierPicker.selectedItemPosition].supplierId, quantities, costs) ?: "Storage is unavailable."
                 if (result.startsWith("Purchase order draft")) { dialog.dismiss(); render(result) }
                 else status.text = result
             }
@@ -212,15 +225,17 @@ class ProcurementActivity : Activity() {
     }
 
     private fun askReceivePurchaseOrder(order: PurchaseOrderDraft) {
-        val received = model?.purchaseOrderReceivedQuantities(order.purchaseOrderId).orEmpty()
+        val current = model ?: run { status.text = "Storage is unavailable."; return }
+        val received = current.purchaseOrderReceivedQuantities(order.purchaseOrderId)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 8, 20, 8) }
         val invoiceReference = EditText(this).apply { hint = "Supplier invoice reference (optional)"; inputType = InputType.TYPE_CLASS_TEXT; setSingleLine(true) }
         root.addView(invoiceReference)
         val fields = order.lines.mapNotNull { line ->
             val remaining = line.orderedQuantity - (received[line.productId] ?: 0)
             if (remaining <= 0) null else {
+                val product = current.products().firstOrNull { it.productId == line.productId }
                 val quantity = EditText(this).apply {
-                    hint = "${line.productName}: received quantity (remaining $remaining)"
+                    hint = "${line.productName}: received quantity in ${product?.unitLabel ?: "base units"} (remaining $remaining ${product?.unitLabel ?: "units"})"
                     inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true)
                 }
                 root.addView(quantity)
@@ -413,6 +428,12 @@ class ProcurementActivity : Activity() {
         raw.trim().toBigDecimal().movePointRight(2).intValueExact().takeIf { it > 0 }
     }.getOrNull()
     private fun money(paise: Long) = String.format(Locale.ROOT, "₹%d.%02d", paise / 100, paise % 100)
+    private fun quantitySummary(baseQuantity: Int, product: TapriProduct?): String {
+        if (product == null || product.baseUnitsPerPurchaseUnit <= 1 || baseQuantity % product.baseUnitsPerPurchaseUnit != 0) {
+            return "$baseQuantity ${product?.unitLabel ?: "units"}"
+        }
+        return "${baseQuantity / product.baseUnitsPerPurchaseUnit} ${product.purchaseUnitLabel} ($baseQuantity ${product.unitLabel})"
+    }
     private fun label(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setPadding(0, 8, 0, 8) }
     private fun button(text: String, action: () -> Unit) = Button(this).apply { this.text = text; minHeight = 56; setOnClickListener { action() } }
     private fun matchWidth() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
