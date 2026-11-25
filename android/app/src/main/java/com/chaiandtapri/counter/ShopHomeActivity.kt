@@ -68,22 +68,17 @@ class ShopHomeActivity : ComponentActivity() {
             content.addView(label("${if (summary.productCount > 0 && summary.stockConfirmedProductCount == summary.productCount) "✓" else "○"} Physical opening stock · ${summary.stockConfirmedProductCount}/${summary.productCount} products confirmed", 14f))
             if (LocalSessionState.isOwner) {
                 val setupAction = FirstSaleSetupAction.next(profile.shopName, summary.productCount, summary.stockConfirmedProductCount)
-                val destination = when (setupAction) {
-                    FirstSaleSetupAction.SET_SHOP_IDENTITY -> ShopSetupActivity::class.java
-                    FirstSaleSetupAction.ADD_PRODUCTS -> ProductCatalogueActivity::class.java
-                    FirstSaleSetupAction.CONFIRM_OPENING_STOCK -> StockCountActivity::class.java
-                    FirstSaleSetupAction.START_SELLING -> QuickSaleActivity::class.java
+                if (setupAction == FirstSaleSetupAction.START_SELLING) {
+                    content.addView(label("Setup complete · your confirmed catalogue and stock are ready for sales.", 14f))
+                } else {
+                    val destination = when (setupAction) {
+                        FirstSaleSetupAction.SET_SHOP_IDENTITY -> ShopSetupActivity::class.java
+                        FirstSaleSetupAction.ADD_PRODUCTS -> ProductCatalogueActivity::class.java
+                        FirstSaleSetupAction.CONFIRM_OPENING_STOCK -> StockCountActivity::class.java
+                        FirstSaleSetupAction.START_SELLING -> error("Handled above")
+                    }
+                    content.addView(button(setupAction.buttonLabel) { startActivity(Intent(this, destination)) })
                 }
-                content.addView(button(setupAction.buttonLabel) { startActivity(Intent(this, destination)) })
-            }
-            if (LocalSessionState.isOwner && profile.shopName.isBlank()) {
-                content.addView(button("Set up shop identity") { startActivity(Intent(this, ShopSetupActivity::class.java)) })
-            }
-            if (LocalSessionState.isOwner && summary.productCount == 0) {
-                content.addView(button("Add products and confirm prices") { startActivity(Intent(this, ProductCatalogueActivity::class.java)) })
-            }
-            if (LocalSessionState.isOwner && summary.productCount > summary.stockConfirmedProductCount) {
-                content.addView(button("Confirm physical opening stock") { startActivity(Intent(this, StockCountActivity::class.java)) })
             }
             content.addView(metric("Recorded sales", money(summary.recordedSalesPaise), "Net of recorded refunds; not a daily total"))
             content.addView(metric("Cash recorded", money(summary.cashRecordedPaise), "Staff-declared cash events, net of recorded cash refunds"))

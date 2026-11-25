@@ -1249,6 +1249,10 @@ Implemented opt-in automatic re-arming between distinct Android single-utterance
 
 ## Full API 37 regression — 26 November 2026
 
+### CT-05 first-sale checklist navigation — 26 November 2026
+
+Shop Home now shows only the next required first-sale setup action, removing duplicate actions that could skip identity/catalogue/count stages. Completed setup is stated explicitly, with Quick Sale remaining the normal sales shortcut. The focused API 37 stock-count routing test passed 1/1, and the guided owner setup → product → opening count → Quick Sale → cash sale test passed 1/1. Kotlin JVM tests passed 98/98, debug APK build passed, and lint passed with 0 errors / 191 warnings. A later full connected instrumentation run was interrupted during a long customer-credit UI test and has no final result; the full Android instrumentation suite is not claimed as passed. Details: `specs/CT-05-FIRST-SALE-CHECKLIST-REDUNDANCY-REPORT-2026-11-26.md`.
+
 The complete current-source Android instrumentation suite passed 151/151 with zero failures/errors/skips in 43m21s on the isolated API 37 AVD. This supersedes the previous 149/150 run and includes CT-07 opt-in re-arming. Kotlin JVM 98/98, Node prototype 52/52, backend 33 passed / 6 PostgreSQL-dependent skipped; APK builds passed; lint has 0 errors / 191 warnings. See `specs/ANDROID-REGRESSION-RERUN-2026-11-25.md` and `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`. This is test/emulator qualification only; the product and six waves remain in progress.
 
 ## 26 November 2026 — CAT-052 background sync process restart

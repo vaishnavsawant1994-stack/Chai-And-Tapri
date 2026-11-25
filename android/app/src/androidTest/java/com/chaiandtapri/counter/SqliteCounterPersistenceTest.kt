@@ -200,6 +200,7 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         LocalSessionState.establish("Synthetic setup owner")
         CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveShopProfile(ShopProfile(shopName = "Synthetic Setup Tapri")).startsWith("Shop setup saved"))
             assertTrue(model.saveProduct(TapriProduct("setup_tea", "Setup Tea", "Chai", 1200, true, true, true)).startsWith("Product saved"))
         }
         val home = instrumentation.startActivitySync(Intent(context, ShopHomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -219,6 +220,14 @@ class SqliteCounterPersistenceTest {
                 repeat(100) { find(text)?.let { return it }; Thread.sleep(100) }
                 throw AssertionError("Shop Home setup action not found: $text")
             }
+            fun findExactText(text: String): AccessibilityNodeInfo? {
+                fun visit(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                    if (node.text?.toString() == text) return node
+                    for (index in 0 until node.childCount) node.getChild(index)?.let { visit(it)?.let { found -> return found } }
+                    return null
+                }
+                return instrumentation.uiAutomation.rootInActiveWindow?.let(::visit)
+            }
             await("First-sale setup")
             assertNotNull(find("Today's recorded activity"))
             assertNotNull(find("Sales from orders created today"))
@@ -229,7 +238,9 @@ class SqliteCounterPersistenceTest {
             assertNotNull(find("Sellable products"))
             assertNotNull(find("Physical opening stock"))
             val before = SqliteCounterPersistence(context).use { it.load() }
-            assertTrue(await("Confirm physical opening stock").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertNotNull("The shop should show one next-step setup action", find("Continue setup"))
+            assertNull("The obsolete duplicate stock action must be absent", findExactText("Confirm physical opening stock"))
+            assertTrue(await("Continue setup").performAction(AccessibilityNodeInfo.ACTION_CLICK))
             stockCount = stockMonitor.waitForActivityWithTimeout(15_000) as? StockCountActivity
             assertNotNull("The setup checklist should open the actual CT-16 stock count", stockCount)
             val after = SqliteCounterPersistence(context).use { it.load() }
@@ -2376,7 +2387,9 @@ class SqliteCounterPersistenceTest {
 
             instrumentation.runOnMainSync { catalogue?.finish(); setup?.finish() }
             assertNotNull("Home should reopen after setup", home)
-            tap("Start selling · Quick Sale")
+            val bullet = 0x00b7.toChar()
+            assertTrue("Completed setup should be explicit", await(text = "Setup complete ${bullet} your confirmed catalogue and stock are ready for sales.").text != null)
+            tap("Quick Sale ${bullet} CT-06")
             sale = saleMonitor.waitForActivityWithTimeout(15_000) as? QuickSaleActivity
             assertNotNull("A ready setup should open the native Quick Sale screen", sale)
             val search = await(hint = "Search product, category or alias")
