@@ -822,3 +822,5 @@ After the fail-closed catalogue-read adjustment, the current source passed the c
 ## Current continuation — CT-24 cash/UPI repayments — 25 November 2026
 
 Customer Credit and Customer Details support repayments by cash or UPI. The selected tender is stored on the existing append-only payment ledger; both methods are staff-declared and the UPI option does not claim provider verification. The flow maintains FIFO receivable allocation and does not include UPI in drawer cash. Verification: Kotlin JVM 92/92; focused API 37 UI instrumentation 1/1; prototype Node 52/52; backend no-DB 33 pass / 6 PostgreSQL-dependent skipped; APK build tasks pass; lint 0 errors / 189 warnings. The full connected Android regression was not rerun. See `CT-24-UPI-CUSTOMER-REPAYMENT-REPORT-2026-11-25.md`. CT-24 remains partial.
+
+Full Android regression follow-up: the post-change connected run stalled on the constrained AVD at `LocalAccessActivity` with launcher ANR evidence; it was stopped before JUnit output. No broad-suite pass is claimed for this continuation. The targeted repayment UI test passed.

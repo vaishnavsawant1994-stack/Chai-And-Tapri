@@ -18,3 +18,7 @@ The payment ledger stores the selected tender. Only cash repayments are associat
 ## Qualification limits
 
 The complete Android instrumentation regression was not rerun for this slice. The focused emulator result is synthetic and emulator-only. UPI remains a staff declaration; no provider verification or bank integration was added. CT-24 remains partial, and the product, security, cross-device recovery, physical-device, field and release gates remain open.
+
+## Broad Android regression follow-up
+
+A post-change `connectedDebugAndroidTest` attempt was started after the focused test passed, but the full runner did not produce JUnit output. The AVD remained on `LocalAccessActivity`; emulator logs showed Android launcher ANRs and heavy kernel CPU use. I stopped the unresponsive run; it has no completed pass/fail count and is **incomplete**, not a suite pass. The focused CT-24 instrumentation test and JVM/build/lint results above remain valid.

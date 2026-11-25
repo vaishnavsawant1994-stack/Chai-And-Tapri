@@ -85,3 +85,5 @@ After the fail-closed catalogue-read adjustment, the current source passed the c
 ## CT-24 repayment tender continuation — 25 November 2026
 
 The Customer Credit and Customer Details screens now offer cash or UPI for customer repayments. Both payment entries are staff-declared; UPI is explicitly not provider-verified and is excluded from physical cash totals. Kotlin JVM 92/92, focused API 37 repayment UI instrumentation 1/1, prototype Node 52/52, backend no-database 33 passed / 6 PostgreSQL-dependent skipped, APK builds pass, lint 0 errors / 189 warnings. The complete connected Android suite was not rerun. This is a focused synthetic emulator workflow, not complete CT-24 or product qualification. See `CT-24-UPI-CUSTOMER-REPAYMENT-REPORT-2026-11-25.md`.
+
+Full regression attempt follow-up: `connectedDebugAndroidTest` did not complete after the repayment change. The AVD remained at `LocalAccessActivity`, launcher ANRs appeared in logcat and no JUnit summary was produced before the run was stopped. The attempt is incomplete; focused repayment instrumentation remains passed.
