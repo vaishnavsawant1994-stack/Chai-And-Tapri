@@ -1266,3 +1266,7 @@ The debug recovery harness now acknowledges recovery completion before the instr
 ## 26 November 2026 - verified local baseline and tracker correction
 
 Reran local checks from the clean worktree: prototype Node 52/52; backend Node 33 passed, 6 PostgreSQL-dependent skipped, 0 failed; Kotlin JVM tests, debug APK, instrumentation APK and `lintDebug` passed with 0 lint errors (191 warnings). A current full Android instrumentation result is not available because the latest broad run was interrupted after emulator instability; the earlier 151/151 remains historical. The master tracker now records OW-13 as its actual partial deterministic-insights implementation, instead of the stale “Not started” status. Browser visual, physical device/field, independent security and production deployment gates remain open.
+
+## 26 November 2026 - current-source Android regression attempt
+
+Reran the serial-pinned API 37 connected suite. It ended after 17m02s when ADB lost the emulator during cleanup. Partial JUnit: 32 tests, 18 passed, 14 failed, 0 errors, 0 skipped; multiple failures show Pixel Launcher ANRs and activity launch timeouts. The run is failed/incomplete and does not qualify the current source. See `specs/ANDROID-REGRESSION-ATTEMPT-2026-11-26-EMULATOR-LOSS.md` and ignored local XML/HTML evidence under `test-evidence/2026-11-26/full-regression-emulator-failure/`.

@@ -10,6 +10,10 @@ Two current-source API 37 instrumentation scenarios now kill a separate Android 
 
 The most recent broad connected Android attempt did not finish: it was interrupted during a long customer-credit UI scenario after the emulator became unresponsive, then ADB reported a broken Package Manager pipe. A subsequent focused recovery run initially failed because the test harness unbound before the recovery callback; this was corrected, and both focused recovery checks then passed. The previously documented 151/151 suite remains a historical result for its earlier source and is not presented as current-source full qualification.
 
+## Follow-up exact-source Android regression attempt — 26 November 2026
+
+Reran the serial-pinned API 37 suite using the booted isolated AVD. The run ended after 17m02s when ADB lost the emulator during cleanup. Its captured partial JUnit result is **32 tests: 18 passed, 14 failed, 0 errors, 0 skipped**. Multiple failures show `Pixel Launcher isn't responding` and activity launch timeouts; the remainder were UI assertions after the emulator had become unresponsive. This is a failed/incomplete suite attempt, not a product qualification. XML/HTML evidence and follow-up are in [the emulator-loss report](ANDROID-REGRESSION-ATTEMPT-2026-11-26-EMULATOR-LOSS.md) and ignored evidence at `../test-evidence/2026-11-26/full-regression-emulator-failure/`. The last full green 151/151 remains historical and is not current-source evidence.
+
 ## Six-wave status
 
 | Wave | Current state | Remaining qualification |
