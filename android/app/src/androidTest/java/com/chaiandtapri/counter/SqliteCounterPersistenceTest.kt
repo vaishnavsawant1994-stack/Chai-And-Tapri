@@ -3838,6 +3838,19 @@ class SqliteCounterPersistenceTest {
         assertEquals(reopened.localBusinessSummary(), estimateModel.localBusinessSummary())
         assertEquals(expectedBeforeReview, estimateModel.expectedCashPaise("closing-open"))
         estimateModel.close()
+        val ordersBeforeCsv = afterEstimate.orders
+        assertTrue(awaitClosingNode(text = "Export this closed session as CSV").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        awaitClosingNode(text = "Save")
+        val filename = "ct28-closing-${System.currentTimeMillis()}.csv"
+        assertTrue(awaitClosingNode(className = "android.widget.EditText").performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, filename)
+        }))
+        assertTrue(awaitClosingNode(text = "Save").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        awaitClosingNode(text = "Closing-session CSV saved. Staff names, handover notes, and customer details were not exported.")
+        val afterCsv = SqliteCounterPersistence(context).use { it.load()!! }
+        assertEquals("Exporting a closing report must not mutate orders", ordersBeforeCsv, afterCsv.orders)
+        assertEquals(beforeEstimate.paymentEntries, afterCsv.paymentEntries)
+        assertEquals(beforeEstimate.stockMovements, afterCsv.stockMovements)
         instrumentation.runOnMainSync { activity.finish() }
         reopened.close()
         context.deleteDatabase("chai_tapri_counter.db")

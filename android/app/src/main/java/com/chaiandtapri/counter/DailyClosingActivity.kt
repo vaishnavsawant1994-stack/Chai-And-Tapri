@@ -24,6 +24,7 @@ class DailyClosingActivity : ComponentActivity() {
     private var model: CounterModel? = null
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
+    private var statusMessage: String? = null
     private var selectedSessionId: String? = null
     private var pendingSessionCsv: String? = null
     @Volatile private var loading = false
@@ -33,7 +34,7 @@ class DailyClosingActivity : ComponentActivity() {
         val csv = pendingSessionCsv
         pendingSessionCsv = null
         if (uri == null) {
-            if (::status.isInitialized) status.text = "CSV export cancelled. No business data was changed."
+            updateStatus("CSV export cancelled. No business data was changed.")
         } else if (csv != null) {
             writeSessionCsv(uri, csv)
         }
@@ -84,7 +85,7 @@ class DailyClosingActivity : ComponentActivity() {
         try {
             content.addView(label("Daily Closing | CT-28", 24f))
             content.addView(label("Closing review is scoped to a closed cash-drawer session. Calendar-day sales totals, unlinked cash activity and verified UPI settlement are not available here.", 14f))
-            status = label("", 14f); content.addView(status)
+            status = label(statusMessage.orEmpty(), 14f); content.addView(status)
             content.addView(label("Busy-counter estimates", 18f))
             content.addView(label("These amounts are operator estimates only. They do not create sales, collections, stock movements, or profit and remain separate from verified records.", 14f))
             content.addView(button("Record unitemized sales estimate") { estimateDialog(current) })
@@ -228,7 +229,7 @@ class DailyClosingActivity : ComponentActivity() {
     }
 
     private fun prepareSessionCsv(sessionId: String) {
-        status.text = "Preparing privacy-minimized session CSV…"
+        updateStatus("Preparing privacy-minimized session CSV…")
         RecoveryExecutor.executor.execute {
             val outcome = runCatching {
                 val current = model ?: error("Closing records are unavailable")
@@ -267,7 +268,7 @@ class DailyClosingActivity : ComponentActivity() {
                             pendingSessionCsv = csv
                             createSessionCsv.launch("cash-closing-${sessionId.takeLast(8)}.csv")
                         },
-                        { status.text = "CSV export could not be prepared. No business records were changed (${it.javaClass.simpleName})." }
+                        { updateStatus("CSV export could not be prepared. No business records were changed (${it.javaClass.simpleName}).") }
                     )
                 }
             }
@@ -275,19 +276,24 @@ class DailyClosingActivity : ComponentActivity() {
     }
 
     private fun writeSessionCsv(uri: Uri, csv: String) {
-        status.text = "Saving closed-session CSV…"
+        updateStatus("Saving closed-session CSV…")
         RecoveryExecutor.executor.execute {
             val result = runCatching {
                 contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { it.write(csv) }
                     ?: error("The selected document could not be opened for writing")
             }
             runOnUiThread {
-                if (!destroyed && ::status.isInitialized) status.text = result.fold(
+                if (!destroyed) updateStatus(result.fold(
                     { "Closing-session CSV saved. Staff names, handover notes, and customer details were not exported." },
                     { "CSV export failed. No business records were changed (${it.javaClass.simpleName})." }
-                )
+                ))
             }
         }
+    }
+
+    private fun updateStatus(message: String) {
+        statusMessage = message
+        if (::status.isInitialized) status.text = message
     }
 
     private fun sessionLabel(session: CashDrawerSession): String = "${time(session.openedAt)} – ${time(session.closedAt ?: session.openedAt)} · ${session.sessionId.takeLast(6)}"
