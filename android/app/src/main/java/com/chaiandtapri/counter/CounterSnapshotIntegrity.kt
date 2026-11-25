@@ -57,7 +57,12 @@ internal object CounterSnapshotIntegrity {
         snapshot.cashDrawerSessions.forEach { session ->
             if (session.openingCashPaise < 0 || session.openedAt <= 0 || (session.closedAt == null) != (session.closingCashPaise == null) || session.closingCashPaise?.let { it < 0 } == true || session.closedAt?.let { it < session.openedAt } == true) problems += "cash drawer session ${session.sessionId} has invalid fields"
             if (session.staffLabel?.let { it.trim().length !in 2..60 } == true || session.handoverToLabel?.let { it.trim().length !in 2..60 } == true || session.handoverNote.length > 160) problems += "cash drawer session ${session.sessionId} has invalid shift handover fields"
-            if (session.staffLabel == null && (session.handoverToLabel != null || session.handoverNote.isNotEmpty())) problems += "cash drawer session ${session.sessionId} has handover details without a shift label"
+            if (session.staffLabel == null && (session.handoverToLabel != null || session.handoverNote.isNotEmpty() || session.handoverToStaffId != null || session.handoverReceivedAt != null || session.handoverReceivedCashPaise != null)) problems += "cash drawer session ${session.sessionId} has handover details without a shift label"
+            if ((session.handoverReceivedAt == null) != (session.handoverReceivedCashPaise == null) ||
+                (session.handoverReceivedAt != null && (session.closedAt == null || session.handoverToStaffId == null || session.handoverReceivedAt < (session.closedAt ?: 0L))) ||
+                session.handoverReceivedCashPaise?.let { it !in 0..100_000_000 } == true) {
+                problems += "cash drawer session ${session.sessionId} has invalid handover receipt fields"
+            }
         }
         if (snapshot.cashDrawerMovements.map { it.movementId }.toSet().size != snapshot.cashDrawerMovements.size) problems += "duplicate cash drawer movement ID"
         snapshot.cashDrawerMovements.forEach { movement ->

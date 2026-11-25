@@ -4,6 +4,10 @@
 
 This addendum records work completed after the 24 November progress audit. It does not replace broader product scope or mark the MVP complete.
 
+## CT-27 recipient-side handover acknowledgement
+
+The designated enabled local receiver now sees a pending handover in CT-27 and can record their physical cash count. The one-time event is attributed to that local actor, persists through encrypted database reopen and portable encrypted backup restore, and does not alter the sender's closed drawer balance. Count differences remain unresolved and visible. Schema v33 adds an additive v32→v33 migration. The sync projection compares only its allow-listed financial/session fields, so local acknowledgement metadata creates no duplicate shift projection. Verification: Kotlin JVM **95/95**; prototype Node **52/52**; focused API 37 UI/model test **1/1** and synthetic portable restore test **1/1**; APK tasks pass; lint 0 errors / 189 warnings. Full Android/backend suites were not rerun. This is local account/count acknowledgement, not proof of physical transfer or production identity. See [report](CT-27-HANDOVER-ACKNOWLEDGEMENT-REPORT-2026-11-25.md).
+
 ## CT-27 local handover recipient binding
 
 Shift handovers can now optionally identify a receiving person by an enabled local staff account. Schema v32 adds a nullable account ID through an additive v31→v32 migration; legacy text labels remain unverified. A mismatched/unknown account is rejected without closing the drawer. Kotlin JVM **94/94**; focused API 37 instrumentation **1/1**; debug and instrumentation APK builds passed; lint 0 errors. Prototype Node **52/52** was run; backend and full Android suites were not rerun. This associates a local directory entry only and does not prove recipient acknowledgement or cash receipt. See [CT-27 report](CT-27-VERIFIED-HANDOVER-RECIPIENT-REPORT-2026-11-25.md).

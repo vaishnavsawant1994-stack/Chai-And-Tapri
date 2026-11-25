@@ -27,7 +27,11 @@ object SyncOutboxPayloadEncoder {
             val old = previousShifts[session.sessionId]
             val oldExpected = old?.let { expectedCash(before, it.sessionId) }
             val expected = expectedCash(after, session.sessionId) ?: return@mapNotNull null
-            if (old == session && (old.closedAt != null || oldExpected == expected)) null else session to expected
+            val syncProjectionUnchanged = old != null && old.openedAt == session.openedAt &&
+                old.openingCashPaise == session.openingCashPaise && old.closedAt == session.closedAt &&
+                old.closingCashPaise == session.closingCashPaise && (old.staffLabel == null) == (session.staffLabel == null) &&
+                oldExpected == expected
+            if (syncProjectionUnchanged) null else session to expected
         }
         val customerSyncIds = after.customerSyncIdentities
         val productUnitLabels = after.productUnitLabels

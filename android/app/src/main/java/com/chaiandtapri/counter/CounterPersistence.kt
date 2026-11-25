@@ -136,7 +136,7 @@ data class BusinessExpense(
     /** Device-clock time when recorded; null means the original date is unavailable. */
     val recordedAtEpochMs: Long? = null
 )
-data class CashDrawerSession(val sessionId: String, val openingCashPaise: Int, val openedAt: Long, val closingCashPaise: Int? = null, val closedAt: Long? = null, val staffLabel: String? = null, val handoverToLabel: String? = null, val handoverNote: String = "", val staffActorId: String? = null, val handoverToStaffId: String? = null)
+data class CashDrawerSession(val sessionId: String, val openingCashPaise: Int, val openedAt: Long, val closingCashPaise: Int? = null, val closedAt: Long? = null, val staffLabel: String? = null, val handoverToLabel: String? = null, val handoverNote: String = "", val staffActorId: String? = null, val handoverToStaffId: String? = null, val handoverReceivedAt: Long? = null, val handoverReceivedCashPaise: Int? = null)
 data class CashDrawerMovement(val movementId: String, val sessionId: String, val kind: String, val amountPaise: Int, val note: String)
 data class CashClosingReview(val reviewId: String, val sessionId: String, val reviewedAt: Long, val note: String)
 data class AuditRecord(val eventId: String, val commandId: String, val event: String, val createdAtEpochMs: Long, val actorId: String? = null)

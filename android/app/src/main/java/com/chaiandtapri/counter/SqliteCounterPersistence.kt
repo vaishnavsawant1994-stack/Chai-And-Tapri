@@ -174,7 +174,9 @@ class SqliteCounterPersistence internal constructor(
         if (oldVersion < 30 && !hasColumn(db, "cash_drawer_sessions", "staff_actor_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_actor_id TEXT")
         if (oldVersion < 31 && !hasColumn(db, "product_catalog", "unit_label")) db.execSQL("ALTER TABLE product_catalog ADD COLUMN unit_label TEXT NOT NULL DEFAULT 'units'")
         if (oldVersion < 32 && !hasColumn(db, "cash_drawer_sessions", "handover_to_staff_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_to_staff_id TEXT")
-        if (newVersion > DATABASE_VERSION || oldVersion > 31) {
+        if (oldVersion < 33 && !hasColumn(db, "cash_drawer_sessions", "handover_received_at")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_received_at INTEGER")
+        if (oldVersion < 33 && !hasColumn(db, "cash_drawer_sessions", "handover_received_cash_paise")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_received_cash_paise INTEGER CHECK(handover_received_cash_paise IS NULL OR handover_received_cash_paise BETWEEN 0 AND 100000000)")
+        if (newVersion > DATABASE_VERSION || oldVersion > 32) {
             throw IllegalStateException("No migration is defined from database version $oldVersion to $newVersion")
         }
     }
@@ -976,8 +978,8 @@ class SqliteCounterPersistence internal constructor(
                 if (c.isNull(6)) null else c.getString(6), c.getLong(7).takeIf { it > 0 })
         }
         val drawerSessions = mutableListOf<CashDrawerSession>()
-        db.rawQuery("SELECT session_id,opening_cash_paise,opened_at,closing_cash_paise,closed_at,staff_label,handover_to_label,handover_note,staff_actor_id,handover_to_staff_id FROM cash_drawer_sessions ORDER BY rowid", null).use { c ->
-            while (c.moveToNext()) drawerSessions += CashDrawerSession(c.getString(0), c.getInt(1), c.getLong(2), if (c.isNull(3)) null else c.getInt(3), if (c.isNull(4)) null else c.getLong(4), if (c.isNull(5)) null else c.getString(5), if (c.isNull(6)) null else c.getString(6), c.getString(7), if (c.isNull(8)) null else c.getString(8), if (c.isNull(9)) null else c.getString(9))
+        db.rawQuery("SELECT session_id,opening_cash_paise,opened_at,closing_cash_paise,closed_at,staff_label,handover_to_label,handover_note,staff_actor_id,handover_to_staff_id,handover_received_at,handover_received_cash_paise FROM cash_drawer_sessions ORDER BY rowid", null).use { c ->
+            while (c.moveToNext()) drawerSessions += CashDrawerSession(c.getString(0), c.getInt(1), c.getLong(2), if (c.isNull(3)) null else c.getInt(3), if (c.isNull(4)) null else c.getLong(4), if (c.isNull(5)) null else c.getString(5), if (c.isNull(6)) null else c.getString(6), c.getString(7), if (c.isNull(8)) null else c.getString(8), if (c.isNull(9)) null else c.getString(9), if (c.isNull(10)) null else c.getLong(10), if (c.isNull(11)) null else c.getInt(11))
         }
         val drawerMovements = mutableListOf<CashDrawerMovement>()
         db.rawQuery("SELECT movement_id,session_id,kind,amount_paise,note FROM cash_drawer_movements ORDER BY created_at,movement_id", null).use { c ->
@@ -1098,6 +1100,7 @@ class SqliteCounterPersistence internal constructor(
                 put("session_id", session.sessionId); put("opening_cash_paise", session.openingCashPaise); put("opened_at", session.openedAt)
                 put("closing_cash_paise", session.closingCashPaise); put("closed_at", session.closedAt); put("staff_label", session.staffLabel)
                 put("handover_to_label", session.handoverToLabel); put("handover_note", session.handoverNote); put("staff_actor_id", session.staffActorId); put("handover_to_staff_id", session.handoverToStaffId)
+                put("handover_received_at", session.handoverReceivedAt); put("handover_received_cash_paise", session.handoverReceivedCashPaise)
                 }
                 val updated = db.update("cash_drawer_sessions", values, "session_id=?", arrayOf(session.sessionId))
                 if (updated == 0) db.insertOrThrow("cash_drawer_sessions", null, values)
@@ -1127,7 +1130,7 @@ class SqliteCounterPersistence internal constructor(
 
     companion object {
         internal const val DATABASE_NAME = "chai_tapri_counter.db"
-        internal const val DATABASE_VERSION = 32
+        internal const val DATABASE_VERSION = 33
         internal const val STORE_IDENTITY_KEY = "shop_identity"
 
         internal fun locallyBoundShopIdentity(context: Context, databaseName: String, keyNamespace: String): String? =
@@ -1199,6 +1202,8 @@ class SqliteCounterPersistence internal constructor(
         db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_note TEXT NOT NULL DEFAULT ''")
         if (!hasColumn(db, "cash_drawer_sessions", "staff_actor_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN staff_actor_id TEXT")
         if (!hasColumn(db, "cash_drawer_sessions", "handover_to_staff_id")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_to_staff_id TEXT")
+        if (!hasColumn(db, "cash_drawer_sessions", "handover_received_at")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_received_at INTEGER")
+        if (!hasColumn(db, "cash_drawer_sessions", "handover_received_cash_paise")) db.execSQL("ALTER TABLE cash_drawer_sessions ADD COLUMN handover_received_cash_paise INTEGER CHECK(handover_received_cash_paise IS NULL OR handover_received_cash_paise BETWEEN 0 AND 100000000)")
     }
 
     private fun createCashClosingReviewTable(db: CipherDatabase) {

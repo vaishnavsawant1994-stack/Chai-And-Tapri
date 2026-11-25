@@ -65,6 +65,7 @@ internal object LocalBusinessMutationPolicy {
     private fun managerOnlyEvent(event: String, actorId: String?): Boolean {
         if (event.startsWith("staff_shift.started") && event.contains("staff_actor_id=$actorId")) return false
         if (event.startsWith("staff_shift.ended") && event.contains("staff_actor_id=$actorId")) return false
+        if (event.startsWith("staff_shift.handover_received") && event.contains("receiver_actor_id=$actorId")) return false
         return event.startsWith("remove #") ||
             event.startsWith("order.cancelled") ||
             event.startsWith("order.price_adjusted") ||

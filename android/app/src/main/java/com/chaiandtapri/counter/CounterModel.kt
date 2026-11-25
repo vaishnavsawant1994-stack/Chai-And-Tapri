@@ -420,6 +420,27 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (note.trim().length > 160) return "Handover note must be 160 characters or fewer. No shift ended."
         return closeCashDrawer(countedCashPaise, commandId, handoverToLabel, note, handoverToStaffId)
     }
+    fun acknowledgeStaffHandover(sessionId: String, receivedCashPaise: Int, commandId: String = "shift-handover-received-${java.util.UUID.randomUUID()}"): String {
+        if (persistence == null) return "Staff handover requires durable shop storage. No acknowledgement recorded."
+        if (commandId.isBlank()) return "Command ID is required. No acknowledgement recorded."
+        if (commandId in appliedCommandIds) return "Duplicate command ignored."
+        val actorId = LocalSessionState.actorId?.takeIf { LocalSessionState.authenticated }
+            ?: return "Sign in as the designated receiving staff account. No acknowledgement recorded."
+        val shift = cashDrawerSessions.firstOrNull { it.sessionId == sessionId && it.staffLabel != null }
+            ?: return "Staff shift was not found. No acknowledgement recorded."
+        if (shift.closedAt == null) return "The sending shift must close before handover acknowledgement."
+        if (shift.handoverToStaffId != actorId) return "Only the designated receiving account can acknowledge this handover."
+        if (persistence.loadStaffCredential(actorId)?.account?.enabled != true) return "The receiving staff account is no longer enabled. No acknowledgement recorded."
+        if (shift.handoverReceivedAt != null) return "This handover has already been acknowledged."
+        if (receivedCashPaise !in 0..100_000_000) return "Enter a received cash count from Rs 0 to Rs 1,000,000. No acknowledgement recorded."
+        val senderCount = shift.closingCashPaise ?: return "The sender's closing cash count is unavailable. No acknowledgement recorded."
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
+        val index = cashDrawerSessions.indexOfFirst { it.sessionId == sessionId }
+        cashDrawerSessions[index] = shift.copy(handoverReceivedAt = System.currentTimeMillis(), handoverReceivedCashPaise = receivedCashPaise)
+        val difference = receivedCashPaise.toLong() - senderCount
+        val outcome = if (difference == 0L) "matches" else "unresolved difference ${money(difference)}"
+        return commitMutation(before, commandId, "Cash handover acknowledged; $outcome. No drawer total was changed.", "staff_shift.handover_received session=$sessionId sender_count=${senderCount}p receiver_count=${receivedCashPaise}p difference=${difference}p receiver_actor_id=$actorId")
+    }
     fun recordCashClosingReview(sessionId: String, note: String = "", commandId: String = "cash-close-review-${java.util.UUID.randomUUID()}"): String {
         if (persistence == null) return "Closing review requires durable shop storage."
         if (commandId.isBlank()) return "Command ID is required. No review recorded."

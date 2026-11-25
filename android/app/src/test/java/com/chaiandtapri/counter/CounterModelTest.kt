@@ -604,6 +604,17 @@ class CounterModelTest {
         ))
         assertTrue(shiftClose.sendable)
         assertTrue(shiftClose.json!!.contains("\"closingCashPaise\":900"))
+        val closedShift = privateShift.copy(closingCashPaise = 900, closedAt = 2000)
+        val localReceiptOnly = SyncOutboxPayloadEncoder.between(
+            before.copy(cashDrawerSessions = listOf(closedShift)),
+            before.copy(cashDrawerSessions = listOf(closedShift.copy(
+                handoverToStaffId = "private-recipient-id",
+                handoverReceivedAt = 3000,
+                handoverReceivedCashPaise = 850
+            )))
+        )
+        assertFalse(localReceiptOnly.sendable)
+        assertEquals("empty_delta", localReceiptOnly.blockedReason)
     }
 
     @Test fun supplierFinancialProjectionUsesPersistedOpaqueIdsAndOmitsSupplierPii() {
@@ -957,6 +968,24 @@ class CounterModelTest {
             assertTrue(expected.message!!.contains("receivable projection 1501p differs from credit ledger 1500p"))
         }
         assertEquals(1500, persistence.state!!.orders.single().creditPaise)
+    }
+
+    @Test fun snapshotIntegrityRejectsIncompleteOrUnassignedShiftReceipt() {
+        val base = CounterSnapshot(12, emptyList(), emptyMap(), emptySet(), emptyList(), emptyList(), emptyList(), emptyList())
+        val closed = CashDrawerSession("shift-receipt-integrity", 1000, 100, 1000, 200, staffLabel = "Sender", handoverToStaffId = "receiver")
+        CounterSnapshotIntegrity.requireConsistent(base.copy(cashDrawerSessions = listOf(closed.copy(handoverReceivedAt = 300, handoverReceivedCashPaise = 900))))
+        listOf(
+            closed.copy(handoverReceivedAt = 300),
+            closed.copy(handoverReceivedAt = 300, handoverReceivedCashPaise = 900, handoverToStaffId = null),
+            closed.copy(handoverReceivedAt = 150, handoverReceivedCashPaise = 900)
+        ).forEach { invalid ->
+            try {
+                CounterSnapshotIntegrity.requireConsistent(base.copy(cashDrawerSessions = listOf(invalid)))
+                throw AssertionError("Invalid shift handover receipt should be rejected")
+            } catch (expected: IllegalStateException) {
+                assertTrue(expected.message!!.contains("invalid handover receipt fields"))
+            }
+        }
     }
 
     @Test fun criticalOrderSequenceKeepsPaymentSeparateFromHandover() {

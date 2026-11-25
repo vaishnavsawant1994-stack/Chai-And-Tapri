@@ -52,14 +52,23 @@ class StaffShiftsActivity : ComponentActivity() {
                 } else content.addView(label("An active shift belongs to another local account. Ask a manager to review it.", 16f))
             }
             content.addView(label("Recent shift sessions", 19f))
-            val history = current.cashDrawerHistory().filter { it.staffLabel != null && (LocalSessionState.isManager || it.staffActorId == LocalSessionState.actorId) }.take(20)
+            val history = current.cashDrawerHistory().filter {
+                it.staffLabel != null && (LocalSessionState.isManager || it.staffActorId == LocalSessionState.actorId || it.handoverToStaffId == LocalSessionState.actorId)
+            }.take(20)
             if (history.isEmpty()) content.addView(label("No staff shift sessions recorded.", 14f))
             history.forEach { shift ->
                 val expected = current.expectedCashPaise(shift.sessionId) ?: 0L
                 val state = if (shift.closedAt == null) "ACTIVE" else "ENDED · handed over ${money(shift.closingCashPaise!!.toLong())} · variance ${money(shift.closingCashPaise.toLong() - expected)}"
                 val handover = shift.handoverToLabel?.let { "\nHandover ${if (shift.handoverToStaffId == null) "label (unverified)" else "account ${shift.handoverToStaffId}"}: $it" }.orEmpty()
+                val received = shift.handoverReceivedCashPaise?.let { receivedPaise ->
+                    val sent = shift.closingCashPaise?.toLong() ?: receivedPaise.toLong()
+                    "\nRecipient counted ${money(receivedPaise.toLong())} · sender counted ${money(sent)} · difference ${money(receivedPaise.toLong() - sent)}"
+                } ?: "\nHandover acknowledgement: pending"
                 val note = shift.handoverNote.takeIf(String::isNotBlank)?.let { "\nNote: $it" }.orEmpty()
-                content.addView(label("${shift.staffLabel} · $state\nOpening ${money(shift.openingCashPaise.toLong())} · expected ${money(expected)}$handover$note", 14f))
+                content.addView(label("${shift.staffLabel} · $state\nOpening ${money(shift.openingCashPaise.toLong())} · expected ${money(expected)}$handover${if (shift.handoverToStaffId == null) "" else received}$note", 14f))
+                if (shift.closedAt != null && shift.handoverToStaffId == LocalSessionState.actorId && shift.handoverReceivedAt == null) {
+                    content.addView(button("Acknowledge cash received for ${shift.staffLabel}") { receiveHandoverDialog(shift.sessionId, shift.closingCashPaise ?: 0) })
+                }
             }
             content.addView(button("Cash Register · CT-26") { startActivity(android.content.Intent(this, CashRegisterActivity::class.java)) })
             content.addView(button("Back") { finish() })
@@ -108,6 +117,29 @@ class StaffShiftsActivity : ComponentActivity() {
             } }
             dialog.show()
         }
+    }
+
+    private fun receiveHandoverDialog(sessionId: String, senderCountPaise: Int) {
+        if (LocalSessionState.actorId.isNullOrBlank()) return
+        val received = EditText(this).apply {
+            hint = "Cash physically received in rupees · sender counted ${money(senderCountPaise.toLong())}"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this).setTitle("Acknowledge cash handover").setMessage("Enter your physical count. Any difference will remain visible and unresolved; this acknowledgement does not change the closed drawer totals.").setView(received)
+            .setNegativeButton("Cancel", null).setPositiveButton("Record count", null).create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val amount = toPaise(received.text.toString())
+                        if (amount == null) { received.error = "Enter a valid count"; return@setOnClickListener }
+                        val result = model?.acknowledgeStaffHandover(sessionId, amount) ?: "Local storage is unavailable."
+                        dialog.dismiss()
+                        android.widget.Toast.makeText(this, result, android.widget.Toast.LENGTH_LONG).show()
+                        render()
+                    }
+                }
+                dialog.show()
+            }
     }
 
     private fun toPaise(text: String): Int? = runCatching { text.trim().toBigDecimal().movePointRight(2).intValueExact().takeIf { it in 0..100_000_000 } }.getOrNull()
