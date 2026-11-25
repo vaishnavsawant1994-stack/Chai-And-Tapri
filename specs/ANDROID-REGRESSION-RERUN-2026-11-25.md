@@ -24,6 +24,8 @@ The two schema migration tests passed after they were changed to assert `SqliteC
 
 The supplier UPI screen test now waits for the committed-result message before opening a second encrypted database connection. It passed within the full suite and as a focused test. This removes a test-only race between the accessibility click and UI transaction callback.
 
+Post-run triage tried replacing `startActivitySync` with an activity-monitor launch to avoid the full-run idle timeout. That variant failed to attach the accessibility tree to Quick Sale and was reverted. The committed test retains the original `startActivitySync` flow, which passed in the focused run recorded above. The generated XML was consequently overwritten by this reverted experiment and is not evidence for the final source.
+
 ## Evidence paths
 
 - Full run command: `android/scripts/run-isolated-connected-tests.cmd emulator-5554`.

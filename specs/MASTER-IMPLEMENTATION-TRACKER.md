@@ -852,3 +852,5 @@ CT-11 date filters now have two explicit bases: order creation timestamp and any
 ## Verification follow-up — Android suite load failure — 25 November 2026
 
 Current-source full Android suite: 149/150; the single failure was a 45-second `startActivitySync` launch timeout in the Quick Sale UI test during a long emulator run. That UI test passed 1/1 when isolated. Supplier UPI instrumentation passed in full and focused runs after waiting for committed-result UI feedback. v30/v25 migration assertions now compare to current schema v33 and passed. Prototype Node 52/52; backend no-database 33 passed/6 skipped; Kotlin JVM 96/96; APK tasks pass; lint 0 errors/189 warnings. Full Android regression remains not green-qualified until a resource-suitable full run passes. See `ANDROID-REGRESSION-RERUN-2026-11-25.md`.
+
+An activity-monitor launch workaround was tested afterward and reverted because accessibility nodes were unavailable. The final source keeps `startActivitySync`; the latest generated JUnit XML is from the reverted experiment, not the 150-test run.
