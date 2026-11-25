@@ -21,6 +21,8 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -237,6 +239,18 @@ class MainActivity : ComponentActivity() {
         column.addView(button("Listen for next command"){startListeningAgain()})
         column.addView(label("Recognized transcript · editable",16f))
         transcript=EditText(this).apply{hint="Naya order, do cutting chai";minLines=2}
+        transcript.addTextChangedListener(object:TextWatcher{
+            override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int) = Unit
+            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){
+                if(pending!=null){
+                    pending=null
+                    pendingId=""
+                    session="Transcript edited · review required"
+                    if(::status.isInitialized)status.text="Transcript changed after proposal. Propose again before applying."
+                }
+            }
+            override fun afterTextChanged(s:Editable?) = Unit
+        })
         column.addView(transcript)
         column.addView(button("Propose command"){propose()})
         column.addView(button("Apply reviewed command"){applyPending()})

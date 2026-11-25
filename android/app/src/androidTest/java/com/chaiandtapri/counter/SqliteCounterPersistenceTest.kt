@@ -1295,6 +1295,52 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun editingRecognizedTranscriptInvalidatesReviewedCommandUntilReproposed() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.clear()
+        assertTrue(LocalOwnerAuth.enroll(context, "transcript-review-owner", "Transcript Review Owner", "Synthetic transcript review passphrase".toCharArray()))
+        LocalSessionState.establish("Transcript Review Owner")
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = false).use { setup ->
+            assertTrue(setup.saveProduct(TapriProduct("cutting_chai", "Cutting Chai", "Chai", 1000, true, true, true, listOf("cutting"))).startsWith("Product saved"))
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val transcriptField = MainActivity::class.java.getDeclaredField("transcript").apply { isAccessible = true }
+        val pendingField = MainActivity::class.java.getDeclaredField("pending").apply { isAccessible = true }
+        val modelField = MainActivity::class.java.getDeclaredField("model").apply { isAccessible = true }
+        val propose = MainActivity::class.java.getDeclaredMethod("propose").apply { isAccessible = true }
+        val apply = MainActivity::class.java.getDeclaredMethod("applyPending").apply { isAccessible = true }
+        try {
+            var ready = false
+            for (attempt in 0 until 120) {
+                instrumentation.runOnMainSync { ready = runCatching { transcriptField.get(activity) != null }.getOrDefault(false) }
+                if (ready) break
+                Thread.sleep(100)
+            }
+            assertTrue("Counter screen should finish loading", ready)
+            instrumentation.runOnMainSync {
+                val transcript = transcriptField.get(activity) as EditText
+                transcript.setText("Naya order, do cutting chai")
+                propose.invoke(activity)
+                assertNotNull("Initial transcript should produce a reviewed proposal", pendingField.get(activity))
+                transcript.setText("Naya order, ek cutting chai")
+                assertNull("Editing transcript must invalidate the stale proposal", pendingField.get(activity))
+                apply.invoke(activity)
+                assertTrue("Applying after edit must not create an order", (modelField.get(activity) as CounterModel).allOrders().isEmpty())
+                propose.invoke(activity)
+                assertNotNull("Edited transcript can be reviewed as a new proposal", pendingField.get(activity))
+                apply.invoke(activity)
+                val created = (modelField.get(activity) as CounterModel).allOrders().single()
+                assertEquals(1, created.lines.single().quantity)
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun recoveryActivityCompletesBackupVerificationCallbackForSafContentUri() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
