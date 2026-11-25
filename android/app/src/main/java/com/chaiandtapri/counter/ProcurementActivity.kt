@@ -282,9 +282,21 @@ class ProcurementActivity : Activity() {
             val productPicker = Spinner(this).apply {
                 adapter = ArrayAdapter(this@ProcurementActivity, android.R.layout.simple_spinner_dropdown_item, products.map { "${it.name} (${it.productId})" })
             }
-            val quantity = EditText(this).apply { hint = "Received quantity"; inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true) }
-            val unitCost = EditText(this).apply { hint = "Unit cost in rupees"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
-            row.addView(productPicker); row.addView(quantity); row.addView(unitCost)
+            val unitInfo = label("", 13f)
+            val quantity = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true) }
+            val unitCost = EditText(this).apply { hint = "Equivalent cost per ${products.first().unitLabel} in ₹"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL; setSingleLine(true) }
+            fun showConversion(index: Int) {
+                val product = products[index.coerceIn(products.indices)]
+                quantity.hint = "Received quantity in ${product.purchaseUnitLabel}"
+                unitCost.hint = "Cost per ${product.unitLabel} in ₹ (integer paise)"
+                unitInfo.text = "1 ${product.purchaseUnitLabel} = ${product.baseUnitsPerPurchaseUnit} ${product.unitLabel}. Enter cost per sell/count unit; stock is recorded in ${product.unitLabel}."
+            }
+            productPicker.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) = showConversion(position)
+            }
+            showConversion(0)
+            row.addView(productPicker); row.addView(unitInfo); row.addView(quantity); row.addView(unitCost)
             lines.addView(row)
             rows += ReceiptRow(productPicker, quantity, unitCost)
         }
@@ -314,7 +326,7 @@ class ProcurementActivity : Activity() {
                     return@setOnClickListener
                 }
                 val supplierId = suppliers[supplierPicker.selectedItemPosition].supplierId
-                val result = model?.receivePurchase(supplierId, quantities, costs, supplierInvoiceReference = invoiceReference.text.toString()) ?: "Storage is unavailable."
+                val result = model?.receivePurchaseInPurchaseUnits(supplierId, quantities, costs, supplierInvoiceReference = invoiceReference.text.toString()) ?: "Storage is unavailable."
                 if (result.startsWith("Received ")) { dialog.dismiss(); render(result) } else status.text = result
             }
         }

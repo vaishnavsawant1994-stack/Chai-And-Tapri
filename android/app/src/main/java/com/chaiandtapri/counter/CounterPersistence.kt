@@ -184,8 +184,12 @@ data class TapriProduct(
     val estimatedUnitCostPaise: Int? = null,
     /** Exact product identifier entered by an optional keyboard-wedge barcode/QR scanner. */
     val scanCode: String? = null,
-    /** Configured base unit used for sale, count, and stock quantities; no pack conversion is implied. */
-    val unitLabel: String = "units"
+    /** Base unit used for sale, count, and stock quantities. */
+    val unitLabel: String = "units",
+    /** Unit used for direct supplier receipts; received quantities convert into [unitLabel]. */
+    val purchaseUnitLabel: String = unitLabel,
+    /** Number of base units contained in one purchase unit. */
+    val baseUnitsPerPurchaseUnit: Int = 1
 )
 
 data class CounterSnapshot(

@@ -409,6 +409,31 @@ class CounterModelTest {
         reopened.close()
     }
 
+    @Test fun directPurchaseUnitsConvertToSellableStockAndAuditOriginalPackQuantity() {
+        val persistence = MemoryPersistence()
+        val model = CounterModel(persistence, requireConfiguredProducts = true)
+        val product = TapriProduct("bottled_water", "Water Bottle", "Drinks", 2000, priceConfirmed = true,
+            unitLabel = "bottle", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 12)
+        assertTrue(model.saveProduct(product).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock(product.productId, 5, "counted bottles", "water-opening").startsWith("Opening stock"))
+        assertTrue(model.saveSupplier("water_dealer", "Water Dealer", "water-supplier").startsWith("Supplier saved"))
+
+        assertTrue(model.receivePurchaseInPurchaseUnits("water_dealer", mapOf(product.productId to 2), mapOf(product.productId to 125), "water-crates").startsWith("Received"))
+        assertEquals(29, model.stockLevels()[product.productId])
+        assertEquals(3000L, model.supplierPayablePaise("water_dealer"))
+        assertEquals(24, model.stockMovements().single { it.reason == "purchase_receipt" }.quantityDelta)
+        assertTrue(model.auditEvents().last().contains("purchase_units=bottled_water:2:crate:12:24:bottle"))
+        assertEquals("Duplicate command ignored.", model.receivePurchaseInPurchaseUnits("water_dealer", mapOf(product.productId to 2), mapOf(product.productId to 125), "water-crates"))
+
+        val stockBefore = model.stockLevels()
+        val payableBefore = model.supplierPayablePaise("water_dealer")
+        val overflowResult = model.receivePurchaseInPurchaseUnits("water_dealer", mapOf(product.productId to 100_000), mapOf(product.productId to 50_000_000), "water-overflow")
+        assertTrue("Unexpected overflow rejection: $overflowResult", overflowResult.contains("range"))
+        assertEquals(stockBefore, model.stockLevels())
+        assertEquals(payableBefore, model.supplierPayablePaise("water_dealer"))
+        assertTrue(model.saveProduct(product.copy(baseUnitsPerPurchaseUnit = 6)).contains("cannot change after"))
+    }
+
     @Test fun supplierInvoiceReferencesAreOptionalValidatedUniquePerSupplierAndPersisted() {
         val persistence = MemoryPersistence()
         val model = CounterModel(persistence, requireConfiguredProducts = true)

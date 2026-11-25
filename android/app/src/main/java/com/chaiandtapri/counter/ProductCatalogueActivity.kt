@@ -60,7 +60,7 @@ class ProductCatalogueActivity : Activity() {
         products.forEach { product ->
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
             card.addView(label("${product.name} · ${product.category}", 18f))
-            card.addView(label("Sell / count unit: ${product.unitLabel} · pack-size conversion is not configured", 13f))
+            card.addView(label("Sell / count: ${product.unitLabel} · local direct receipt: ${product.purchaseUnitLabel} = ${product.baseUnitsPerPurchaseUnit} ${product.unitLabel}", 13f))
             val price = if (product.priceConfirmed) "₹${rupees(product.unitPricePaise)} · Owner confirmed" else "₹${rupees(product.unitPricePaise)} · Example price, not confirmed"
             card.addView(label("$price · ${if (product.active) "Active" else "Inactive"}${if (product.favorite) " · Favourite" else ""}", 14f))
             card.addView(label(product.scanCode?.let { "Scanner code · $it" } ?: "Scanner code not configured", 13f))
@@ -107,6 +107,8 @@ class ProductCatalogueActivity : Activity() {
         val name = field("Product name", existing?.name.orEmpty())
         val category = field("Category", existing?.category.orEmpty())
         val unitLabel = field("Sell / count unit (e.g. cup, bottle, piece, pack)", existing?.unitLabel ?: "units")
+        val purchaseUnitLabel = field("Purchase unit (e.g. carton, dozen, box; blank = same)", existing?.takeIf { it.purchaseUnitLabel != it.unitLabel }?.purchaseUnitLabel.orEmpty())
+        val purchaseUnitFactor = field("Base units per purchase unit (1 if same)", existing?.baseUnitsPerPurchaseUnit?.toString() ?: "1", integer = true)
         val price = field("Actual selling price in ₹", existing?.let { rupees(it.unitPricePaise) }.orEmpty(), true)
         val estimatedCost = field("Estimated unit cost in ₹ (optional)", existing?.estimatedUnitCostPaise?.let(::rupees).orEmpty(), true)
         val scanCode = field("Barcode / QR scanner code (optional)", existing?.scanCode.orEmpty())
@@ -134,7 +136,9 @@ class ProductCatalogueActivity : Activity() {
                     reorderThreshold = reorderThreshold.text.toString().trim().takeIf(String::isNotEmpty)?.toIntOrNull() ?: if (reorderThreshold.text.isNullOrBlank()) null else -1,
                     estimatedUnitCostPaise = costPaise,
                     scanCode = scanCode.text.toString().trim().takeIf(String::isNotEmpty),
-                    unitLabel = unitLabel.text.toString()
+                    unitLabel = unitLabel.text.toString(),
+                    purchaseUnitLabel = purchaseUnitLabel.text.toString().trim().ifBlank { unitLabel.text.toString().trim() },
+                    baseUnitsPerPurchaseUnit = purchaseUnitFactor.text.toString().toIntOrNull() ?: -1
                 )
                 performMutation("Saving product…") { store -> store.saveProduct(product) }
             }.show()
