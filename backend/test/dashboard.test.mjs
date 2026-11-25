@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
+import { formatQuantity } from '../../owner-web/quantity-format.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { authorizeProjectionForRole } from '../src/service.mjs';
 import { createApiServer } from '../src/http.mjs';
@@ -252,6 +253,12 @@ test('inventory snapshot returns an explicit empty accepted state', () => {
   assert.equal(result.movementCount, 0);
 });
 
+test('owner quantity formatter preserves explicit labels and marks missing units', () => {
+  assert.equal(formatQuantity(3, 'cup'), '3 cup');
+  assert.equal(formatQuantity(-2, 'piece'), '-2 piece');
+  assert.equal(formatQuantity(5, null), '5 (unit not reported)');
+});
+
 test('daily sales activity diffs order states and groups declared tenders by server UTC receipt date', () => {
   const created = {
     orderNumber: 4, fulfillment: 'TAKEN', payment: 'UNPAID', paidPaise: 0, creditPaise: 0,
@@ -484,6 +491,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(shortPage.headers.get('location'), '/owner/');
   const page = await fetch(`${base}/owner/`);
   assert.equal(page.status, 200);
+  assert.equal((await fetch(`${base}/favicon.ico`)).status, 204);
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   const pageText = await page.text();
   assert.match(pageText, /Owner Overview/);
@@ -537,6 +545,10 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(exporter.status, 200);
   assert.match(exporter.headers.get('content-type'), /javascript/);
   assert.match(await exporter.text(), /buildOwnerReportCsv/);
+  const quantityFormatter = await fetch(`${base}/owner/quantity-format.mjs`);
+  assert.equal(quantityFormatter.status, 200);
+  assert.match(quantityFormatter.headers.get('content-type'), /javascript/);
+  assert.match(await quantityFormatter.text(), /unit not reported/);
 
   const denied = await fetch(`${base}/v1/dashboard/overview?shopId=shop-1`);
   assert.equal(denied.status, 401);

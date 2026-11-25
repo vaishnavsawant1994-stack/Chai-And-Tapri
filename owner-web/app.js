@@ -1,4 +1,5 @@
 import { buildOwnerReportCsv } from './report-export.mjs';
+import { formatQuantity } from './quantity-format.mjs';
 
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -228,11 +229,11 @@ import { buildOwnerReportCsv } from './report-export.mjs';
         const row = document.createElement('tr');
         const values = [
           product.productId,
-          String(product.netDeliveredUnits),
-          String(product.refundedUnits),
+          formatQuantity(product.netDeliveredUnits, product.unitLabel),
+          formatQuantity(product.refundedUnits, product.unitLabel),
           money(product.netDeliveredItemValuePaise),
           String(product.orderCount),
-          product.stockState === 'known' ? String(product.stockQuantity) : product.stockState === 'unknown' ? 'Unknown quantity' : 'Not reported'
+          product.stockState === 'known' ? formatQuantity(product.stockQuantity, product.unitLabel) : product.stockState === 'unknown' ? 'Unknown quantity' : 'Not reported'
         ];
         values.forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         return row;
@@ -276,7 +277,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
       const formatTime = (value) => value ? new Date(value).toLocaleString() : 'Not recorded';
       const productRows = data.products.map((product) => {
         const row = document.createElement('tr');
-        const values = [product.productId, product.quantityState === 'known' ? String(product.quantity) : '—', product.quantityState,
+        const values = [product.productId, product.quantityState === 'known' ? formatQuantity(product.quantity, product.unitLabel) : '—', product.quantityState,
           product.lastReportedRevision === null ? '—' : String(product.lastReportedRevision), formatTime(product.lastReportedAt)];
         values.forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         return row;
@@ -289,7 +290,7 @@ import { buildOwnerReportCsv } from './report-export.mjs';
       $('inventory-rows').replaceChildren(...productRows);
       const movementRows = data.recentMovements.map((movement) => {
         const row = document.createElement('tr');
-        const values = [movement.movementId, movement.productId, `${movement.quantityDelta > 0 ? '+' : ''}${movement.quantityDelta}`,
+        const values = [movement.movementId, movement.productId, formatQuantity(`${movement.quantityDelta > 0 ? '+' : ''}${movement.quantityDelta}`, movement.unitLabel),
           movement.orderNumber === null ? '—' : `#${movement.orderNumber}`, String(movement.serverRevision), formatTime(movement.acceptedAt)];
         values.forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         return row;

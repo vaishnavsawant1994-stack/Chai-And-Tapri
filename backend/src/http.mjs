@@ -10,6 +10,7 @@ const ownerAssets = new Map([
   ['/owner/index.html', ['../../owner-web/index.html', 'text/html; charset=utf-8']],
   ['/owner/app.js', ['../../owner-web/app.js', 'text/javascript; charset=utf-8']],
   ['/owner/report-export.mjs', ['../../owner-web/report-export.mjs', 'text/javascript; charset=utf-8']],
+  ['/owner/quantity-format.mjs', ['../../owner-web/quantity-format.mjs', 'text/javascript; charset=utf-8']],
   ['/owner/styles.css', ['../../owner-web/styles.css', 'text/css; charset=utf-8']]
 ]);
 async function serveOwnerAsset(path,res) {
@@ -34,6 +35,7 @@ export function createApiServer(service) {
   return createServer(async(req,res)=>{
     try {
       const url=new URL(req.url,'http://localhost');
+      if(req.method==='GET'&&url.pathname==='/favicon.ico') { res.writeHead(204,{'cache-control':'no-store'}); return res.end(); }
       if(req.method==='GET'&&url.pathname==='/health') return json(res,200,{status:'ok',service:'sync-journal-prototype'});
       if(req.method==='GET'&&url.pathname==='/owner') { res.writeHead(308,{location:'/owner/', 'cache-control':'no-store'}); return res.end(); }
       if(req.method==='GET'&&ownerAssets.has(url.pathname)) return await serveOwnerAsset(url.pathname,res);
