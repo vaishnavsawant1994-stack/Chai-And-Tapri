@@ -142,7 +142,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (lines.any { (stock[it.productId] ?: 0) < it.quantity }) return "Insufficient stock. No sale or payment recorded."
         val resolvedCustomer = customerId?.trim()?.takeIf(String::isNotEmpty)
         if (tender == "udhar" && resolvedCustomer == null) return "Select a customer account before recording Udhar. No sale recorded."
-        val before = snapshot()
+        // Snapshot reads product configuration from persistence. A recovery barrier can
+        // reject that read before commitMutation gets a chance to roll back, so translate
+        // the barrier into the same no-write result used for commit-time rejection.
+        val before = try {
+            snapshot()
+        } catch (_: BusinessMaintenanceException) {
+            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
+        }
         val deliveredLines = lines.map { it.copy(deliveredQuantity = it.quantity) }
         val order = CounterOrder(nextNumber++, deliveredLines.toMutableList(), Fulfillment.GIVEN, salePosted = true)
         val total = order.salePaise
@@ -183,7 +190,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val resolvedCustomer = customerId.trim().takeIf(String::isNotEmpty)
             ?: return "Select a customer account before recording the Udhar balance. No sale recorded."
 
-        val before = snapshot()
+        // Snapshot reads product configuration from persistence. A recovery barrier can
+        // reject that read before commitMutation gets a chance to roll back, so translate
+        // the barrier into the same no-write result used for commit-time rejection.
+        val before = try {
+            snapshot()
+        } catch (_: BusinessMaintenanceException) {
+            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
+        }
         val creditPaise = total - cashPaise
         val order = CounterOrder(nextNumber++, lines.map { it.copy(deliveredQuantity = it.quantity) }.toMutableList(), Fulfillment.GIVEN, salePosted = true)
         order.paidPaise = cashPaise
@@ -683,7 +697,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         val correctionReason = if (command.type == "remove") command.auditReason?.trim()?.takeIf { it.length in 3..120 && it.none(Char::isISOControl) }
             ?: return "A correction reason of 3–120 characters is required. No change made." else null
-        val before = snapshot()
+        // Snapshot reads product configuration from persistence. A recovery barrier can
+        // reject that read before commitMutation gets a chance to roll back, so translate
+        // the barrier into the same no-write result used for commit-time rejection.
+        val before = try {
+            snapshot()
+        } catch (_: BusinessMaintenanceException) {
+            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
+        }
         if (command.type == "create") {
             val line = line(command.productId ?: return "Unknown product.",command.quantity) ?: return "Unknown product or quantity."
             val order = CounterOrder(nextNumber++,mutableListOf(line))

@@ -2142,7 +2142,7 @@ class SqliteCounterPersistenceTest {
             val query = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "First Sale Cutting Chai") }
             assertTrue(search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, query))
             tap("FIRST SALE CUTTING CHAI · ₹15.00")
-            await(text = "1 × First Sale Cutting Chai")
+            await(text = "1 units × First Sale Cutting Chai")
             tap("Checkout")
             tap("Cash received")
 
@@ -5161,7 +5161,7 @@ class SqliteCounterPersistenceTest {
             }
             assertTrue("Quick Sale should accept product alias search", search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, searchArgs))
             tapSale("E2E Lemon Chai")
-            awaitSaleNode("1 × E2E Lemon Chai")
+            awaitSaleNode("1 units × E2E Lemon Chai")
             tapSale("Checkout")
             awaitSaleNode("Record payment")
             tapSale("Cash received")
@@ -5457,7 +5457,7 @@ class SqliteCounterPersistenceTest {
             fun click(textPrefix: String) = assertTrue("Could not click $textPrefix", awaitNode(textPrefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
             click("Repeat last completed sale")
             click("Add to current order")
-            assertTrue("Repeated sale should be staged as an editable draft", awaitNode("2 × Repeat Tea").text.toString().contains("2 × Repeat Tea"))
+            assertTrue("Repeated sale should be staged as an editable draft", awaitNode("2 units × Repeat Tea").text.toString().contains("2 units × Repeat Tea"))
             val after = SqliteCounterPersistence(context).use { it.load() ?: error("Staging repeat sale removed persisted data") }
             assertEquals("Draft staging must not commit an extra order or payment", before, after)
         } finally {
@@ -5883,7 +5883,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
             instrumentation.waitForIdleSync()
-            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 × $productName") })
+            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 units × $productName") })
             instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
             instrumentation.waitForIdleSync()
             assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any {
@@ -5893,7 +5893,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync { quantityButton("Increase").performClick() }
             instrumentation.waitForIdleSync()
-            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 × $productName") })
+            assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("3 units × $productName") })
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
@@ -5933,7 +5933,7 @@ class SqliteCounterPersistenceTest {
             }
             instrumentation.waitForIdleSync()
             var views = descendants(activity.window.decorView)
-            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $name") })
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 units × $name") })
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("Scanned $name") })
 
             instrumentation.runOnMainSync {
@@ -5943,7 +5943,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             views = descendants(activity.window.decorView)
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("No unique active product matches this code") })
-            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $name") })
+            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("1 units × $name") })
             val check = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             assertTrue("Scanning selects cart items only; checkout alone commits a sale", check.allOrders().isEmpty())
             assertEquals(2, check.stockLevels()[id])
@@ -6010,7 +6010,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             fun descendants(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
             var views = descendants(activity.window.decorView)
-            assertTrue("The camera result must resolve through the configured catalogue", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+            assertTrue("The camera result must resolve through the configured catalogue", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 units × $productName") })
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("Scanned $productName") })
 
             instrumentation.runOnMainSync {
@@ -6022,7 +6022,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             views = descendants(activity.window.decorView)
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("No unique active product matches this code") })
-            assertTrue("An unknown scan must not discard the existing draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+            assertTrue("An unknown scan must not discard the existing draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 units × $productName") })
 
             instrumentation.runOnMainSync {
                 activity.handleCameraScanResult(
@@ -6033,7 +6033,7 @@ class SqliteCounterPersistenceTest {
             instrumentation.waitForIdleSync()
             views = descendants(activity.window.decorView)
             assertTrue("A denied/cancelled camera result explains the typed fallback", views.filterIsInstance<TextView>().any { it.text.toString().contains("Camera permission was denied") })
-            assertTrue("A denied/cancelled camera result must preserve the draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 × $productName") })
+            assertTrue("A denied/cancelled camera result must preserve the draft", views.filterIsInstance<TextView>().any { it.text.toString().contains("1 units × $productName") })
             val verification = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
             assertTrue("Scanning stages a draft; normal checkout is still required", verification.allOrders().isEmpty())
             assertEquals(2, verification.stockLevels()[productId])
