@@ -14,6 +14,10 @@ The most recent broad connected Android attempt did not finish: it was interrupt
 
 Reran the serial-pinned API 37 suite using the booted isolated AVD. The run ended after 17m02s when ADB lost the emulator during cleanup. Its captured partial JUnit result is **32 tests: 18 passed, 14 failed, 0 errors, 0 skipped**. Multiple failures show `Pixel Launcher isn't responding` and activity launch timeouts; the remainder were UI assertions after the emulator had become unresponsive. This is a failed/incomplete suite attempt, not a product qualification. XML/HTML evidence and follow-up are in [the emulator-loss report](ANDROID-REGRESSION-ATTEMPT-2026-11-26-EMULATOR-LOSS.md) and ignored evidence at `../test-evidence/2026-11-26/full-regression-emulator-failure/`. The last full green 151/151 remains historical and is not current-source evidence.
 
+## CAT-052 backend integration follow-up — 26 November 2026
+
+The current backend suite was run against a new disposable PostgreSQL 17 instance with migrations 001–004, runtime grants, and the restricted application role. All **39/39** tests passed with **0 skipped**. Test output: `../test-evidence/2026-11-26/backend-postgres-39-of-39.log`; setup and limits: [CAT-052 report](CAT-052-POSTGRES-CURRENT-SUITE-REPORT-2026-11-26.md). The disposable container is stopped. This does not close CAT-052 production, full financial-ledger, multi-device conflict, or operational-security gaps.
+
 ## Six-wave status
 
 | Wave | Current state | Remaining qualification |

@@ -1270,3 +1270,7 @@ Reran local checks from the clean worktree: prototype Node 52/52; backend Node 3
 ## 26 November 2026 - current-source Android regression attempt
 
 Reran the serial-pinned API 37 connected suite. It ended after 17m02s when ADB lost the emulator during cleanup. Partial JUnit: 32 tests, 18 passed, 14 failed, 0 errors, 0 skipped; multiple failures show Pixel Launcher ANRs and activity launch timeouts. The run is failed/incomplete and does not qualify the current source. See `specs/ANDROID-REGRESSION-ATTEMPT-2026-11-26-EMULATOR-LOSS.md` and ignored local XML/HTML evidence under `test-evidence/2026-11-26/full-regression-emulator-failure/`.
+
+## 26 November 2026 - CAT-052 current PostgreSQL suite
+
+Applied migrations 001–004 and runtime grants to a fresh disposable PostgreSQL 17 container; ran all backend tests with a restricted runtime role. Result: **39/39 passed, 0 skipped**. The container was stopped after the test; no unrelated container or host PostgreSQL service was used. See `specs/CAT-052-POSTGRES-CURRENT-SUITE-REPORT-2026-11-26.md`; local ignored test output is `test-evidence/2026-11-26/backend-postgres-39-of-39.log`. This remains local backend integration evidence, not production or Android live-sync qualification.
