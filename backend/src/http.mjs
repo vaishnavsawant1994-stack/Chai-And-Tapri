@@ -147,9 +147,12 @@ export function createApiServer(service) {
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/audit') {
         const shopId=url.searchParams.get('shopId');
         const limit=Number(url.searchParams.get('limit')??'100');
+        const rawBeforeRevision=url.searchParams.get('beforeRevision');
+        const beforeRevision=rawBeforeRevision===null?null:Number(rawBeforeRevision);
         if(!Number.isInteger(limit)||limit<1||limit>100) throw new ApiError(400,'invalid_audit_limit');
+        if(beforeRevision!==null&&(!Number.isSafeInteger(beforeRevision)||beforeRevision<1)) throw new ApiError(400,'invalid_audit_cursor');
         const actor=await service.authenticate(token,shopId);
-        return json(res,200,await service.shopAuditHistory(actor,limit));
+        return json(res,200,await service.shopAuditHistory(actor,limit,beforeRevision));
       }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/shifts') {
         const shopId=url.searchParams.get('shopId');

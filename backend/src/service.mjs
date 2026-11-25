@@ -670,21 +670,29 @@ export class SyncService {
     return buildProfitReadiness(activity);
   }
 
-  async shopAuditHistory(actor, limit = 100) {
+  async shopAuditHistory(actor, limit = 100, beforeRevision = null) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'invalid_audit_limit');
+    if (beforeRevision !== null && (!Number.isSafeInteger(beforeRevision) || beforeRevision < 1)) throw new ApiError(400, 'invalid_audit_cursor');
     return withTransaction(this.pool, async (c) => {
       await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
       const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
       if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
-      const result = await c.query(`SELECT e.server_revision,e.event_id,e.event_type,e.base_revision,e.envelope,e.received_at,
+      const query = `SELECT e.server_revision,e.event_id,e.event_type,e.base_revision,e.envelope,e.received_at,
         e.actor_user_id,e.actor_role,u.display_name AS actor_display_name
         FROM sync_events e LEFT JOIN users u ON u.user_id=e.actor_user_id
-        WHERE e.shop_id=$1 ORDER BY e.server_revision DESC LIMIT $2`, [actor.shop_id, limit]);
-      return buildAuditHistory({
+        WHERE e.shop_id=$1${beforeRevision === null ? '' : ' AND e.server_revision<$2'} ORDER BY e.server_revision DESC LIMIT $${beforeRevision === null ? 2 : 3}`;
+      const result = await c.query(query, beforeRevision === null
+        ? [actor.shop_id, limit + 1]
+        : [actor.shop_id, beforeRevision, limit + 1]);
+      const hasMore = result.rows.length > limit;
+      const pageRows = result.rows.slice(0, limit);
+      const nextBeforeRevision = hasMore ? Number(pageRows.at(-1)?.server_revision) : null;
+      const report = buildAuditHistory({
         shopId: actor.shop_id, shopName: shop.rows[0].display_name,
-        serverRevision: Number(shop.rows[0].server_revision), events: result.rows.reverse(), limit
+        serverRevision: Number(shop.rows[0].server_revision), events: pageRows.reverse(), limit
       });
+      return { ...report, hasMore, nextBeforeRevision };
     });
   }
 

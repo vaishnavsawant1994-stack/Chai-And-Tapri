@@ -9,6 +9,7 @@ import { formatQuantity } from './quantity-format.mjs';
   let session = null;
   let activeShopId = null;
   let activeView = 'overview';
+  let auditBeforeRevision = null;
   const reportSnapshots = new Map();
 
   const money = (paise) => new Intl.NumberFormat('en-IN', {
@@ -510,14 +511,19 @@ import { formatQuantity } from './quantity-format.mjs';
     }
   }
 
-  async function loadAuditHistory() {
+  async function loadAuditHistory({ append = false } = {}) {
     if (!session || !activeShopId) return;
     $('refresh-button').disabled = true;
+    const olderButton = $('audit-older-button');
+    olderButton.disabled = true;
     invalidateReport('audit');
     setStatus($('audit-status'), 'Loading accepted event metadata…');
     try {
       const limit = $('audit-limit').value;
-      const data = await request(`/v1/dashboard/audit?shopId=${encodeURIComponent(activeShopId)}&limit=${encodeURIComponent(limit)}`, {
+      const beforeRevision = append ? auditBeforeRevision : null;
+      if (append && beforeRevision === null) return;
+      const cursor = beforeRevision === null ? '' : `&beforeRevision=${encodeURIComponent(beforeRevision)}`;
+      const data = await request(`/v1/dashboard/audit?shopId=${encodeURIComponent(activeShopId)}&limit=${encodeURIComponent(limit)}${cursor}`, {
         headers: { authorization: `Bearer ${session.token}` }
       });
       $('audit-scope').textContent = `${data.evidence.scope} ${data.evidence.source}`;
@@ -530,14 +536,18 @@ import { formatQuantity } from './quantity-format.mjs';
         return row;
       });
       if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 8; cell.className = 'empty-row'; cell.textContent = 'No server-accepted events are available yet.'; row.append(cell); rows.push(row); }
-      $('audit-rows').replaceChildren(...rows);
+      if (append) $('audit-rows').append(...rows);
+      else $('audit-rows').replaceChildren(...rows);
+      auditBeforeRevision = data.nextBeforeRevision ?? null;
+      olderButton.hidden = !data.hasMore || auditBeforeRevision === null;
       $('audit-evidence-list').replaceChildren(...Object.values(data.evidence).map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
-      setStatus($('audit-status'), `${data.returnedEventCount} accepted events loaded through server revision ${data.serverRevision}.`, 'success');
+      const displayed = $('audit-rows').querySelectorAll('tr:not(.empty-row)').length;
+      setStatus($('audit-status'), `${displayed} accepted events displayed through server revision ${data.serverRevision}${data.hasMore ? '; older events are available.' : '.'}`, 'success');
       captureReport('audit', 'Accepted event history', 'audit-scope', null, ['audit-evidence-list']);
     } catch (error) {
       setStatus($('audit-status'), showError(error), 'error');
       if (/unauthorized|shop_access_denied|owner_access_required/.test(showError(error))) signOutLocally();
-    } finally { $('refresh-button').disabled = false; }
+    } finally { $('refresh-button').disabled = false; olderButton.disabled = false; }
   }
 
   async function loadShifts() {
@@ -738,6 +748,7 @@ import { formatQuantity } from './quantity-format.mjs';
   $('cashflow-tab').addEventListener('click', () => { setView('cashflow'); loadCashflow(); });
   $('profit-tab').addEventListener('click', () => { setView('profit'); loadProfitReadiness(); });
   $('audit-tab').addEventListener('click', () => { setView('audit'); loadAuditHistory(); });
+  $('audit-older-button').addEventListener('click', () => loadAuditHistory({ append: true }));
   $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
   $('staff-tab').addEventListener('click', () => { setView('staff'); loadStaff(); });
   $('staff-invite-form').addEventListener('submit', async (event) => {

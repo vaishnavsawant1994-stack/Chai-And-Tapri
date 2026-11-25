@@ -49,6 +49,13 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
     assert.equal(shiftReport.shiftCount,1);
     assert.equal(shiftReport.shifts[0].shiftId,shift.shiftId);
     assert.match(shiftReport.evidence.limitation,/not attendance/);
+    const latestAuditPage=await service.shopAuditHistory(actor,1);
+    assert.equal(latestAuditPage.hasMore,true);
+    assert.equal(latestAuditPage.events[0].serverRevision,2);
+    assert.equal(latestAuditPage.nextBeforeRevision,2);
+    const olderAuditPage=await service.shopAuditHistory(actor,1,latestAuditPage.nextBeforeRevision);
+    assert.equal(olderAuditPage.hasMore,false);
+    assert.equal(olderAuditPage.events[0].serverRevision,1);
     const closeEvent={type:'business.command.v1',schemaVersion:1,eventId:randomUUID(),commandId:`shift-close-${randomUUID()}`,businessId:enrollment.businessId,shopId:enrollment.shopId,deviceId,baseRevision:2,payload:{...projectionDelta([]),staffShifts:[{...shift,closedAtEpochMs:Date.now()+1000,expectedCashPaise:900,closingCashPaise:850}]}};
     assert.equal((await service.submitEvents(actor,[closeEvent])).results[0].status,'accepted');
     await assert.rejects(service.submitEvents(actor,[{...closeEvent,eventId:randomUUID(),commandId:`shift-alter-${randomUUID()}`,baseRevision:3,payload:{...closeEvent.payload,staffShifts:[{...closeEvent.payload.staffShifts[0],closingCashPaise:900}]}}]),(e)=>e instanceof ApiError&&e.code==='staff_shift_closed_identity_conflict');
