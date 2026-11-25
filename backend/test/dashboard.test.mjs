@@ -471,6 +471,7 @@ test('owner overview route requires authentication and serves only owner static 
     async shopRecordedMoneyMovements(actor, days) { return { ...fixture, shopId: actor.shop_id, days, daily: [], totals: {} }; },
     async shopProfitReadiness(actor, days) { return { ...fixture, shopId: actor.shop_id, days, status: 'not_calculable', figures: { grossProfitPaise: null, operatingProfitPaise: null } }; },
     async shopAuditHistory(actor, limit, beforeRevision) { return { ...fixture, shopId: actor.shop_id, limit, beforeRevision, hasMore: beforeRevision === null, nextBeforeRevision: beforeRevision === null ? 4 : null, returnedEventCount: 0, events: [], evidence: { limitation: 'not a complete employee audit trail' } }; },
+    async shopSyncConflicts(actor, limit) { return { ...fixture, shopId: actor.shop_id, limit, openConflictCount: 0, hasMore: false, conflicts: [], evidence: { action: 'review only' } }; },
     async shopStaffShifts(actor) { return { ...fixture, shopId: actor.shop_id, shiftCount: 0, shifts: [], evidence: { limitation: 'not attendance or payroll' } }; },
     async shopStaffMembers(actor) { return { shopId: actor.shop_id, members: [] }; },
     async shopStaffInvitations(actor) { return { shopId: actor.shop_id, invitations: [] }; },
@@ -511,6 +512,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /Profit readiness/);
   assert.match(pageText, /id="profit-missing-list"/);
   assert.match(pageText, /Accepted event history/);
+  assert.match(pageText, /Sync conflicts/);
+  assert.match(pageText, /id="conflicts-rows"/);
   assert.match(pageText, /Shift &amp; drawer sessions/);
   assert.match(pageText, /id="shifts-rows"/);
   assert.match(pageText, /Staff access/);
@@ -535,6 +538,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/dashboard\/cashflow/);
   assert.match(scriptText, /\/v1\/dashboard\/profit-readiness/);
   assert.match(scriptText, /\/v1\/dashboard\/audit/);
+  assert.match(scriptText, /\/v1\/dashboard\/conflicts/);
   assert.match(scriptText, /beforeRevision/);
   assert.match(pageText, /id="audit-older-button"/);
   assert.match(scriptText, /\/v1\/dashboard\/shifts/);
@@ -556,6 +560,13 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal(denied.status, 401);
   const deniedActivity = await fetch(`${base}/v1/dashboard/activity?shopId=shop-1&days=7`);
   assert.equal(deniedActivity.status, 401);
+  const deniedConflicts = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1`);
+  assert.equal(deniedConflicts.status, 401);
+  const invalidConflictLimit = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1&limit=101`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(invalidConflictLimit.status, 400);
+  const conflictResponse = await fetch(`${base}/v1/dashboard/conflicts?shopId=shop-1&limit=10`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(conflictResponse.status, 200);
+  assert.equal((await conflictResponse.json()).openConflictCount, 0);
   assert.equal((await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`)).status, 401);
   const insights = await fetch(`${base}/v1/dashboard/insights?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
   assert.equal(insights.status, 200);
@@ -627,6 +638,6 @@ test('owner overview route requires authentication and serves only owner static 
   assert.equal((await createdInvite.json()).invitationToken.length, 43);
   const invalidInviteShape = await fetch(`${base}/v1/staff/invitations`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', email: 'staff@example.test', role: 'owner', permission: 'all' }) });
   assert.equal(invalidInviteShape.status, 400);
-  assert.equal(calls.length, 26);
+  assert.equal(calls.length, 28);
   assert.ok(calls.every((call) => call.shopId === 'shop-1'));
 });
