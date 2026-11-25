@@ -39,6 +39,7 @@ class ExpensesActivity : Activity() {
             content.addView(label("Operating Expenses | CT-25", 24f))
             val deviceZone = ZoneId.systemDefault()
             content.addView(label("Local lifetime total: ${money(current.totalExpensesPaise())}. Daily grouping uses this device's clock and timezone (${deviceZone.id}); timestamps are not independently verified. Cash entries are staff-declared.", 14f))
+            content.addView(label("Operator IDs come from the device-local audit session; they do not independently prove who performed the action.", 13f))
             status = label("", 14f); content.addView(status)
             content.addView(button("Record operating expense") { askExpense() })
             content.addView(label("Expense history", 19f))
@@ -51,9 +52,11 @@ class ExpensesActivity : Activity() {
                 val date = summary.localDate?.toString() ?: "Date unavailable"
                 content.addView(label("$date | ${summary.recordCount} record${if (summary.recordCount == 1) "" else "s"} | ${money(summary.totalPaise)}", 14f))
             }
+            val auditByCommandId = current.auditRecords().associateBy { it.commandId }
             entries.forEach { expense ->
                 val recordedDate = expense.recordedAtEpochMs?.takeIf { it > 0 }?.let { java.time.Instant.ofEpochMilli(it).atZone(deviceZone).toLocalDate().toString() } ?: "date unavailable"
-                content.addView(label("$recordedDate | ${expense.category} | ${money(expense.amountPaise.toLong())} | ${expense.method} | ${expense.status}${if (expense.note.isBlank()) "" else " | ${expense.note}"}", 14f))
+                val actor = auditByCommandId[expense.expenseId]?.actorId?.takeIf { it.isNotBlank() } ?: "not recorded"
+                content.addView(label("$recordedDate | ${expense.category} | ${money(expense.amountPaise.toLong())} | ${expense.method} | ${expense.status} | operator ID: $actor${if (expense.note.isBlank()) "" else " | ${expense.note}"}", 14f))
             }
             content.addView(label("Supplier purchases and supplier payments are tracked separately. Cash expenses recorded during an open CT-26 drawer session reduce that session's expected cash. Do not also record the same expense as a separate cash-out movement.", 13f))
             content.addView(button("Back") { finish() })

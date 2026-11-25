@@ -1207,3 +1207,7 @@ Full-regression follow-up: the post-change `connectedDebugAndroidTest` run stall
 ## CT-24 repayment receipt continuation — 25 November 2026
 
 Cash/UPI repayment screens now display a local receipt with tender evidence, allocation by credit order, and remaining balance. Receipt construction checks that before/after receivable deltas equal the committed repayment; mismatch suppresses the receipt. UPI is labeled staff-declared, not provider-verified. Verification: Kotlin JVM 94/94; focused API 37 receipt UI test 1/1; prototype Node 52/52; backend no-DB suite 33 passed / 6 PostgreSQL-dependent skipped; `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` passed (lint 0 errors / 189 warnings). Broad Android regression remains incomplete after AVD launcher/package-service failures; see `specs/CT-24-UPI-CUSTOMER-REPAYMENT-REPORT-2026-11-25.md`.
+
+## CT-25 expense operator attribution — 25 November 2026
+
+Expense history now shows the device-local audit actor ID associated with each expense; legacy unattributed records are explicit. The screen states these IDs are not independent identity proof. No schema migration was needed. Focused API 37 emulator test passed 1/1; Kotlin JVM 94/94; debug/test APK builds and lint passed (0 errors / 189 warnings). Node/backend were not rerun for this Android-only display change. Report: `specs/CT-25-EXPENSE-OPERATOR-ATTRIBUTION-REPORT-2026-11-25.md`.

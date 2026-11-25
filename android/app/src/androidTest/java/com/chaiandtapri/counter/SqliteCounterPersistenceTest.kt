@@ -3229,6 +3229,33 @@ class SqliteCounterPersistenceTest {
         context.deleteDatabase("chai_tapri_counter.db")
     }
 
+    @Test fun expenseHistoryShowsDeviceLocalAuditActorWithIdentityLimit() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        var activity: ExpensesActivity? = null
+        LocalSessionState.establish("Synthetic Expense Owner")
+        try {
+            CounterModel(SqliteCounterPersistence(context)).use { model ->
+                assertTrue(model.recordExpense("wages", 1_250, "cash", "synthetic operator attribution", "expense-actor-ui").startsWith("Expense recorded"))
+                assertEquals("local-owner", model.auditRecords().single { it.commandId == "expense-actor-ui" }.actorId)
+            }
+            activity = instrumentation.startActivitySync(Intent(context, ExpensesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as ExpensesActivity
+            val strings = mutableListOf<String>()
+            fun collect(view: View) {
+                if (view is TextView) strings += view.text.toString()
+                if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+            }
+            collect(activity!!.findViewById(android.R.id.content))
+            assertTrue(strings.any { it.contains("operator ID: local-owner") && it.contains("wages") })
+            assertTrue(strings.any { it.contains("do not independently prove who performed the action") })
+        } finally {
+            activity?.let { instrumentation.runOnMainSync { it.finish() } }
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun cashDrawerSessionAndReconciliationPersistAndRenderOnScreen() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

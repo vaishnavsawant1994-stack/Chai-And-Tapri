@@ -91,3 +91,7 @@ Full regression attempt follow-up: `connectedDebugAndroidTest` did not complete 
 ## CT-24 repayment receipt follow-up — 25 November 2026
 
 Repayment UI now displays the committed amount and method, per-order allocation, remaining customer balance and evidence limits. A pure formatter refuses to produce a receipt when ledger deltas fail reconciliation. Verification: Kotlin JVM 94/94; focused API 37 receipt flow 1/1; Node 52/52; backend no-DB 33 passed / 6 PostgreSQL-dependent skipped; debug/test APK builds and lint passed (0 errors / 189 warnings). The broad Android suite remains incomplete; a focused rerun passed after restarting the disposable AVD. Details: `CT-24-UPI-CUSTOMER-REPAYMENT-REPORT-2026-11-25.md`.
+
+## CT-25 expense actor display — 25 November 2026
+
+Expense history now presents the existing local audit actor ID next to each expense and marks legacy/unattributed rows as not recorded. The disclosure states the actor ID is not independent proof of human identity. Focused API 37 UI test 1/1 passed; Kotlin JVM 94/94; debug/test APK builds and lint passed (0 errors / 189 warnings). Node/backend suites were not rerun for this Android-only display change. Full details: `CT-25-EXPENSE-OPERATOR-ATTRIBUTION-REPORT-2026-11-25.md`.

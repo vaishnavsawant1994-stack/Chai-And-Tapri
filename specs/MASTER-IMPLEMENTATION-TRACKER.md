@@ -828,3 +828,7 @@ Full Android regression follow-up: the post-change connected run stalled on the 
 ## CT-24 repayment receipt — 25 November 2026
 
 Both customer-credit screens now show an allocation receipt after a successful cash/UPI repayment. The receipt uses the committed payment method/status, computes order-level deltas from before/after credit entries, displays remaining balance, and is suppressed unless the allocation sum reconciles to the payment. UPI remains staff-declared and explicitly unverified. Kotlin JVM 94/94, focused API 37 UI instrumentation 1/1, Node prototype 52/52, backend no-DB 33 pass / 6 DB-dependent skips, APK builds and lint pass (0 lint errors / 189 warnings). Full Android suite was not qualified in this run; see `CT-24-UPI-CUSTOMER-REPAYMENT-REPORT-2026-11-25.md`.
+
+## CT-25 expense actor display — 25 November 2026
+
+Expense history joins each expense to its local audit record by command ID and displays the recorded operator ID, or `not recorded`. It clearly states that this is device-local audit attribution and not independent human identity verification. Verification: focused API 37 test 1/1; Kotlin JVM 94/94; APK tasks and lint passed (0 errors / 189 warnings). Node/backend unchanged and not rerun. See `CT-25-EXPENSE-OPERATOR-ATTRIBUTION-REPORT-2026-11-25.md`. CT-25 remains partial.
