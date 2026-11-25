@@ -1065,10 +1065,11 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun recordCashUpiPendingSplit(orderNumber: Int, cashPaise: Int, commandId: String, expectedRevision: Int? = null): String =
         apply(commandId, ProposedCommand("cash_upi_pending_split", orderNumber, "Record cash plus UPI pending split", amountPaise = cashPaise, expectedRevision = expectedRevision))
 
-    fun repayCredit(customerId: String, amountPaise: Int, commandId: String): String {
+    fun repayCredit(customerId: String, amountPaise: Int, commandId: String, paymentMethod: String = "cash"): String {
         if (commandId.isBlank()) return "Command ID is required."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         if (customerId.isBlank() || amountPaise <= 0) return "Customer and positive repayment amount are required."
+        if (paymentMethod !in setOf("cash", "upi")) return "Repayment method must be cash or UPI. No change made."
         val balance=creditBalance(customerId)
         if (amountPaise>balance) return "Repayment exceeds customer balance. No change made."
         val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
@@ -1088,7 +1089,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             remaining-=allocation
         }
         repayments += CreditRepayment(commandId,customerId,amountPaise)
-        paymentEntries += PaymentEntry(commandId, null, customerId, amountPaise, "cash", "staff_declared", "customer_repayment", drawerSessionId = activeCashDrawer()?.sessionId)
+        paymentEntries += PaymentEntry(commandId, null, customerId, amountPaise, paymentMethod, "staff_declared", "customer_repayment", drawerSessionId = if (paymentMethod == "cash") activeCashDrawer()?.sessionId else null)
         return commitMutation(before,commandId,"Repayment ${money(amountPaise)} allocated to $customerId.","customer.credit_repaid $customerId ${amountPaise}p",affectedOrders=affected)
     }
 

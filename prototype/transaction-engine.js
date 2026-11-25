@@ -433,7 +433,7 @@
       const payload = command.payload || {};
       const customer = next.customers[payload.customerId];
       if (!customer) throw error('CUSTOMER_NOT_FOUND', 'Choose a valid customer account.');
-      if (payload.paymentMethod !== 'cash') throw error('UNSUPPORTED_REPAYMENT_METHOD', 'This prototype supports staff-declared cash repayments only.');
+      if (!['cash', 'upi'].includes(payload.paymentMethod)) throw error('UNSUPPORTED_REPAYMENT_METHOD', 'Choose cash or staff-declared UPI for the repayment.');
       const amountPaise = payload.amountPaise;
       if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0 || amountPaise > customer.balancePaise) throw error('PAYMENT_MISMATCH', 'Repayment must be positive and cannot exceed this customer’s outstanding balance.');
       let remaining = amountPaise;
@@ -464,7 +464,7 @@
       const now = command.occurredAt || new Date().toISOString();
       const actorId = command.actorId || 'demo-owner';
       next.receivables.push({ id: `${key}-repayment`, customerId: customer.id, amountPaise: -amountPaise, type: 'repayment', allocations, actorId, at: now });
-      next.payments.push({ id: `${key}-payment`, customerId: customer.id, amountPaise, method: 'cash', status: 'staff_declared', evidence: 'staff_declaration', type: 'customer_repayment', allocations, actorId, at: now });
+      next.payments.push({ id: `${key}-payment`, customerId: customer.id, amountPaise, method: payload.paymentMethod, status: 'staff_declared', evidence: 'staff_declaration', type: 'customer_repayment', allocations, actorId, at: now });
       next.events.push({ id: `${key}-event`, type: 'customer.repayment_recorded', customerId: customer.id, amountPaise, allocations, actorId, source: command.source || 'touch', at: now });
       return { status: 'repayment_recorded', customerId: customer.id, amountPaise, balancePaise: customer.balancePaise, allocations };
     }

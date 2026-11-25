@@ -493,13 +493,14 @@ test('customer repayments allocate to udhar entries and update outstanding balan
   assert.equal(snapshot.sales[0].paidPaise, 500);
   assert.equal(snapshot.receivables[0].settledPaise, 500);
    assert.equal(snapshot.sales[0].paymentState, 'split');
-  tx.execute({ type: 'customer.record_repayment', idempotencyKey: 'repayment-two', payload: { customerId: 'ramesh', amountPaise: 1500, paymentMethod: 'cash' } });
+  tx.execute({ type: 'customer.record_repayment', idempotencyKey: 'repayment-two', payload: { customerId: 'ramesh', amountPaise: 1500, paymentMethod: 'upi' } });
   snapshot = tx.snapshot();
   assert.equal(snapshot.customers.ramesh.balancePaise, 0);
   assert.equal(snapshot.sales[0].creditPaise, 0);
   assert.equal(snapshot.sales[0].paidPaise, 2000);
    assert.equal(snapshot.sales[0].paymentState, 'staff_declared');
   assert.equal(snapshot.payments.filter(payment => payment.type === 'customer_repayment').length, 2);
+  assert.deepEqual(snapshot.payments.filter(payment => payment.type === 'customer_repayment').map(payment => [payment.method, payment.status]), [['cash', 'staff_declared'], ['upi', 'staff_declared']]);
 });
 
 test('concurrent orders cannot both consume the same final stock', () => {

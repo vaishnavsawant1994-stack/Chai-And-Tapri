@@ -90,7 +90,7 @@ class CustomerDetailsActivity : Activity() {
                         (event.orderNumber?.let { " / order #$it" } ?: ""), 14f
                 ))
             }
-            if (due > 0) content.addView(button("Record cash repayment") { askRepayment(due) })
+            if (due > 0) content.addView(button("Record repayment") { chooseRepaymentMethod(due) })
             content.addView(button("Back") { finish() })
         } catch (error: Exception) {
             content.addView(label("Customer details could not be opened. No financial record was changed.", 17f))
@@ -99,20 +99,28 @@ class CustomerDetailsActivity : Activity() {
         }
     }
 
-    private fun askRepayment(duePaise: Int) {
+    private fun chooseRepaymentMethod(duePaise: Int) {
+        AlertDialog.Builder(this).setTitle("Repayment method")
+            .setItems(arrayOf("Cash (staff-declared)", "UPI (staff-declared, not verified)")) { _, which ->
+                askRepayment(duePaise, if (which == 0) "cash" else "upi")
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun askRepayment(duePaise: Int, method: String) {
+        val methodLabel = if (method == "cash") "cash" else "UPI (staff-declared; not provider-verified)"
         val amount = EditText(this).apply {
-            hint = "Cash amount in rupees; due ${money(duePaise)}"
+            hint = "$methodLabel amount in rupees; due ${money(duePaise)}"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
             setSingleLine(true)
         }
-        AlertDialog.Builder(this).setTitle("Record cash repayment")
-            .setMessage("Staff-declared cash repayment for $customerId. This does not verify external payment.")
+        AlertDialog.Builder(this).setTitle("Record $methodLabel repayment")
+            .setMessage("Staff-declared $methodLabel repayment for $customerId. This does not verify external payment.")
             .setView(amount).setNegativeButton("Cancel", null).setPositiveButton("Record repayment") { _, _ ->
                 val paise = runCatching { amount.text.toString().trim().toBigDecimal().movePointRight(2).intValueExact() }
                     .getOrNull()?.takeIf { it in 1..duePaise }
                 if (paise == null) render("Enter a valid positive amount no greater than the outstanding balance. No change was made.")
                 else {
-                    val result = model?.repayCredit(customerId, paise, "ct22-repayment-${UUID.randomUUID()}")
+                    val result = model?.repayCredit(customerId, paise, "ct22-repayment-${UUID.randomUUID()}", method)
                     render(result ?: "Repayment was not recorded.")
                 }
             }.show()

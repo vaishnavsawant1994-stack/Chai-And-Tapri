@@ -37,7 +37,7 @@ class CustomerCreditActivity : Activity() {
             val current = CounterModel(SqliteCounterPersistence(this), requireConfiguredProducts = true)
             model = current
             content.addView(label("Customers & Udhar Ledger · CT-21/23", 24f))
-            content.addView(label("Local encrypted customer records only. Repayments are staff-declared cash. Contact information is stored only with recorded consent; messaging is not available.", 14f))
+            content.addView(label("Local encrypted customer records only. Cash and UPI repayments are staff-declared; UPI is not provider-verified. Contact information is stored only with recorded consent; messaging is not available.", 14f))
             message?.let { content.addView(label(it, 14f)) }
             val allCredits = current.customerCredits()
             val accounts = allCredits.groupBy { it.customerId }.toSortedMap()
@@ -80,7 +80,7 @@ class CustomerCreditActivity : Activity() {
                     startActivity(android.content.Intent(this, CustomerDetailsActivity::class.java)
                         .putExtra(CustomerDetailsActivity.EXTRA_CUSTOMER_ID, customerId))
                 })
-                if (balance > 0) card.addView(button("Record cash repayment") { askRepayment(customerId, balance) })
+                if (balance > 0) card.addView(button("Record repayment") { chooseRepaymentMethod(customerId, balance) })
                 content.addView(card, matchWidth())
                 accountCards += customerId to card
             }
@@ -158,20 +158,28 @@ class CustomerCreditActivity : Activity() {
 
     private fun maskPhone(phone: String): String = "••••••${phone.takeLast(4)}"
 
-    private fun askRepayment(customerId: String, balancePaise: Int) {
+    private fun chooseRepaymentMethod(customerId: String, balancePaise: Int) {
+        AlertDialog.Builder(this).setTitle("Repayment method")
+            .setItems(arrayOf("Cash (staff-declared)", "UPI (staff-declared, not verified)")) { _, which ->
+                askRepayment(customerId, balancePaise, if (which == 0) "cash" else "upi")
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun askRepayment(customerId: String, balancePaise: Int, method: String) {
+        val methodLabel = if (method == "cash") "cash" else "UPI (staff-declared; not provider-verified)"
         val amount = EditText(this).apply {
-            hint = "Cash amount in rupees (due ${money(balancePaise)})"
+            hint = "$methodLabel amount in rupees (due ${money(balancePaise)})"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
             setSingleLine(true)
         }
-        AlertDialog.Builder(this).setTitle("Record cash repayment")
-            .setMessage("This records staff-declared cash for $customerId; it does not verify external payment.")
+        AlertDialog.Builder(this).setTitle("Record $methodLabel repayment")
+            .setMessage("This records a staff-declared $methodLabel repayment for $customerId. No external payment is verified.")
             .setView(amount).setNegativeButton("Cancel", null).setPositiveButton("Record repayment") { _, _ ->
                 val paise = parsePaise(amount.text.toString())
                 if (paise == null) content.addView(label("Enter a positive amount with no fractions smaller than one paisa. No change made.", 14f), 0)
                 else {
                     val current = model
-                    val result = current?.repayCredit(customerId, paise, "ui-repayment-${java.util.UUID.randomUUID()}")
+                    val result = current?.repayCredit(customerId, paise, "ui-repayment-${java.util.UUID.randomUUID()}", method)
                     render()
                     content.addView(label(result ?: "Repayment was not recorded.", 14f), 1)
                 }

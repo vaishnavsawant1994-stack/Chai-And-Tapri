@@ -1158,10 +1158,14 @@ class CounterModelTest {
         assertTrue(model.repayCredit("customer-1",500,"repay-1").contains("allocated"))
         assertEquals(1000, model.creditBalance("customer-1"))
         assertEquals(Payment.SPLIT, model.allOrders().single().payment)
-        assertTrue(model.repayCredit("customer-1",1000,"repay-2").contains("allocated"))
+        assertTrue(model.repayCredit("customer-1",1000,"repay-2", "upi").contains("allocated"))
         assertEquals(0, model.creditBalance("customer-1"))
         assertEquals(Payment.STAFF_DECLARED, model.allOrders().single().payment)
         assertTrue(model.repayCredit("customer-1",1,"overpay").contains("exceeds"))
+        val repayments = model.paymentHistory().filter { it.kind == "customer_repayment" }
+        assertEquals(listOf("cash", "upi"), repayments.map { it.method })
+        assertTrue(repayments.all { it.status == "staff_declared" })
+        assertTrue(model.repayCredit("customer-1", 1, "invalid-method", "card").contains("must be cash or UPI"))
     }
 
     @Test fun paymentScreenSplitCollectionAtomicallyPostsCashAndUdhar() {

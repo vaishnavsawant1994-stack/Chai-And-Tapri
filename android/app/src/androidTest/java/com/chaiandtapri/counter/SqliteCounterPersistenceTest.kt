@@ -3733,7 +3733,8 @@ class SqliteCounterPersistenceTest {
                 }
                 throw AssertionError("Customer repayment UI element not found: text=$textPrefix hint=$hintPrefix")
             }
-            assertTrue(findNode(textPrefix = "Record cash repayment").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(findNode(textPrefix = "Record repayment").performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            assertTrue(findNode(textPrefix = "Cash (staff-declared)").performAction(AccessibilityNodeInfo.ACTION_CLICK))
             val amountField = findNode(hintPrefix = "Cash amount in rupees")
             assertTrue("Repayment amount editor should accept focus", amountField.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             instrumentation.waitForIdleSync()
@@ -5541,8 +5542,9 @@ class SqliteCounterPersistenceTest {
                     throw AssertionError("Customer repayment control not found: ${prefix ?: hint}")
                 }
                 fun clickCustomer(prefix: String) = assertTrue("Could not tap $prefix", awaitCustomerNode(prefix = prefix).performAction(AccessibilityNodeInfo.ACTION_CLICK))
-                clickCustomer("Record cash repayment")
-                val repaymentAmount = awaitCustomerNode(hint = "Cash amount in rupees")
+                clickCustomer("Record repayment")
+                clickCustomer("UPI (staff-declared, not verified)")
+                val repaymentAmount = awaitCustomerNode(hint = "UPI (staff-declared; not provider-verified) amount in rupees")
                 assertTrue("Repayment amount should accept entry", repaymentAmount.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 assertTrue("Repayment amount should save text", repaymentAmount.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "4.00")
@@ -5567,9 +5569,9 @@ class SqliteCounterPersistenceTest {
                 assertEquals(600, reconciled.creditBalance("split_ui_ravi"))
                 assertEquals(2, reconciled.stockLevels()["split_ui_tea"])
                 assertEquals(1500L, reconciled.localBusinessSummary().recordedSalesPaise)
-                assertEquals(900L, reconciled.localBusinessSummary().cashRecordedPaise)
+                assertEquals("UPI repayment must not inflate the physical cash drawer", 500L, reconciled.localBusinessSummary().cashRecordedPaise)
                 assertEquals(600L, reconciled.localBusinessSummary().customerReceivablePaise)
-                assertEquals(1, reconciled.paymentHistory().count { it.kind == "customer_repayment" && it.customerId == "split_ui_ravi" && it.amountPaise == 400 && it.method == "cash" && it.status == "staff_declared" })
+                assertEquals(1, reconciled.paymentHistory().count { it.kind == "customer_repayment" && it.customerId == "split_ui_ravi" && it.amountPaise == 400 && it.method == "upi" && it.status == "staff_declared" })
                 assertTrue(reconciled.auditEvents().any { it.contains("customer.credit_repaid split_ui_ravi 400p") })
                 reconciled.close()
             } finally {
