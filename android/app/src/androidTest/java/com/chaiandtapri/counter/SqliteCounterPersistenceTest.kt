@@ -1149,6 +1149,93 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun paymentScreenConfirmsAndPersistsCashPlusObservedUpiSplit() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        val setup = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(setup.saveProduct(TapriProduct("chai", "Test Chai", "Tea", 1500, priceConfirmed = true)).contains("Product saved"))
+        assertTrue(setup.confirmOpeningStock("chai", 10, "CT-10 observed UPI split fixture", "ct10-observed-split-stock").contains("10 units"))
+        assertTrue(setup.apply("ct10-observed-split-create", ProposedCommand("create", null, "Create synthetic order", "chai")).contains("created"))
+        assertTrue(setup.apply("ct10-observed-split-ready", ProposedCommand("ready", 12, "Ready order")).contains("ready"))
+        assertTrue(setup.apply("ct10-observed-split-given", ProposedCommand("given", 12, "Hand over order")).contains("given"))
+        val order = setup.allOrders().single()
+        val stockBefore = setup.stockLevels()["chai"]
+        setup.close()
+
+        val activity = instrumentation.startActivitySync(Intent(context, PaymentActivity::class.java)
+            .putExtra(PaymentActivity.EXTRA_ORDER_NUMBER, order.number).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            fun awaitNode(prefix: String? = null, hint: String? = null, className: String? = null): AccessibilityNodeInfo {
+                var lastTree = "<no active window>"
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    var selected: AccessibilityNodeInfo? = null
+                    if (root != null) {
+                        fun collect(node: AccessibilityNodeInfo) {
+                            if (selected == null && (if (prefix != null) node.text?.toString()?.startsWith(prefix, true) == true
+                                else if (hint != null) node.hintText?.toString()?.equals(hint, true) == true
+                                else node.className?.toString() == className)) selected = node
+                            for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                        }
+                        collect(root)
+                        lastTree = root.toString()
+                    }
+                    selected?.let { return it }
+                    root?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Accessibility node not found: prefix=$prefix hint=$hint class=$className; UI=$lastTree")
+            }
+            fun clickText(prefix: String) {
+                val node = awaitNode(prefix = prefix)
+                Thread.sleep(300)
+                val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+                assertFalse("No visible bounds for $prefix", bounds.isEmpty)
+                val now = android.os.SystemClock.uptimeMillis()
+                val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+                val up = MotionEvent.obtain(now, now + 80, MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+                try {
+                    assertTrue(instrumentation.uiAutomation.injectInputEvent(down, true))
+                    assertTrue(instrumentation.uiAutomation.injectInputEvent(up, true))
+                } finally { down.recycle(); up.recycle() }
+                Thread.sleep(300)
+            }
+
+            clickText("Split cash + UPI received")
+            val input = awaitNode(hint = "Cash received in rupees", className = EditText::class.java.name)
+            assertTrue(input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "5.00")
+            }))
+            clickText("Review split")
+            assertEquals("Confirm staff-declared split", awaitNode(prefix = "Confirm staff-declared split").text.toString())
+            clickText("Record observed payments")
+
+            var result: CounterModel? = null
+            for (attempt in 0 until 100) {
+                result?.close()
+                result = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+                if (result.paymentHistory().count { it.orderNumber == order.number } == 2) break
+                Thread.sleep(100)
+            }
+            val persisted = result!!
+            val settled = persisted.allOrders().single { it.number == order.number }
+            assertEquals(0, settled.duePaise)
+            assertEquals(1500, settled.paidPaise)
+            assertEquals(Payment.STAFF_DECLARED, settled.payment)
+            assertEquals(setOf("cash", "upi"), persisted.paymentHistory().map { it.method }.toSet())
+            assertTrue(persisted.paymentHistory().all { it.status == "staff_declared" })
+            assertEquals(0, persisted.paymentHistory().count { it.status == "verified" || it.status == "pending" })
+            assertEquals(stockBefore, persisted.stockLevels()["chai"])
+            assertEquals(1, persisted.auditEvents().count { it.contains("cash_upi_received_split #${order.number}") })
+            persisted.close()
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+            Thread.sleep(250)
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun paymentScreenRecordsCashPlusUpiPendingAndResolvesItWithoutFalseVerification() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

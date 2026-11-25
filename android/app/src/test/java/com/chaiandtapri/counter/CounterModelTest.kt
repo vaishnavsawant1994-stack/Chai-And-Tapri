@@ -1261,6 +1261,60 @@ class CounterModelTest {
         assertEquals(1, model.auditEvents().count { it.startsWith("cash-upi-split ") })
     }
 
+    @Test fun observedCashAndUpiSplitPostsTwoStaffDeclaredCollectionsAtomically() {
+        val storage = MemoryPersistence()
+        val model = CounterModel(storage)
+        model.apply("cash-upi-observed-create", model.parse("Naya order, one chai")!!)
+        model.apply("cash-upi-observed-ready", model.parse("Order 12 ready hai")!!)
+        model.apply("cash-upi-observed-given", model.parse("Order 12 de diya")!!)
+        val orderBefore = model.allOrders().single()
+
+        val result = model.recordCashUpiReceivedSplit(12, 500, "cash-upi-observed-split", orderBefore.revision)
+        assertTrue("Unexpected split result: $result", result.contains("UPI not provider-verified"))
+        val settled = model.allOrders().single()
+        assertEquals(0, settled.duePaise)
+        assertEquals(1500, settled.paidPaise)
+        assertEquals(0, settled.creditPaise)
+        assertEquals(Payment.STAFF_DECLARED, settled.payment)
+        assertEquals(setOf("cash-upi-observed-split-cash", "cash-upi-observed-split-upi"), model.paymentHistory().map { it.entryId }.toSet())
+        assertEquals(500, model.paymentHistory().single { it.method == "cash" }.amountPaise)
+        assertEquals(1000, model.paymentHistory().single { it.method == "upi" }.amountPaise)
+        assertTrue(model.paymentHistory().all { it.status == "staff_declared" })
+        assertEquals(0, model.paymentHistory().count { it.status == "verified" })
+        assertEquals(1, model.auditEvents().count { it.startsWith("cash-upi-observed-split ") })
+        assertEquals("Duplicate command ignored.", model.recordCashUpiReceivedSplit(12, 500, "cash-upi-observed-split", settled.revision))
+        assertEquals(2, model.paymentHistory().size)
+    }
+
+    @Test fun observedCashAndUpiSplitRejectsInvalidStaleAndPendingOrdersAndRollsBackOnSaveFailure() {
+        val storage = MemoryPersistence()
+        val model = CounterModel(storage)
+        model.apply("cash-upi-guard-create", model.parse("Naya order, one chai")!!)
+        model.apply("cash-upi-guard-ready", model.parse("Order 12 ready hai")!!)
+        model.apply("cash-upi-guard-given", model.parse("Order 12 de diya")!!)
+        val original = model.allOrders().single()
+        assertTrue(model.recordCashUpiReceivedSplit(12, 0, "cash-upi-guard-zero", original.revision).contains("Cash must be positive"))
+        assertTrue(model.recordCashUpiReceivedSplit(12, 1500, "cash-upi-guard-full", original.revision).contains("Cash must be positive"))
+        assertTrue(model.recordCashUpiReceivedSplit(12, 500, "cash-upi-guard-stale", original.revision - 1).contains("revision conflict"))
+        assertTrue(model.recordUpiPending(12, "cash-upi-guard-pending", original.revision).contains("UPI pending"))
+        val pendingOrder = model.allOrders().single()
+        assertTrue(model.recordCashUpiReceivedSplit(12, 500, "cash-upi-guard-conflict", pendingOrder.revision).contains("no eligible balance"))
+        assertEquals(0, model.paymentHistory().count { it.status == "staff_declared" })
+
+        val failingStorage = MemoryPersistence()
+        val second = CounterModel(failingStorage)
+        second.apply("cash-upi-fail-create", second.parse("Naya order, one chai")!!)
+        second.apply("cash-upi-fail-ready", second.parse("Order 12 ready hai")!!)
+        second.apply("cash-upi-fail-given", second.parse("Order 12 de diya")!!)
+        val before = second.allOrders().single().let { it.copy(lines = it.lines.toMutableList()) }
+        val beforeEvents = second.auditEvents()
+        failingStorage.failNext = true
+        assertTrue(second.recordCashUpiReceivedSplit(12, 500, "cash-upi-fail-save", before.revision).contains("No change made"))
+        assertEquals(before, second.allOrders().single())
+        assertTrue(second.paymentHistory().isEmpty())
+        assertEquals(beforeEvents, second.auditEvents())
+    }
+
     @Test fun directUpiReceiptIsStaffDeclaredAndCannotReplacePendingAttempt() {
         val model = CounterModel()
         model.apply("direct-upi-create", model.parse("Naya order, one chai")!!)

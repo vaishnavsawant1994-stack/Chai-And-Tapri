@@ -34,3 +34,7 @@ The Android Daily Closing screen now offers a privacy-minimized SAF CSV for a se
 | 6 — release qualification | Not complete. | Independent security review, performance, field, deployment, support and release process. |
 
 Current feature evidence is summarized in the [master implementation tracker](MASTER-IMPLEMENTATION-TRACKER.md). Browser visual authorization, physical hardware and production deployment have not been bypassed or claimed.
+
+## CT-10 observed cash + UPI split — 26 November 2026
+
+The Android Payment workflow now records an explicitly confirmed split between cash and an observed UPI receipt in one atomic transaction. Both events are staff-declared; UPI provider verification is not asserted. Kotlin JVM **102/102**, focused API 37 UI test **1/1**, APK tasks PASS, lint **0 errors / 192 warnings**. The focused UI test reopened the encrypted store and confirmed the ₹15 synthetic order settled as ₹5 cash + ₹10 UPI, with no pending/verified event, no stock change and one audit record. See [CT-10 report](CT-10-OBSERVED-CASH-UPI-SPLIT-REPORT-2026-11-26.md); ignored emulator output is under `../test-evidence/2026-11-26/ct10-observed-cash-upi-split/`. This focused slice does not replace the failed/incomplete broad emulator run or close provider, field, security-review, hardware, production, or six-wave gates.

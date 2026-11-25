@@ -835,6 +835,21 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
                 paymentEntries += PaymentEntry("$commandId-upi-attempt", order.number, null, upiPaise, "upi", "pending", "order_collection")
                 "Split recorded · cash declared ${money(cashPaise)} · UPI pending ${money(upiPaise)}; not verified."
             }
+            "cash_upi_received_split" -> {
+                if (order.fulfillment !in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED) || order.salePaise <= 0)
+                    return "Split collection requires a finished order. No change made."
+                if (order.voided || order.payment in setOf(Payment.UPI_PENDING, Payment.REFUNDED, Payment.CANCELLED) || order.duePaise <= 0)
+                    return "Order has no eligible balance for a split collection. No change made."
+                val cashPaise = command.amountPaise ?: return "Enter the cash portion of the split collection. No change made."
+                if (cashPaise <= 0 || cashPaise >= order.duePaise)
+                    return "Cash must be positive and less than the due so a UPI portion remains. No change made."
+                val upiPaise = order.duePaise - cashPaise
+                order.paidPaise += order.duePaise
+                paymentEntries += PaymentEntry("$commandId-cash", order.number, null, cashPaise, "cash", "staff_declared", "order_collection", drawerSessionId = activeCashDrawer()?.sessionId)
+                paymentEntries += PaymentEntry("$commandId-upi", order.number, null, upiPaise, "upi", "staff_declared", "order_collection")
+                updatePaymentState(order)
+                "Split recorded · cash ${money(cashPaise)} and UPI ${money(upiPaise)}; both staff-declared, UPI not provider-verified."
+            }
             "upi_direct" -> {
                 if (order.fulfillment !in setOf(Fulfillment.GIVEN, Fulfillment.CANCELLED) || order.salePaise <= 0)
                     return "UPI receipt requires a finished order. No change made."
@@ -1087,6 +1102,10 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     /** Atomically records staff-declared cash and an unverified UPI attempt for the remaining due. */
     fun recordCashUpiPendingSplit(orderNumber: Int, cashPaise: Int, commandId: String, expectedRevision: Int? = null): String =
         apply(commandId, ProposedCommand("cash_upi_pending_split", orderNumber, "Record cash plus UPI pending split", amountPaise = cashPaise, expectedRevision = expectedRevision))
+
+    /** Atomically records cash and an observed, staff-declared UPI receipt for the remaining due. */
+    fun recordCashUpiReceivedSplit(orderNumber: Int, cashPaise: Int, commandId: String, expectedRevision: Int? = null): String =
+        apply(commandId, ProposedCommand("cash_upi_received_split", orderNumber, "Record cash plus staff-declared UPI split", amountPaise = cashPaise, expectedRevision = expectedRevision))
 
     fun repayCredit(customerId: String, amountPaise: Int, commandId: String, paymentMethod: String = "cash"): String {
         if (commandId.isBlank()) return "Command ID is required."

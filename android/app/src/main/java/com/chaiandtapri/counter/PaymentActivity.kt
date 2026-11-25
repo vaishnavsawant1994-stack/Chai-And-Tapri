@@ -62,6 +62,7 @@ class PaymentActivity : Activity() {
                             }.show()
                     })
                     card.addView(button("Split cash + UPI pending") { splitCashUpiPendingPrompt(current, order.number, order.duePaise, revision) })
+                    card.addView(button("Split cash + UPI received · staff-declared") { splitCashUpiReceivedPrompt(current, order.number, order.duePaise, revision) })
                     card.addView(button("Record Udhar for existing customer ID") { udharPrompt(current, order.number, order.duePaise, revision) })
                     card.addView(button("Split cash + Udhar") { splitCashUdharPrompt(current, order.number, order.duePaise, revision) })
                 }
@@ -248,6 +249,42 @@ class PaymentActivity : Activity() {
                     .setNegativeButton("Go back", null)
                     .setPositiveButton("Record split") { _, _ ->
                         mutate(current) { it.recordCashUpiPendingSplit(orderNumber, cashPaise, "payment-cash-upi-${UUID.randomUUID()}", revision) }
+                    }
+                    .show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun splitCashUpiReceivedPrompt(current: CounterModel, orderNumber: Int, duePaise: Int, revision: Int) {
+        val cashInput = EditText(this).apply {
+            hint = "Cash received in rupees"
+            contentDescription = "Cash received in rupees"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setSingleLine(true)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Cash plus UPI received")
+            .setMessage("Order due ${money(duePaise)}. Enter cash physically received. The remainder is recorded only if you observed the customer's UPI receipt. Both entries are staff-declared; UPI is not provider-verified.")
+            .setView(cashInput)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Review split", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val cashPaise = runCatching { cashInput.text.toString().trim().toBigDecimal().movePointRight(2).intValueExact() }.getOrNull()
+                if (cashPaise == null || cashPaise <= 0 || cashPaise >= duePaise) {
+                    status.text = "Cash must be positive and less than the due. No payment was recorded."
+                    return@setOnClickListener
+                }
+                val upiPaise = duePaise - cashPaise
+                dialog.dismiss()
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm staff-declared split")
+                    .setMessage("Record ${money(cashPaise)} cash and ${money(upiPaise)} UPI as received according to staff observation? UPI provider verification is not available.")
+                    .setNegativeButton("Go back", null)
+                    .setPositiveButton("Record observed payments") { _, _ ->
+                        mutate(current) { it.recordCashUpiReceivedSplit(orderNumber, cashPaise, "payment-cash-upi-received-${UUID.randomUUID()}", revision) }
                     }
                     .show()
             }
