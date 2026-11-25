@@ -46,3 +46,7 @@ The broader last recorded test baselines are in [the 24 November audit](PROJECT-
 ## CT-05 Shop Home daily metrics — 25 November 2026
 
 Implemented and emulator-tested a date-scoped activity section using the existing ledger projection. Kotlin JVM 82/82; APK builds pass; focused API 37 Shop Home instrumentation 1/1; full API 37 connected instrumentation 140/140 (0 failures/errors/skips); lint 0 errors / 186 warnings. Date attribution remains device-local; this does not qualify a full daily close, profit reporting, or the complete screen. Details: [CT-05 report](CT-05-SHOP-HOME-DAILY-METRICS-REPORT-2026-11-25.md).
+
+## CT-15 owner-configured low-stock thresholds
+
+Inventory Overview now shows active products at or below owner-configured thresholds only when physical stock is confirmed. Unknown stock is omitted with a disclosure; the alert is not a purchase recommendation. Focused API 37 instrumentation passed 1/1, including an unchanged persisted snapshot assertion. Kotlin JVM 86/86; debug and instrumentation APK tasks passed; lint 0 errors / 187 warnings. Node and full connected instrumentation were not rerun. See [CT-15 report](CT-15-LOW-STOCK-THRESHOLD-REPORT-2026-11-25.md) and [focused XML](../test-evidence/2026-11-25/ct15-inventory-low-stock-focused-instrumentation.xml). CT-15 remains partial; hardware, security review and production gates remain open.

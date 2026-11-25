@@ -34,6 +34,23 @@ class InventoryOverviewActivity : Activity() {
             content.addView(label("Local stock ledger. Unconfirmed balances are not presented as verified. Purchase receipts and supplier payables are recorded separately.", 14f))
             val products = current.products()
             if (products.isEmpty()) content.addView(label("No products in the catalogue.", 16f))
+            val thresholdProducts = products.filter { it.active && it.reorderThreshold != null }
+            val lowStock = current.lowStockProducts()
+            content.addView(label("Low-stock alerts", 19f))
+            if (thresholdProducts.isEmpty()) {
+                content.addView(label("No owner-configured low-stock thresholds. Set a threshold in the product catalogue; only confirmed physical counts are evaluated.", 14f))
+            } else {
+                val unverifiedCount = thresholdProducts.count { !current.isStockConfirmed(it.productId) }
+                if (lowStock.isEmpty()) {
+                    content.addView(label("No confirmed product is at or below its configured threshold.", 14f))
+                } else {
+                    content.addView(label("${lowStock.size} confirmed product(s) are at or below their owner-configured threshold. This is a stock alert, not a purchase recommendation.", 14f))
+                    lowStock.forEach { (product, quantity) ->
+                        content.addView(label("Low stock · ${product.name}: $quantity units on hand · alert at ${product.reorderThreshold} or fewer", 15f))
+                    }
+                }
+                if (unverifiedCount > 0) content.addView(label("Unverified stock is not evaluated until a physical count is confirmed for $unverifiedCount thresholded product(s).", 14f))
+            }
             products.forEach { product ->
                 val confirmed = current.isStockConfirmed(product.productId)
                 val quantity = current.stockLevels()[product.productId]

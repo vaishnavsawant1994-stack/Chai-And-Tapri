@@ -3823,6 +3823,44 @@ class SqliteCounterPersistenceTest {
         }
     }
 
+    @Test fun inventoryOverviewShowsOnlyConfirmedStockBelowOwnerThreshold() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+            assertTrue(model.saveProduct(TapriProduct("inventory_low_tea", "Low Tea", "Chai", 1000, true, false, true, reorderThreshold = 3)).startsWith("Product saved"))
+            assertTrue(model.saveProduct(TapriProduct("inventory_uncounted_coffee", "Uncounted Coffee", "Coffee", 1500, true, false, true, reorderThreshold = 2)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("inventory_low_tea", 2, "synthetic threshold fixture", "inventory-low-stock-confirmed").startsWith("Opening stock confirmed"))
+        }
+        val before = SqliteCounterPersistence(context).use { it.load() ?: error("Synthetic inventory snapshot missing") }
+        LocalSessionState.establish("Synthetic Inventory Owner")
+        val activity = instrumentation.startActivitySync(Intent(context, InventoryOverviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            val visible = mutableListOf<String>()
+            repeat(40) {
+                visible.clear()
+                instrumentation.runOnMainSync {
+                    fun collect(view: View) {
+                        if (view is TextView) visible += view.text.toString()
+                        if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                    }
+                    collect(activity.findViewById(android.R.id.content))
+                }
+                if (visible.any { it.contains("Low Tea: 2 units on hand") }) return@repeat
+                Thread.sleep(100)
+            }
+            assertTrue("Inventory should show a low-stock section", visible.any { it == "Low-stock alerts" })
+            assertTrue("Inventory should show the confirmed stock alert: $visible", visible.any { it.contains("Low Tea: 2 units on hand") && it.contains("alert at 3 or fewer") })
+            assertTrue("Inventory must disclose that uncounted thresholded products are not evaluated", visible.any { it.contains("not evaluated until a physical count is confirmed") })
+            assertFalse("Unconfirmed quantity must not be shown as a low-stock alert", visible.any { it.contains("Uncounted Coffee") && it.contains("Low stock") })
+            val after = SqliteCounterPersistence(context).use { it.load() ?: error("Inventory screen removed data") }
+            assertEquals("Inventory overview is read-only", before, after)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun inventoryRouteSavesMultiProductPhysicalCountAsOnePersistentSession() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
