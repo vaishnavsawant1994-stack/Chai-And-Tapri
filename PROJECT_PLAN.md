@@ -1274,3 +1274,7 @@ Reran the serial-pinned API 37 connected suite. It ended after 17m02s when ADB l
 ## 26 November 2026 - CAT-052 current PostgreSQL suite
 
 Applied migrations 001–004 and runtime grants to a fresh disposable PostgreSQL 17 container; ran all backend tests with a restricted runtime role. Result: **39/39 passed, 0 skipped**. The container was stopped after the test; no unrelated container or host PostgreSQL service was used. See `specs/CAT-052-POSTGRES-CURRENT-SUITE-REPORT-2026-11-26.md`; local ignored test output is `test-evidence/2026-11-26/backend-postgres-39-of-39.log`. This remains local backend integration evidence, not production or Android live-sync qualification.
+
+## 26 November 2026 - CT-28 closed cash-session CSV export
+
+Daily Closing now exports the selected closed drawer session through the Android document picker. The snapshot reports paise totals, expected cash, physical count and unresolved variance with evidence labels; it omits staff identities, handover notes, customer data and free-text reasons. Export is read-only and CSV-safe. Kotlin/JVM **100/100**, debug/test APK builds PASS, lint **0 errors / 196 warnings**. The added CT-28 instrumentation assertion compiles, but actual SAF picker/save/cancel/read-back is not runtime-qualified because the API 37 emulator was lost during the current regression attempt. See `specs/CT-28-CASH-SESSION-CSV-EXPORT-REPORT-2026-11-26.md`.

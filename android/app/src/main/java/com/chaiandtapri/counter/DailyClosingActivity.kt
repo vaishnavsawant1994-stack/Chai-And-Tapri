@@ -1,8 +1,8 @@
 package com.chaiandtapri.counter
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.widget.Button
@@ -16,15 +16,28 @@ import java.util.Locale
 import java.util.UUID
 import java.math.BigDecimal
 import java.math.RoundingMode
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 
 /** CT-28 review for a completed drawer session. This is not yet a calendar-day accounting report. */
-class DailyClosingActivity : Activity() {
+class DailyClosingActivity : ComponentActivity() {
     private var model: CounterModel? = null
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
     private var selectedSessionId: String? = null
+    private var pendingSessionCsv: String? = null
     @Volatile private var loading = false
     @Volatile private var destroyed = false
+
+    private val createSessionCsv = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        val csv = pendingSessionCsv
+        pendingSessionCsv = null
+        if (uri == null) {
+            if (::status.isInitialized) status.text = "CSV export cancelled. No business data was changed."
+        } else if (csv != null) {
+            writeSessionCsv(uri, csv)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -170,6 +183,10 @@ class DailyClosingActivity : Activity() {
         content.addView(label("Physical count: ${money(counted)}", 18f))
         content.addView(label(if (variance == 0L) "Cash difference: ${money(variance)} · matched" else "Cash difference: ${money(variance)} · unresolved", 18f))
 
+        content.addView(button("Export this closed session as CSV") {
+            prepareSessionCsv(session.sessionId)
+        })
+
         val review = current.closingReview(session.sessionId)
         content.addView(label(if (review == null) "Review status: not acknowledged" else "Review status: acknowledged at ${time(review.reviewedAt)}${if (review.note.isBlank()) "" else " · ${review.note}"}", 14f))
         if (review == null) content.addView(button("Acknowledge review and note follow-up") { reviewDialog(session.sessionId, variance) })
@@ -208,6 +225,69 @@ class DailyClosingActivity : Activity() {
             }
         } }
         dialog.show()
+    }
+
+    private fun prepareSessionCsv(sessionId: String) {
+        status.text = "Preparing privacy-minimized session CSV…"
+        RecoveryExecutor.executor.execute {
+            val outcome = runCatching {
+                val current = model ?: error("Closing records are unavailable")
+                val session = current.closedCashDrawerHistory().firstOrNull { it.sessionId == sessionId }
+                    ?: error("The selected closed session is unavailable")
+                val payments = current.sessionPaymentEntries(sessionId)
+                val cashCollections = payments.filter { it.method == "cash" && it.kind == "order_collection" && it.amountPaise > 0 }.sumOf { it.amountPaise.toLong() }
+                val cashRepayments = payments.filter { it.method == "cash" && it.kind == "customer_repayment" }.sumOf { it.amountPaise.toLong() }
+                val cashRefunds = -payments.filter { it.method == "cash" && it.kind == "cash_refund" }.sumOf { it.amountPaise.toLong() }
+                val cashExpenses = current.sessionCashExpenses(sessionId).sumOf { it.amountPaise.toLong() }
+                val supplierSettlements = current.sessionCashSupplierPayments(sessionId).sumOf { it.amountPaise.toLong() }
+                val movements = current.cashDrawerMovements(sessionId)
+                val expected = current.expectedCashPaise(sessionId) ?: error("Expected cash is unavailable")
+                val counted = session.closingCashPaise?.toLong() ?: error("Physical count is unavailable")
+                CashClosingCsv.render(CashClosingCsvData(
+                    sessionId = session.sessionId,
+                    openedAtEpochMs = session.openedAt,
+                    closedAtEpochMs = session.closedAt ?: error("Session is not closed"),
+                    openingCashPaise = session.openingCashPaise.toLong(),
+                    cashCollectionsPaise = cashCollections,
+                    cashRepaymentsPaise = cashRepayments,
+                    cashRefundsPaise = cashRefunds,
+                    cashExpensesPaise = cashExpenses,
+                    cashSupplierSettlementsPaise = supplierSettlements,
+                    manualCashInPaise = movements.filter { it.kind == "cash_in" }.sumOf { it.amountPaise.toLong() },
+                    manualCashOutPaise = movements.filter { it.kind == "cash_out" }.sumOf { it.amountPaise.toLong() },
+                    expectedCashPaise = expected,
+                    countedCashPaise = counted,
+                    variancePaise = counted - expected
+                ))
+            }
+            runOnUiThread {
+                if (!destroyed && ::status.isInitialized) {
+                    outcome.fold(
+                        { csv ->
+                            pendingSessionCsv = csv
+                            createSessionCsv.launch("cash-closing-${sessionId.takeLast(8)}.csv")
+                        },
+                        { status.text = "CSV export could not be prepared. No business records were changed (${it.javaClass.simpleName})." }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun writeSessionCsv(uri: Uri, csv: String) {
+        status.text = "Saving closed-session CSV…"
+        RecoveryExecutor.executor.execute {
+            val result = runCatching {
+                contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { it.write(csv) }
+                    ?: error("The selected document could not be opened for writing")
+            }
+            runOnUiThread {
+                if (!destroyed && ::status.isInitialized) status.text = result.fold(
+                    { "Closing-session CSV saved. Staff names, handover notes, and customer details were not exported." },
+                    { "CSV export failed. No business records were changed (${it.javaClass.simpleName})." }
+                )
+            }
+        }
     }
 
     private fun sessionLabel(session: CashDrawerSession): String = "${time(session.openedAt)} – ${time(session.closedAt ?: session.openedAt)} · ${session.sessionId.takeLast(6)}"

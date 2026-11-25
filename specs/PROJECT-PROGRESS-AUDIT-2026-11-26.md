@@ -18,6 +18,10 @@ Reran the serial-pinned API 37 suite using the booted isolated AVD. The run ende
 
 The current backend suite was run against a new disposable PostgreSQL 17 instance with migrations 001–004, runtime grants, and the restricted application role. All **39/39** tests passed with **0 skipped**. Test output: `../test-evidence/2026-11-26/backend-postgres-39-of-39.log`; setup and limits: [CAT-052 report](CAT-052-POSTGRES-CURRENT-SUITE-REPORT-2026-11-26.md). The disposable container is stopped. This does not close CAT-052 production, full financial-ledger, multi-device conflict, or operational-security gaps.
 
+## CT-28 closed cash-session CSV export — 26 November 2026
+
+The Android Daily Closing screen now offers a privacy-minimized SAF CSV for a selected closed drawer session. The report includes integer-paise entries, device-clock times, expected and physically counted cash, and unresolved variance. It excludes names, actor IDs, handover notes, customer data and free-text reasons. Kotlin/JVM 100/100 and APK/lint tasks passed (0 lint errors / 196 warnings). The instrumented visibility assertion was compiled but not run; actual picker save/cancel/read-back remains pending because the API 37 AVD was lost during the full-suite attempt. Details: [CT-28 export report](CT-28-CASH-SESSION-CSV-EXPORT-REPORT-2026-11-26.md).
+
 ## Six-wave status
 
 | Wave | Current state | Remaining qualification |

@@ -3726,6 +3726,7 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("Expected cash: ₹63.00") })
         assertTrue(strings.any { it.contains("Physical count: ₹60.00") })
         assertTrue(strings.any { it.contains("Cash difference: -₹3.00 · unresolved") })
+        assertTrue(strings.contains("Export this closed session as CSV"))
         assertTrue(strings.any { it.contains("Open orders: 1") })
         assertTrue(strings.any { it.contains("UPI pending: ₹15.00") })
         assertTrue(strings.any { it.contains("Customer credit outstanding: ₹15.00") })
