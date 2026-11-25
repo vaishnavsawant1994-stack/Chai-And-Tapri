@@ -1,4 +1,7 @@
 # Chai And Tapri OS — Progress Audit — 24 November 2026
+## Latest continuation - CAT-052 staff cloud-access UI with isolated PostgreSQL - 25 November 2026
+
+Requalified the existing Android staff-cloud-access UI against a newly initialized disposable PostgreSQL 17 cluster and loopback-only HTTPS test server. The UI accepted a synthetic owner-issued cashier invitation, bound the account to the local cashier actor, synced that actor's cash sale, verified the accepted owner overview, then revoked the server session and removed the local encrypted session. Focused API 37 instrumentation passed **1/1**; backend PostgreSQL suite passed **35/35, 0 failures, 0 skips**. Evidence is stored in `test-evidence/2026-11-25/cat052-live-sync/` and `test-evidence/2026-11-25/backend-postgres-suite-35-of-35.log`. The temporary cluster and HTTPS server were stopped and ADB reverse mapping removed. This qualifies one synthetic local UI-to-service path only; no production sync, owner-side Android invitation administration, browser visual review, cross-device conflict recovery, independent security review, or deployment is qualified. See `specs/CAT-052-STAFF-CLOUD-ACCESS-LOCAL-E2E-REPORT-2026-11-25.md`.
 
 ## Follow-up — CT-27 authenticated shift UI — 25 November 2026
 
