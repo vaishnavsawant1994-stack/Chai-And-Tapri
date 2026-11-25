@@ -100,10 +100,12 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         .filter { (product, quantity) -> quantity <= (product.reorderThreshold ?: Int.MAX_VALUE) }
         .sortedBy { it.second }
     fun saveProduct(product: TapriProduct): String {
+        barrierRejectionIfActive()?.let { return it }
         if (!product.productId.matches(Regex("[a-z][a-z0-9_]{1,39}"))) return "Product ID must use 2–40 lowercase letters, numbers or underscores."
         if (product.name.trim().length !in 2..60 || product.category.trim().length !in 2..40) return "Enter a product name and category."
         if (product.unitLabel.trim().length !in 1..24 || product.unitLabel.any(Char::isISOControl)) return "Enter a stock/selling unit label of 1 to 24 printable characters."
-        val existingProduct = products().firstOrNull { it.productId == product.productId }
+        val catalogue = configuredProductsOrNull() ?: return maintenanceRejection()
+        val existingProduct = catalogue.firstOrNull { it.productId == product.productId }
         val normalizedUnit = product.unitLabel.trim()
         if (existingProduct != null && existingProduct.unitLabel != normalizedUnit &&
             (allOrders().any { order -> order.lines.any { it.productId == product.productId } } ||
@@ -117,7 +119,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (product.reorderThreshold != null && product.reorderThreshold !in 1..100_000) return "Low-stock threshold must be 1 to 100000 units, or blank."
         val scanCode = product.scanCode?.trim()?.takeIf(String::isNotEmpty)
         if (scanCode != null && (scanCode.length > 128 || scanCode.any(Char::isISOControl))) return "Scan code must be 1 to 128 printable characters, or blank."
-        if (scanCode != null && products().any { it.productId != product.productId && it.scanCode?.equals(scanCode, ignoreCase = true) == true }) {
+        if (scanCode != null && catalogue.any { it.productId != product.productId && it.scanCode?.equals(scanCode, ignoreCase = true) == true }) {
             return "That scan code is already assigned to another product."
         }
         return try {
@@ -130,6 +132,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
 
     /** One atomic counter sale: canonical catalogue price, stock, order and tender share one commit. */
     fun quickSale(items: List<Pair<String, Int>>, tender: String, customerId: String? = null, commandId: String = java.util.UUID.randomUUID().toString()): String {
+        barrierRejectionIfActive()?.let { return it }
         if (commandId.isBlank()) return "Command ID is required."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         if (items.isEmpty()) return "Add at least one product. No sale recorded."
@@ -142,14 +145,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (lines.any { (stock[it.productId] ?: 0) < it.quantity }) return "Insufficient stock. No sale or payment recorded."
         val resolvedCustomer = customerId?.trim()?.takeIf(String::isNotEmpty)
         if (tender == "udhar" && resolvedCustomer == null) return "Select a customer account before recording Udhar. No sale recorded."
-        // Snapshot reads product configuration from persistence. A recovery barrier can
-        // reject that read before commitMutation gets a chance to roll back, so translate
-        // the barrier into the same no-write result used for commit-time rejection.
-        val before = try {
-            snapshot()
-        } catch (_: BusinessMaintenanceException) {
-            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
-        }
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
+
         val deliveredLines = lines.map { it.copy(deliveredQuantity = it.quantity) }
         val order = CounterOrder(nextNumber++, deliveredLines.toMutableList(), Fulfillment.GIVEN, salePosted = true)
         val total = order.salePaise
@@ -175,6 +172,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     }
     /** One atomic immediate sale split between declared cash and a customer receivable. */
     fun quickSaleSplit(items: List<Pair<String, Int>>, cashPaise: Int, customerId: String, commandId: String = java.util.UUID.randomUUID().toString()): String {
+        barrierRejectionIfActive()?.let { return it }
         if (commandId.isBlank()) return "Command ID is required."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         if (items.isEmpty()) return "Add at least one product. No sale recorded."
@@ -190,14 +188,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val resolvedCustomer = customerId.trim().takeIf(String::isNotEmpty)
             ?: return "Select a customer account before recording the Udhar balance. No sale recorded."
 
-        // Snapshot reads product configuration from persistence. A recovery barrier can
-        // reject that read before commitMutation gets a chance to roll back, so translate
-        // the barrier into the same no-write result used for commit-time rejection.
-        val before = try {
-            snapshot()
-        } catch (_: BusinessMaintenanceException) {
-            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
-        }
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
+
         val creditPaise = total - cashPaise
         val order = CounterOrder(nextNumber++, lines.map { it.copy(deliveredQuantity = it.quantity) }.toMutableList(), Fulfillment.GIVEN, salePosted = true)
         order.paidPaise = cashPaise
@@ -230,13 +222,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun stockLevels(): Map<String,Int> = stock.toMap()
     fun isStockConfirmed(productId: String): Boolean = !requireConfiguredProducts || productId in stockConfirmedProductIds
     fun confirmOpeningStock(productId: String, quantity: Int, reason: String, commandId: String = "opening-stock-${java.util.UUID.randomUUID()}"): String {
+        barrierRejectionIfActive()?.let { return it }
         if (persistence == null) return "Opening stock requires durable shop storage."
         if (commandId.isBlank()) return "A stock-count command ID is required. No change made."
         if (quantity !in 0..100_000) return "Count must be between 0 and 100,000 units. No change made."
         if (reason.trim().length !in 4..120) return "Enter a short reason for this opening count. No change made."
-        val product = persistence.loadProducts().firstOrNull { it.productId == productId && it.active }
+        val product = (configuredProductsOrNull() ?: return maintenanceRejection()).firstOrNull { it.productId == productId && it.active }
             ?: return "Active product not found. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val old = stock[productId] ?: 0
         val delta = quantity - old
         stock[productId] = quantity
@@ -246,15 +239,16 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     }
     /** Commits one multi-product physical count atomically; no purchase or payable is created. */
     fun confirmPhysicalStockCounts(counts: Map<String, Int>, reason: String, commandId: String): String {
+        barrierRejectionIfActive()?.let { return it }
         val storage = persistence ?: return "Physical stock counts require encrypted local storage."
         if (commandId.isBlank()) return "A stock-count command ID is required. No change made."
         if (reason.trim().length !in 4..120) return "Enter a count reason between 4 and 120 characters. No change made."
         if (counts.isEmpty()) return "Select at least one product to count. No change made."
         if (counts.size > 200) return "A count session can include at most 200 products. No change made."
         if (counts.values.any { it !in 0..100_000 }) return "Each count must be between 0 and 100,000 units. No change made."
-        val activeProducts = storage.loadProducts().filter { it.active }.associateBy { it.productId }
+        val activeProducts = (configuredProductsOrNull() ?: return maintenanceRejection()).filter { it.active }.associateBy { it.productId }
         if (counts.keys.any { it !in activeProducts }) return "One or more selected products are missing or inactive. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         counts.toSortedMap().forEach { (productId, quantity) ->
             val old = stock[productId] ?: 0
             stock[productId] = quantity
@@ -293,7 +287,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val note = reason.trim().replace(Regex("[\\r\\n\\t]+"), " ").replace(Regex("\\s{2,}"), " ")
         if (amountPaise !in 1..100_000_000) return "Enter an estimate from ₹0.01 to ₹1,000,000. No estimate saved."
         if (note.length !in 4..120) return "Enter an estimate reason between 4 and 120 characters. No estimate saved."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         return commitMutation(before, commandId,
             "Unitemized amount saved as an estimate only: ${money(amountPaise)}. It is not recorded sales or a collection.",
             "busy_counter.estimate classification=estimated amount=${amountPaise}p reason=$note")
@@ -370,7 +364,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (staffActorId != null && (!LocalSessionState.authenticated || LocalSessionState.actorId != staffActorId || LocalSessionState.ownerDisplayName != staffLabel?.trim())) return "Shift identity must match the signed-in local account. No shift started."
         if (LocalSessionState.authenticated && staffLabel != null && staffActorId != LocalSessionState.actorId) return "Authenticated shifts must be linked to the signed-in account. No shift started."
         if (openingCashPaise !in 0..100_000_000) return "Opening cash must be between Rs 0 and Rs 1,000,000. No drawer opened."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         cashDrawerSessions += CashDrawerSession(commandId, openingCashPaise, System.currentTimeMillis(), staffLabel = staffLabel?.trim(), staffActorId = staffActorId)
         val kind = if (staffLabel == null) "cash_drawer.opened" else "staff_shift.started"
         val result = if (staffLabel == null) "Cash drawer opened with ${money(openingCashPaise)} counted opening cash." else "Shift started for ${staffLabel.trim()} with ${money(openingCashPaise)} opening cash${if (staffActorId == null) " (legacy label is not authenticated)" else " (signed-in local account)"}."
@@ -396,7 +390,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val session = activeCashDrawer() ?: return "Open a cash drawer session first. No movement recorded."
         if (kind !in setOf("cash_in", "cash_out") || amountPaise !in 1..100_000_000 || note.trim().length !in 3..120) return "Enter cash in/out, a positive amount, and a short reason. No movement recorded."
         if (kind == "cash_out" && amountPaise.toLong() > (expectedCashPaise(session.sessionId) ?: 0L)) return "Cash out cannot exceed the currently expected drawer balance. No movement recorded."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         cashDrawerMovements += CashDrawerMovement(commandId, session.sessionId, kind, amountPaise, note.trim())
         return commitMutation(before, commandId, "${if (kind == "cash_in") "Cash added" else "Cash removed"}: ${money(amountPaise)}.", "cash_drawer.$kind session=${session.sessionId} amount=${amountPaise}p reason=${note.trim()}")
     }
@@ -409,7 +403,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (handoverToLabel?.trim()?.length?.let { it !in 2..60 } == true || handoverNote.trim().length > 160) return "Check the handover name and note lengths. No drawer closed."
         if ((handoverToLabel != null || handoverNote.isNotBlank()) && session.staffLabel == null) return "Handover details require a staff shift. No drawer closed."
         val expected = expectedCashPaise(session.sessionId) ?: return "Cash session is unavailable. No drawer closed."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val index = cashDrawerSessions.indexOfFirst { it.sessionId == session.sessionId }
         cashDrawerSessions[index] = session.copy(closingCashPaise = countedCashPaise, closedAt = System.currentTimeMillis(), handoverToLabel = handoverToLabel?.trim(), handoverNote = handoverNote.trim())
         val variance = countedCashPaise.toLong() - expected
@@ -432,7 +426,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (cashClosingReviews.any { it.sessionId == sessionId }) return "This session's closing review is already recorded."
         val details = note.trim()
         if (details.length > 240) return "Closing note must be 240 characters or fewer. No review recorded."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         cashClosingReviews += CashClosingReview(commandId, session.sessionId, System.currentTimeMillis(), details)
         return commitMutation(before, commandId, "Closing review recorded for cash session.", "cash_closing.reviewed session=$sessionId variance=${session.closingCashPaise!!.toLong() - (expectedCashPaise(sessionId) ?: 0L)}p open_orders=${currentOpenOrderCount()} pending_upi=${currentPendingUpiPaise()}p")
     }
@@ -466,13 +460,14 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         purchaseOrderId: String = "po-${java.util.UUID.randomUUID()}",
         commandId: String = "purchase-order-${java.util.UUID.randomUUID()}"
     ): String {
+        barrierRejectionIfActive()?.let { return it }
         if (persistence == null) return "Purchase orders require durable shop storage."
         if (commandId.isBlank() || purchaseOrderId.isBlank()) return "Purchase order and command IDs are required. No order saved."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         if (purchaseOrderRecords.any { it.purchaseOrderId == purchaseOrderId }) return "Purchase order ID already exists. No order saved."
         if (supplierRecords.none { it.supplierId == supplierId }) return "Choose an existing supplier. No order saved."
         if (quantities.isEmpty() || quantities.size !in 1..50 || quantities.keys != unitCostsPaise.keys) return "Add 1 to 50 products with quantity and estimated unit cost. No order saved."
-        val products = persistence.loadProducts().associateBy { it.productId }
+        val products = (configuredProductsOrNull() ?: return maintenanceRejection()).associateBy { it.productId }
         val lines = quantities.toSortedMap().map { (productId, quantity) ->
             val product = products[productId]?.takeIf { it.active } ?: return "Active catalogue product $productId was not found. No order saved."
             val cost = unitCostsPaise[productId] ?: return "Estimated unit cost is missing. No order saved."
@@ -481,7 +476,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         }
         val total = lines.sumOf { it.lineCostPaise }
         if (total !in 1..Int.MAX_VALUE.toLong()) return "Estimated order total is outside the supported range. No order saved."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         purchaseOrderRecords += PurchaseOrderDraft(purchaseOrderId, supplierId, lines, PurchaseOrderStatus.DRAFT, createdAtEpochMs = System.currentTimeMillis())
         return commitMutation(before, commandId, "Purchase order draft $purchaseOrderId saved; no stock or payable was changed.",
             "purchase_order.draft_saved id=$purchaseOrderId supplier=$supplierId estimated_total=${total}p")
@@ -496,7 +491,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val order = purchaseOrderRecords[index]
         if (order.revision != expectedRevision) return "Purchase order changed; refresh before updating it. No change made."
         if (order.status != PurchaseOrderStatus.DRAFT) return "Only a draft can be marked sent. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         purchaseOrderRecords[index] = order.copy(status = PurchaseOrderStatus.SENT, revision = order.revision + 1)
         return commitMutation(before, commandId, "Purchase order marked sent by the owner; no supplier message was sent by the app.",
             "purchase_order.marked_sent id=$purchaseOrderId")
@@ -513,7 +508,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (order.status == PurchaseOrderStatus.CANCELLED || purchaseOrderReceivedQuantities(purchaseOrderId).values.sum() > 0) return "An already cancelled or partially received order cannot be cancelled through this path. No change made."
         val note = reason.trim()
         if (note.length !in 3..120) return "Enter a cancellation reason from 3 to 120 characters. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         purchaseOrderRecords[index] = order.copy(status = PurchaseOrderStatus.CANCELLED, revision = order.revision + 1)
         return commitMutation(before, commandId, "Purchase order cancelled; no stock or payable was changed.",
             "purchase_order.cancelled id=$purchaseOrderId reason=$note")
@@ -537,7 +532,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (!id.matches(Regex("[a-z][a-z0-9_]{1,39}"))) return "Supplier ID must use 2 to 40 lowercase letters, numbers or underscores."
         if (displayName.length !in 2..80) return "Enter a supplier name between 2 and 80 characters."
         if (normalizedPhone != null && (!normalizedPhone.matches(Regex("\\+?[0-9][0-9 ()-]{5,19}")) || normalizedPhone.count(Char::isDigit) !in 7..15)) return "Enter a valid supplier phone number or leave it blank."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val index = supplierRecords.indexOfFirst { it.supplierId == id }
         val existingPhone = supplierRecords.getOrNull(index)?.phone
         val existing = supplierRecords.getOrNull(index)
@@ -548,6 +543,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
 
     /** Direct verified receipt. It requires a confirmed physical stock baseline and posts payable + stock atomically. */
     fun receivePurchase(supplierId: String, quantities: Map<String, Int>, unitCostsPaise: Map<String, Int>, commandId: String = "purchase-${java.util.UUID.randomUUID()}", purchaseOrderId: String? = null, supplierInvoiceReference: String? = null): String {
+        barrierRejectionIfActive()?.let { return it }
         if (persistence == null) return "Purchase receiving requires durable shop storage."
         if (commandId.isBlank()) return "Purchase receipt command ID is required. No change made."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
@@ -563,7 +559,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         val linkedOrder = purchaseOrderId?.let { id -> purchaseOrderRecords.firstOrNull { it.purchaseOrderId == id } }
         if (purchaseOrderId != null && (linkedOrder == null || linkedOrder.supplierId != supplierId || linkedOrder.status != PurchaseOrderStatus.SENT)) return "Choose an open sent purchase order for this supplier. No receipt recorded."
         if (quantities.isEmpty() || quantities.size !in 1..50 || quantities.keys != unitCostsPaise.keys) return "Add 1 to 50 products with quantity and unit cost. No receipt recorded."
-        val products = persistence.loadProducts().associateBy { it.productId }
+        val products = (configuredProductsOrNull() ?: return maintenanceRejection()).associateBy { it.productId }
         val lines = mutableListOf<PurchaseReceiptLine>()
         for ((productId, quantity) in quantities) {
             val product = products[productId]?.takeIf { it.active } ?: return "Active catalogue product $productId was not found. No receipt recorded."
@@ -580,7 +576,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         }
         val total = lines.sumOf { it.lineCostPaise }
         if (total !in 1..Int.MAX_VALUE.toLong()) return "Receipt total is outside the supported financial range. No receipt recorded."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         lines.forEach { line ->
             stock[line.productId] = (stock[line.productId] ?: 0) + line.quantity
             movements += StockMovement("$commandId:${line.productId}:purchase", line.productId, line.quantity, "purchase_receipt", null)
@@ -602,7 +598,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (supplierRecords.none { it.supplierId == supplierId }) return "Supplier was not found. No payment recorded."
         val balance = supplierPayablePaise(supplierId)
         if (amountPaise <= 0 || amountPaise.toLong() > balance) return "Payment must be positive and cannot exceed supplier payable ${money(balance.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())}. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         supplierPayments += SupplierPayment(commandId, supplierId, amountPaise, method, "staff_declared", if (method == "cash") activeCashDrawer()?.sessionId else null)
         val methodLabel = if (method == "cash") "cash" else "UPI"
         return commitMutation(before, commandId, "Staff-declared $methodLabel payment ${money(amountPaise)} recorded for supplier $supplierId; provider verification is not available.", "supplier.payment_recorded supplier=$supplierId amount=${amountPaise}p method=$method status=staff_declared")
@@ -631,7 +627,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         }
         val total = lines.sumOf { it.lineValuePaise }
         if (total > payable) return "Return value cannot exceed this supplier's outstanding payable. No return recorded."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         lines.forEach { line ->
             stock[line.productId] = (stock[line.productId] ?: 0) - line.quantity
             movements += StockMovement("$commandId:${line.productId}:purchase_return", line.productId, -line.quantity, "purchase_return", null)
@@ -651,7 +647,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (amountPaise !in 1..100_000_000) return "Enter a positive amount no greater than Rs 1,000,000. No expense recorded."
         if (method !in setOf("cash", "upi", "card")) return "Choose cash, UPI or card as the declared payment method. No expense recorded."
         if (details.length > 160) return "Expense note must be 160 characters or fewer. No expense recorded."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         expenseRecords += BusinessExpense(commandId, normalizedCategory, amountPaise, method, "staff_declared", details,
             if (method == "cash") activeCashDrawer()?.sessionId else null, System.currentTimeMillis())
         return commitMutation(before, commandId, "Expense recorded: $normalizedCategory ${money(amountPaise)} via $method.", "expense.recorded category=$normalizedCategory amount=${amountPaise}p method=$method status=staff_declared")
@@ -697,14 +693,8 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         val correctionReason = if (command.type == "remove") command.auditReason?.trim()?.takeIf { it.length in 3..120 && it.none(Char::isISOControl) }
             ?: return "A correction reason of 3–120 characters is required. No change made." else null
-        // Snapshot reads product configuration from persistence. A recovery barrier can
-        // reject that read before commitMutation gets a chance to roll back, so translate
-        // the barrier into the same no-write result used for commit-time rejection.
-        val before = try {
-            snapshot()
-        } catch (_: BusinessMaintenanceException) {
-            return "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
-        }
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
+
         if (command.type == "create") {
             val line = line(command.productId ?: return "Unknown product.",command.quantity) ?: return "Unknown product or quantity."
             val order = CounterOrder(nextNumber++,mutableListOf(line))
@@ -866,7 +856,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     fun cancelOrder(number: Int,reason: String,commandId: String = "cancel-${System.nanoTime()}",expectedRevision: Int? = null): String {
         if (commandId.isBlank()) return "Command ID is required."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val order=orders[number] ?: return "Order not found."
         if(expectedRevision != null && expectedRevision != order.revision) return "Order revision conflict. Refresh and review the order before retrying."
         if(order.fulfillment==Fulfillment.GIVEN) return "A handed-over order requires an authorized refund. No change made."
@@ -905,7 +895,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             (if (line.productId == productId) newUnitPricePaise else line.unitPricePaise).toLong() * line.quantity
         }
         if (updatedTotal !in 1..Int.MAX_VALUE.toLong()) return "Updated order total exceeds the supported amount. No change made."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         order.lines[index] = oldLine.copy(unitPricePaise = newUnitPricePaise)
         return commitMutation(
             before,
@@ -961,7 +951,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (commandId.isBlank()) return "Command ID is required."
         if (commandId in appliedCommandIds) return "Duplicate command ignored."
         if (reason.isBlank()) return "A correction reason is required."
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         val order = orders[number] ?: return "Order not found."
         if (expectedRevision != null && expectedRevision != order.revision) return "Order revision conflict. Refresh and review the order before retrying."
         if (order.fulfillment !in setOf(Fulfillment.GIVEN,Fulfillment.CANCELLED) || order.voided) return "Refunds require a finished order with delivered items. No change made."
@@ -1039,7 +1029,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
             if ((stock[productId] ?: 0) < quantity) return "Insufficient stock for ${line.name}. No handover or stock movement recorded."
             selected += index to quantity
         }
-        val before = snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         selected.forEach { (index, quantity) ->
             val line = order.lines[index]
             order.lines[index] = line.copy(deliveredQuantity = line.deliveredQuantity + quantity)
@@ -1081,7 +1071,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         if (customerId.isBlank() || amountPaise <= 0) return "Customer and positive repayment amount are required."
         val balance=creditBalance(customerId)
         if (amountPaise>balance) return "Repayment exceeds customer balance. No change made."
-        val before=snapshot()
+        val before = mutationSnapshotOrNull() ?: return maintenanceRejection()
         var remaining=amountPaise
         val affected=mutableListOf<CounterOrder>()
         for (index in credits.indices) {
@@ -1148,6 +1138,13 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
         }
     }
 
+    private fun mutationSnapshotOrNull(): CounterSnapshot? = try { snapshot() } catch (_: BusinessMaintenanceException) { null }
+
+    private fun maintenanceRejection() = "Backup or recovery is in progress. This action was not recorded; retry when it finishes."
+
+    private fun barrierRejectionIfActive(): String? = if (BusinessWriteBarrier.currentMaintenance() == null) null else maintenanceRejection()
+
+    private fun configuredProductsOrNull(): List<TapriProduct>? = try { persistence?.loadProducts().orEmpty() } catch (_: BusinessMaintenanceException) { null }
     private fun snapshot() = CounterSnapshot(
         nextNumber,
         orders.values.map { CounterOrderRecord(it.number, it.lines.toList(), it.fulfillment, it.payment, it.paidPaise, it.salePosted, it.cancelReason, it.revision, it.creditPaise, it.refundedPaise, it.voided, it.cashRefundedPaise, it.creditReversedPaise, it.createdAtEpochMs) },
@@ -1195,7 +1192,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     private fun line(id:String,quantity:Int): CounterLine? {
         if(quantity !in 1..99) return null
         if (requireConfiguredProducts) {
-            val product = persistence?.loadProducts()?.firstOrNull { it.productId == id && it.active && it.priceConfirmed } ?: return null
+            val product = configuredProductsOrNull()?.firstOrNull { it.productId == id && it.active && it.priceConfirmed } ?: return null
             return CounterLine(product.productId, product.name, quantity, product.unitPricePaise, estimatedUnitCostPaise = product.estimatedUnitCostPaise)
         }
         val (name,price)=when(id){ "cutting_chai"->"Cutting Chai" to 1000; "chai"->"Regular Chai" to 1500; "samosa"->"Samosa" to 2000; "coffee"->"Coffee" to 2500; else->return null }
@@ -1203,7 +1200,7 @@ class CounterModel(private val persistence: CounterPersistence? = null, private 
     }
     private fun productFor(text:String): Pair<String,String>? {
         if (requireConfiguredProducts) {
-            return persistence?.loadProducts()?.asSequence()?.filter { it.active && it.priceConfirmed }?.flatMap { product ->
+            return configuredProductsOrNull()?.asSequence()?.filter { it.active && it.priceConfirmed }?.flatMap { product ->
                 (product.aliases + product.name).asSequence().map { alias -> normalize(alias) to product }
             }?.filter { (alias, _) -> alias.isNotBlank() && Regex("(?<![\\p{L}\\p{N}])${Regex.escape(alias)}(?![\\p{L}\\p{N}])").containsMatchIn(text) }
                 ?.maxByOrNull { it.first.length }?.second?.let { it.productId to it.name } ?: return null

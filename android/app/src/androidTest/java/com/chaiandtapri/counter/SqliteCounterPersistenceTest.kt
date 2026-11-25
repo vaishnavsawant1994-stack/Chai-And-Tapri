@@ -6491,15 +6491,37 @@ class SqliteCounterPersistenceTest {
     @Test fun maintenanceBarrierRejectsAndRollsBackBusinessWritesThenReleases() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase("chai_tapri_counter.db")
-        val model = CounterModel(SqliteCounterPersistence(context))
+        val model = CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true)
+        assertTrue(model.saveProduct(TapriProduct("barrier_tea", "Barrier Tea", "Chai", 1500, priceConfirmed = true)).startsWith("Product saved"))
+        assertTrue(model.confirmOpeningStock("barrier_tea", 8, "synthetic maintenance baseline", "barrier-stock").contains("8 units"))
+        assertTrue(model.saveCustomerProfile(CustomerProfile("barrier_customer", "Barrier Customer")).contains("profile saved"))
+        assertTrue(model.apply("barrier-existing-order", ProposedCommand("create", null, "one Barrier Tea", "barrier_tea", 1)).contains("Order"))
+        val existingOrder = model.allOrders().single()
         val rejected = BusinessWriteBarrier.duringMaintenance("test maintenance") {
-            model.apply("barrier-rejected", ProposedCommand("create", null, "new chai", "chai", 1))
+            listOf(
+                model.apply("barrier-rejected-command", ProposedCommand("create", null, "new tea", "barrier_tea", 1)),
+                model.quickSale(listOf("barrier_tea" to 1), "cash", commandId = "barrier-rejected-quick-sale"),
+                model.quickSaleSplit(listOf("barrier_tea" to 1), 500, "barrier_customer", "barrier-rejected-split-sale"),
+                model.confirmOpeningStock("barrier_tea", 9, "should not post", "barrier-rejected-stock"),
+                model.confirmPhysicalStockCounts(mapOf("barrier_tea" to 9), "should not post", "barrier-rejected-count"),
+                model.saveProduct(TapriProduct("barrier_second", "Barrier Second", "Chai", 2000, priceConfirmed = true)),
+                model.createPurchaseOrderDraft("missing_supplier", mapOf("barrier_tea" to 1), mapOf("barrier_tea" to 1000), "barrier-rejected-po"),
+                model.recordExpense("miscellaneous", 100, "cash", "should not post", "barrier-rejected-expense"),
+                model.recordCash(existingOrder.number, 500, "barrier-rejected-cash")
+            )
         }
-        assertTrue(rejected.contains("not recorded"))
-        assertTrue(model.allOrders().isEmpty())
+        assertEquals(9, rejected.size)
+        assertTrue(rejected.all { it.contains("not recorded") })
+        assertEquals(listOf(existingOrder), model.allOrders())
+        assertTrue(model.products().any { it.productId == "barrier_tea" })
+        assertFalse(model.products().any { it.productId == "barrier_second" })
+        assertEquals(8, model.stockLevels()["barrier_tea"])
+        assertTrue(model.expenseHistory().isEmpty())
+        assertTrue(model.paymentHistory().isEmpty())
+        assertEquals(listOf("barrier-stock:barrier_tea:opening-count"), model.stockMovements().map { it.movementId })
         assertEquals(null, BusinessWriteBarrier.currentMaintenance())
-        assertTrue(model.apply("barrier-released", ProposedCommand("create", null, "new chai", "chai", 1)).contains("Order"))
-        assertEquals(1, model.allOrders().size)
+        assertTrue(model.apply("barrier-released", ProposedCommand("create", null, "new tea", "barrier_tea", 1)).contains("Order"))
+        assertEquals(2, model.allOrders().size)
         model.close()
         context.deleteDatabase("chai_tapri_counter.db")
     }
