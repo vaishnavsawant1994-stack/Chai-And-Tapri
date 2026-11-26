@@ -36,6 +36,7 @@ import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,6 +51,30 @@ import org.junit.runner.RunWith
 /** Runs against Android's real SQLite implementation when an emulator/device is available. */
 @RunWith(AndroidJUnit4::class)
 class SqliteCounterPersistenceTest {
+    @Test fun productCatalogueSaveCreatesSendableEncryptedOutboxWithPurchaseConversion() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic catalogue sync owner")
+        try {
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertTrue(model.saveProduct(TapriProduct("sync_water", "Sync Water", "Drinks", 2000, priceConfirmed = true,
+                    aliases = listOf("water"), estimatedUnitCostPaise = 125, unitLabel = "bottle", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 24)).startsWith("Product saved"))
+            }
+            val outbox = SqliteCounterPersistence(context).use { it.loadPendingSyncEvents(10) }
+            assertEquals(1, outbox.size)
+            assertEquals(1, outbox.single().payloadVersion)
+            val product = JSONObject(outbox.single().payloadJson!!).getJSONArray("catalogue").getJSONObject(0)
+            assertEquals("sync_water", product.getString("productId"))
+            assertEquals("crate", product.getString("purchaseUnitLabel"))
+            assertEquals(24, product.getInt("baseUnitsPerPurchaseUnit"))
+            assertEquals("bottle", product.getString("unitLabel"))
+            assertTrue(product.isNull("scanCode"))
+        } finally {
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     private fun scrollActiveWindowForward(root: AccessibilityNodeInfo) {
         var target: AccessibilityNodeInfo? = null
         fun visit(node: AccessibilityNodeInfo) {

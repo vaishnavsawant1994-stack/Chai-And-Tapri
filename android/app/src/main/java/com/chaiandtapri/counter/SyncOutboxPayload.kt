@@ -6,6 +6,26 @@ data class SyncOutboxPayload(val version: Int?, val json: String?, val blockedRe
 }
 
 object SyncOutboxPayloadEncoder {
+    /** Owner-only catalogue upsert; the server separately enforces role and unit-history constraints. */
+    fun catalogueProduct(product: TapriProduct): SyncOutboxPayload {
+        val json = buildString {
+            append('{'); field("kind", "projection_delta.v1"); append(',')
+            append("\"orders\":[],\"stock\":[],\"stockMovements\":[],\"customerCredits\":[],\"repayments\":[],\"paymentEntries\":[],")
+            append("\"catalogue\":[{")
+            field("productId", product.productId); append(','); field("name", product.name); append(',')
+            field("category", product.category); append(','); number("unitPricePaise", product.unitPricePaise); append(',')
+            bool("active", product.active); append(','); bool("favorite", product.favorite); append(',')
+            bool("priceConfirmed", product.priceConfirmed); append(','); append("\"aliases\":")
+            array(product.aliases) { append(quoted(it)) }; append(',')
+            nullableNumber("reorderThreshold", product.reorderThreshold); append(',')
+            nullableNumber("estimatedUnitCostPaise", product.estimatedUnitCostPaise); append(',')
+            nullableField("scanCode", product.scanCode?.trim()?.takeIf(String::isNotEmpty)); append(',')
+            field("unitLabel", product.unitLabel); append(','); field("purchaseUnitLabel", product.purchaseUnitLabel); append(',')
+            number("baseUnitsPerPurchaseUnit", product.baseUnitsPerPurchaseUnit); append("}]}")
+        }
+        return SyncOutboxPayload(version = 1, json = json, blockedReason = null)
+    }
+
     fun between(before: CounterSnapshot, after: CounterSnapshot): SyncOutboxPayload {
         val unsupported = before.suppliers != after.suppliers ||
             before.cashClosingReviews != after.cashClosingReviews

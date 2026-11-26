@@ -909,3 +909,10 @@ Extended the Kotlin transaction test to assert the split produces a sendable out
 ## Exact-source Android full regression — 26 November 2026
 
 The isolated API 37 AVD completed a fresh `connectedDebugAndroidTest` run: **152/152 passed, 0 failures, 0 errors, 0 skipped**. Gradle reported `BUILD SUCCESSFUL` in **10m08s**. JUnit: `android/app/build/outputs/androidTest-results/connected/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml`; HTML: `android/app/build/reports/androidTests/connected/debug/index.html`. This supersedes the earlier 32-test emulator-loss attempt for the tested source; the failed attempt is retained above as historical troubleshooting evidence. Physical Bluetooth/audio, shop-floor use, independent security review, browser visual authorization, backend deployment, and production release remain unqualified.
+
+
+## CAT-052 catalogue-to-owner projection slice - 26 November 2026
+
+Android product saves now create sendable encrypted outbox events with configured base/purchase units. Backend validation accepts catalogue upserts only from owner/manager roles, freezes unit conversion after accepted product use, and owner product/inventory projections show accepted names and conversions without fabricating sales or stock. See [CAT-052 report](CAT-052-CATALOGUE-OWNER-PROJECTION-REPORT-2026-11-26.md).
+
+Verification in this slice: prototype Node 52/52; backend Node 43/43 with 0 skips against disposable PostgreSQL 17; Kotlin JVM 105/105; debug and instrumentation APK builds passed; lint passed with 0 errors and 197 warnings; focused API 37 encrypted-outbox instrumentation passed 1/1. This is Android-to-server-to-owner projection only, not multi-device catalogue download. Physical device, production backend, visual dashboard, and release qualification remain pending.

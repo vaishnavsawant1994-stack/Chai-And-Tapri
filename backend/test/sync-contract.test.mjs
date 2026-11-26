@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, applyCustomerLedgerDelta, applyProductUnitLabelDelta, applySupplierLedgerDelta, applyStaffShiftLedgerDelta, authorizeProjectionForRole, emptyCustomerLedger, emptySupplierLedger, emptyStaffShiftLedger, validateProjectionDelta } from '../src/service.mjs';
+import { ApiError, applyCustomerLedgerDelta, applyProductCatalogueDelta, applyProductUnitLabelDelta, applySupplierLedgerDelta, applyStaffShiftLedgerDelta, authorizeProjectionForRole, emptyCustomerLedger, emptySupplierLedger, emptyStaffShiftLedger, validateProjectionDelta } from '../src/service.mjs';
 
 const emptyDelta = () => ({
   kind:'projection_delta.v1',orders:[],stock:[],stockMovements:[],customerCredits:[],repayments:[],paymentEntries:[]
@@ -38,6 +38,31 @@ test('cashiers may use established unit metadata but cannot establish product un
   assert.throws(() => authorizeProjectionForRole('cashier', payload), (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_business_permission_denied');
   assert.equal(authorizeProjectionForRole('cashier', payload, new Map(), new Map(), new Map(), new Map([['tea', 'cup']])), true);
   assert.equal(authorizeProjectionForRole('owner', payload), true);
+});
+
+const catalogueProduct = (overrides = {}) => ({
+  productId:'crate_water', name:'Water Bottle', category:'Drinks', unitPricePaise:2000, active:true, favorite:false,
+  priceConfirmed:true, aliases:['water'], reorderThreshold:12, estimatedUnitCostPaise:125, scanCode:null,
+  unitLabel:'bottle', purchaseUnitLabel:'crate', baseUnitsPerPurchaseUnit:12, ...overrides
+});
+
+test('catalogue projection validates full pack metadata, denies cashier writes, and locks conversion after use', () => {
+  const payload = { ...emptyDelta(), catalogue:[catalogueProduct()] };
+  assert.equal(validateProjectionDelta(payload), true);
+  assert.throws(() => authorizeProjectionForRole('cashier', payload), (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_catalogue_permission_denied');
+  assert.equal(authorizeProjectionForRole('manager', payload), true);
+  const catalogue = new Map(); const labels = new Map(); const used = new Set();
+  assert.equal(applyProductCatalogueDelta(catalogue, payload, labels, used), true);
+  assert.equal(catalogue.get('crate_water').baseUnitsPerPurchaseUnit, 12);
+  assert.equal(labels.get('crate_water'), 'bottle');
+  used.add('crate_water');
+  applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ unitPricePaise:2100 })] }, labels, used);
+  assert.equal(catalogue.get('crate_water').unitPricePaise, 2100);
+  assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ baseUnitsPerPurchaseUnit:6 })] }, labels, used), (error) => error.code === 'product_conversion_conflict');
+  assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ unitLabel:'piece' })] }, labels, used), (error) => error.code === 'product_unit_label_conflict');
+  invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ baseUnitsPerPurchaseUnit:0 })] });
+  invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ aliases:'water' })] });
+  invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ extra:'unapproved' })] });
 });
 
 test('staff shift projection is privacy-minimized, validated and immutable after close', () => {

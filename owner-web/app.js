@@ -228,13 +228,13 @@ import { formatQuantity } from './quantity-format.mjs';
       });
       $('products-scope').textContent = data.evidence.scope;
       $('product-metrics').replaceChildren(
-        metric('Products in accepted catalogue activity', String(data.productCount), 'Products with accepted stock or delivered-order records'),
+        metric('Products in accepted catalogue/activity', String(data.productCount), 'Accepted catalogue upserts plus stock or delivered-order records'),
         metric('Net delivered item value', money(data.netDeliveredItemValuePaise), 'Latest accepted order state; not profit')
       );
       const rows = data.products.map((product) => {
         const row = document.createElement('tr');
         const values = [
-          product.productId,
+          product.productName ? `${product.productName} (${product.productId})` : product.productId,
           formatQuantity(product.netDeliveredUnits, product.unitLabel),
           formatQuantity(product.refundedUnits, product.unitLabel),
           money(product.netDeliveredItemValuePaise),

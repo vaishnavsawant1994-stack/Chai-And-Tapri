@@ -136,6 +136,47 @@ test('accepted unit labels persist in owner projections, reject relabeling, and 
   }
 });
 
+test('owner catalogue upserts reach product and inventory views and freeze pack conversion after use', { skip: !connection }, async () => {
+  const pool = createPool(connection); const admin = createAdminPool(); const service = new SyncService(pool); const deviceId = randomUUID();
+  let enrollment;
+  try {
+    enrollment = await service.register({ email:`catalogue-${randomUUID()}@example.test`, password:'Synthetic-Only-Password-2026!', displayName:'Synthetic Owner', businessName:'Synthetic Business', shopName:'Synthetic Shop', deviceId, deviceLabel:'Catalogue Test Device' });
+    const actor = await service.authenticate(enrollment.token, enrollment.shopId);
+    const product = { productId:'water_bottle', name:'Water Bottle', category:'Drinks', unitPricePaise:2000, active:true, favorite:false,
+      priceConfirmed:true, aliases:['water'], reorderThreshold:12, estimatedUnitCostPaise:125, scanCode:null,
+      unitLabel:'bottle', purchaseUnitLabel:'crate', baseUnitsPerPurchaseUnit:24 };
+    const catalogueEvent = { type:'business.command.v1', schemaVersion:1, eventId:randomUUID(), commandId:`catalogue-${randomUUID()}`,
+      businessId:enrollment.businessId, shopId:enrollment.shopId, deviceId, baseRevision:0,
+      payload:{ ...projectionDelta([]), catalogue:[product] } };
+    assert.equal((await service.submitEvents(actor, [catalogueEvent])).results[0].status, 'accepted');
+    assert.equal((await service.submitEvents(actor, [catalogueEvent])).results[0].status, 'duplicate');
+    const performance = await service.shopProductPerformance(actor);
+    assert.equal(performance.products[0].productName, 'Water Bottle');
+    assert.equal(performance.products[0].purchaseUnitLabel, 'crate');
+    assert.equal(performance.products[0].baseUnitsPerPurchaseUnit, 24);
+    assert.equal(performance.products[0].stockState, 'unreported');
+
+    const stockEvent = { ...catalogueEvent, eventId:randomUUID(), commandId:`stock-${randomUUID()}`, baseRevision:1,
+      payload:{ ...projectionDelta([{ productId:'water_bottle', quantity:48, unitLabel:'bottle' }]) } };
+    assert.equal((await service.submitEvents(actor, [stockEvent])).results[0].status, 'accepted');
+    const inventory = await service.shopInventorySnapshot(actor);
+    assert.equal(inventory.products[0].productName, 'Water Bottle');
+    assert.equal(inventory.products[0].quantity, 48);
+    assert.equal(inventory.products[0].baseUnitsPerPurchaseUnit, 24);
+
+    const relabelConversion = { ...catalogueEvent, eventId:randomUUID(), commandId:`factor-${randomUUID()}`, baseRevision:2,
+      payload:{ ...projectionDelta([]), catalogue:[{ ...product, baseUnitsPerPurchaseUnit:12 }] } };
+    await assert.rejects(service.submitEvents(actor, [relabelConversion]), (error) => error instanceof ApiError && error.code === 'product_conversion_conflict');
+    const priceUpdate = { ...catalogueEvent, eventId:randomUUID(), commandId:`price-${randomUUID()}`, baseRevision:2,
+      payload:{ ...projectionDelta([]), catalogue:[{ ...product, unitPricePaise:2100 }] } };
+    assert.equal((await service.submitEvents(actor, [priceUpdate])).results[0].status, 'accepted');
+    assert.equal((await service.shopProductPerformance(actor)).products[0].unitPricePaise, 2100);
+  } finally {
+    if (enrollment) await cleanupEnrollment(admin, enrollment);
+    await pool.end(); await admin.end();
+  }
+});
+
 test('authentication rejects malformed identifiers and weak registration passwords before database writes', { skip: !connection }, async()=>{
   const pool=createPool(connection); const service=new SyncService(pool);
   try {

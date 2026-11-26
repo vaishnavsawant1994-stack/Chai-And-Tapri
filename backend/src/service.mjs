@@ -29,6 +29,7 @@ const requireOwner = (actor) => { if (actor?.role !== 'owner') throw new ApiErro
 export function authorizeProjectionForRole(role, payload, stockBefore = new Map(), creditsBefore = new Map(), ordersBefore = new Map(), productUnitLabels = new Map()) {
   if (role === 'owner' || role === 'manager') return true;
   if (role !== 'cashier') throw new ApiError(403, 'business_sync_role_denied');
+  if ((payload.catalogue ?? []).length > 0) throw new ApiError(403, 'cashier_catalogue_permission_denied');
   const privilegedFamilies = ['expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns'];
   if (privilegedFamilies.some((field) => (payload[field] ?? []).length > 0)) throw new ApiError(403, 'cashier_business_permission_denied');
   const labeledProducts = [
@@ -117,7 +118,7 @@ export function authorizeProjectionForRole(role, payload, stockBefore = new Map(
 /** Validate the only Android payload contract currently eligible for upload. */
 export function validateProjectionDelta(payload) {
   const requiredTopKeys = ['kind','orders','stock','stockMovements','customerCredits','repayments','paymentEntries'];
-  const allowedTopKeys = [...requiredTopKeys, 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns', 'staffShifts'];
+  const allowedTopKeys = [...requiredTopKeys, 'expenses', 'purchaseReceipts', 'supplierPayments', 'purchaseReturns', 'staffShifts', 'catalogue'];
   if (!object(payload) || requiredTopKeys.some((key) => !Object.hasOwn(payload, key)) ||
     Object.keys(payload).some((key) => !allowedTopKeys.includes(key)) || payload.kind !== 'projection_delta.v1') throw new ApiError(400, 'invalid_projection_delta');
   for (const key of requiredTopKeys.slice(1)) if (!Array.isArray(payload[key]) || payload[key].length > 500) throw new ApiError(400, 'invalid_projection_delta');
@@ -126,8 +127,25 @@ export function validateProjectionDelta(payload) {
   const supplierPayments = payload.supplierPayments ?? [];
   const purchaseReturns = payload.purchaseReturns ?? [];
   const staffShifts = payload.staffShifts ?? [];
-  if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns, staffShifts].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
-  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.customerCredits.length + payload.repayments.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length + staffShifts.length === 0) throw new ApiError(400, 'empty_projection_delta');
+  const catalogue = payload.catalogue ?? [];
+  if (![expenses, purchaseReceipts, supplierPayments, purchaseReturns, staffShifts, catalogue].every((items) => Array.isArray(items) && items.length <= 500)) throw new ApiError(400, 'invalid_projection_delta');
+  if (payload.orders.length + payload.stock.length + payload.stockMovements.length + payload.customerCredits.length + payload.repayments.length + payload.paymentEntries.length + expenses.length + purchaseReceipts.length + supplierPayments.length + purchaseReturns.length + staffShifts.length + catalogue.length === 0) throw new ApiError(400, 'empty_projection_delta');
+
+  const catalogueIds = new Set();
+  const productKeys = ['productId','name','category','unitPricePaise','active','favorite','priceConfirmed','aliases','reorderThreshold','estimatedUnitCostPaise','scanCode','unitLabel','purchaseUnitLabel','baseUnitsPerPurchaseUnit'];
+  for (const product of catalogue) {
+    if (!hasExactKeys(product, productKeys) || !/^[a-z][a-z0-9_]{1,39}$/.test(product.productId ?? '') || catalogueIds.has(product.productId) ||
+      typeof product.name !== 'string' || product.name.trim() !== product.name || product.name.length < 2 || product.name.length > 60 || /[\u0000-\u001f\u007f-\u009f]/.test(product.name) ||
+      typeof product.category !== 'string' || product.category.trim() !== product.category || product.category.length < 2 || product.category.length > 40 || /[\u0000-\u001f\u007f-\u009f]/.test(product.category) ||
+      !isInt(product.unitPricePaise, { min: 0, max: 10_000_000 }) || typeof product.active !== 'boolean' || typeof product.favorite !== 'boolean' || typeof product.priceConfirmed !== 'boolean' ||
+      (product.active && product.priceConfirmed && product.unitPricePaise === 0) || !Array.isArray(product.aliases) || product.aliases.length > 50 ||
+      product.aliases.some((alias) => typeof alias !== 'string' || alias.trim() !== alias || alias.length > 40 || /[\u0000-\u001f\u007f-\u009f]/.test(alias)) ||
+      (product.reorderThreshold !== null && !isInt(product.reorderThreshold, { min: 1, max: 100_000 })) ||
+      (product.estimatedUnitCostPaise !== null && !isInt(product.estimatedUnitCostPaise, { min: 0, max: 10_000_000 })) ||
+      (product.scanCode !== null && (typeof product.scanCode !== 'string' || product.scanCode.trim() !== product.scanCode || product.scanCode.length > 128 || /[\u0000-\u001f\u007f-\u009f]/.test(product.scanCode))) ||
+      !isUnitLabel(product.unitLabel) || !isUnitLabel(product.purchaseUnitLabel) || !isInt(product.baseUnitsPerPurchaseUnit, { min: 1, max: 100_000 })) throw new ApiError(400, 'invalid_projection_delta');
+    catalogueIds.add(product.productId);
+  }
 
   const orderKeys = ['orderNumber','fulfillment','payment','paidPaise','creditPaise','refundedPaise','cashRefundedPaise','creditReversedPaise','salePosted','voided','revision','createdAtEpochMs','lines'];
   const legacyLineKeys = ['productId','quantity','deliveredQuantity','refundedQuantity','unitPricePaise'];
@@ -229,6 +247,30 @@ export function applyProductUnitLabelDelta(labels, payload) {
   for (const movement of payload.stockMovements ?? []) observe(movement.productId, movement.unitLabel);
   for (const [productId, label] of incoming) labels.set(productId, label);
   return true;
+}
+
+/** Keep accepted catalogue snapshots tenant-scoped in the event journal and freeze unit conversions after use. */
+export function applyProductCatalogueDelta(catalogue, payload, unitLabels, usedProducts = new Set()) {
+  for (const product of payload.catalogue ?? []) {
+    const previous = catalogue.get(product.productId);
+    const previousLabel = unitLabels.get(product.productId);
+    if (previousLabel !== undefined && previousLabel !== product.unitLabel) throw new ApiError(409, 'product_unit_label_conflict');
+    const conversionChanged = previous && (previous.purchaseUnitLabel !== product.purchaseUnitLabel ||
+      previous.baseUnitsPerPurchaseUnit !== product.baseUnitsPerPurchaseUnit || previous.unitLabel !== product.unitLabel);
+    if ((conversionChanged && usedProducts.has(product.productId)) ||
+        (!previous && usedProducts.has(product.productId) && (product.baseUnitsPerPurchaseUnit !== 1 || product.purchaseUnitLabel !== product.unitLabel))) {
+      throw new ApiError(409, 'product_conversion_conflict');
+    }
+    catalogue.set(product.productId, product);
+    unitLabels.set(product.productId, product.unitLabel);
+  }
+  return true;
+}
+
+function applyProductHistory(usedProducts, payload) {
+  for (const order of payload.orders ?? []) for (const line of order.lines ?? []) usedProducts.add(line.productId);
+  for (const item of payload.stock ?? []) usedProducts.add(item.productId);
+  for (const movement of payload.stockMovements ?? []) usedProducts.add(movement.productId);
 }
 
 export function applySupplierLedgerDelta(ledger, payload) {
@@ -770,6 +812,8 @@ export class SyncService {
       const creditState = new Map();
       const orderState = new Map();
       const productUnitLabels = new Map();
+      const productCatalogue = new Map();
+      const usedProducts = new Set();
       for (const row of journal.rows) if (row.envelope?.payload?.kind === 'projection_delta.v1') {
         applySupplierLedgerDelta(supplierLedger, row.envelope.payload);
         applyCustomerLedgerDelta(customerLedger, row.envelope.payload);
@@ -778,6 +822,8 @@ export class SyncService {
         for (const credit of row.envelope.payload.customerCredits ?? []) creditState.set(credit.creditId, credit);
         for (const order of row.envelope.payload.orders ?? []) orderState.set(order.orderNumber, order);
         applyProductUnitLabelDelta(productUnitLabels, row.envelope.payload);
+        applyProductCatalogueDelta(productCatalogue, row.envelope.payload, productUnitLabels, usedProducts);
+        applyProductHistory(usedProducts, row.envelope.payload);
       }
       const results = [];
       for (const e of events) {
@@ -798,9 +844,13 @@ export class SyncService {
             VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.business_id,actor.shop_id,e.eventId,e.commandId,e.deviceId,e.baseRevision,revision,e]);
           results.push({ eventId:e.eventId,status:'conflict',currentRevision:revision }); continue;
         }
-        applyProductUnitLabelDelta(new Map(productUnitLabels), e.payload);
-        authorizeProjectionForRole(actor.role, e.payload, stockLedger, creditState, orderState, productUnitLabels);
+        const candidateLabels = new Map(productUnitLabels);
+        applyProductUnitLabelDelta(candidateLabels, e.payload);
+        applyProductCatalogueDelta(new Map(productCatalogue), e.payload, candidateLabels, usedProducts);
+        authorizeProjectionForRole(actor.role, e.payload, stockLedger, creditState, orderState, candidateLabels);
         applyProductUnitLabelDelta(productUnitLabels, e.payload);
+        applyProductCatalogueDelta(productCatalogue, e.payload, productUnitLabels, usedProducts);
+        applyProductHistory(usedProducts, e.payload);
         applySupplierLedgerDelta(supplierLedger, e.payload);
         applyCustomerLedgerDelta(customerLedger, e.payload);
         applyStaffShiftLedgerDelta(staffShiftLedger, e.payload);

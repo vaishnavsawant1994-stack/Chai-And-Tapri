@@ -174,9 +174,14 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
   const orders = new Map();
   const stock = new Map();
   const unitLabels = new Map();
+  const catalogue = new Map();
   for (const row of events) {
     const payload = row.envelope?.payload;
     if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const product of payload.catalogue ?? []) {
+      catalogue.set(product.productId, product);
+      unitLabels.set(product.productId, product.unitLabel);
+    }
     for (const order of payload.orders ?? []) {
       orders.set(order.orderNumber, order);
       for (const line of order.lines ?? []) if (line.unitLabel) unitLabels.set(line.productId, line.unitLabel);
@@ -196,6 +201,7 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
     return products.get(productId);
   };
 
+  for (const productId of catalogue.keys()) ensure(productId);
   for (const [productId, quantity] of stock) ensure(productId).stockQuantity = quantity;
   for (const order of orders.values()) {
     if (!order.salePosted || order.voided) continue;
@@ -214,6 +220,12 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
 
   const rows = [...products.values()].map((product) => ({
     productId: product.productId,
+    productName: catalogue.get(product.productId)?.name ?? null,
+    category: catalogue.get(product.productId)?.category ?? null,
+    active: catalogue.get(product.productId)?.active ?? null,
+    unitPricePaise: catalogue.get(product.productId)?.priceConfirmed ? catalogue.get(product.productId)?.unitPricePaise ?? null : null,
+    purchaseUnitLabel: catalogue.get(product.productId)?.purchaseUnitLabel ?? null,
+    baseUnitsPerPurchaseUnit: catalogue.get(product.productId)?.baseUnitsPerPurchaseUnit ?? null,
     grossDeliveredUnits: product.grossDeliveredUnits,
     refundedUnits: product.refundedUnits,
     netDeliveredUnits: product.netDeliveredUnits,
@@ -221,7 +233,7 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
     orderCount: product.orderNumbers.size,
     stockState: product.stockQuantity === undefined ? 'unreported' : product.stockQuantity === null ? 'unknown' : 'known',
     stockQuantity: product.stockQuantity ?? null,
-    unitLabel: unitLabels.get(product.productId) ?? null
+    unitLabel: unitLabels.get(product.productId) ?? catalogue.get(product.productId)?.unitLabel ?? null
   })).sort((a, b) => b.netDeliveredItemValuePaise - a.netDeliveredItemValuePaise || a.productId.localeCompare(b.productId));
 
   return {
@@ -233,7 +245,8 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
       scope: 'Accepted server events only; offline, blocked and unsynchronized activity is not included.',
       calculation: 'Uses the latest accepted order state per order; voided/unposted orders are excluded and refunded units are subtracted from delivered units.',
       itemValue: 'Net delivered units multiplied by recorded selling price; this is item value, not recognized profit or cost-adjusted revenue.',
-      units: 'Units are shown per product and must not be compared or summed across products because their units may differ.',
+      units: 'Base units and configured purchase-unit conversions come only from accepted catalogue upserts; quantities are shown per product and must not be compared or summed across products.',
+      catalogue: 'Names, category, active status, current confirmed prices and unit conversions come from the latest accepted catalogue upsert. Unaccepted/offline product edits are not shown; costs, aliases and scan codes are not exposed in this view.',
       stock: 'Stock state reflects the latest accepted stock snapshot; unknown and unreported stock are shown separately.'
     }
   };
@@ -244,9 +257,14 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
   const stock = new Map();
   const movements = new Map();
   const unitLabels = new Map();
+  const catalogue = new Map();
   for (const row of events) {
     const payload = row.envelope?.payload;
     if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const product of payload.catalogue ?? []) {
+      catalogue.set(product.productId, product);
+      unitLabels.set(product.productId, product.unitLabel);
+    }
     const receivedAt = row.received_at instanceof Date ? row.received_at : new Date(row.received_at);
     const acceptedAt = Number.isNaN(receivedAt.valueOf()) ? null : receivedAt.toISOString();
     const revision = Number(row.server_revision);
@@ -265,6 +283,9 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
     const current = stock.get(productId);
     return {
       productId,
+      productName: catalogue.get(productId)?.name ?? null,
+      purchaseUnitLabel: catalogue.get(productId)?.purchaseUnitLabel ?? null,
+      baseUnitsPerPurchaseUnit: catalogue.get(productId)?.baseUnitsPerPurchaseUnit ?? null,
       unitLabel: unitLabels.get(productId) ?? null,
       quantityState: !current ? 'unreported' : current.quantity === null ? 'unknown' : 'known',
       quantity: current?.quantity ?? null,
@@ -298,7 +319,7 @@ export function buildInventorySnapshot({ shopId, shopName, serverRevision, event
     recentMovements,
     evidence: {
       scope: 'Accepted server events only; offline, blocked and unsynchronized activity is not included.',
-      quantities: 'Known, unknown and unreported quantities are distinct. Optional unit labels come from accepted transaction events; the synchronized product catalogue and pack-size conversions are not implemented. Do not add or compare quantities across products.',
+      quantities: 'Known, unknown and unreported quantities are distinct. Product names and purchase-unit conversions come from the latest accepted catalogue upsert; quantities remain base-unit counts and must not be added or compared across products.',
       movementHistory: 'Movement entries are deduplicated by movement ID and ordered by server revision. They are records, not proof of a physical count.',
       reconciliation: 'This view does not infer missing sales, waste, theft, or reorder quantities from a stock difference.'
     }

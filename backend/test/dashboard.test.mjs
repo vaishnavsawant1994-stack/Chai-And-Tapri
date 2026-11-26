@@ -180,7 +180,7 @@ test('product performance uses latest order states, subtracts returns, excludes 
   ] };
   const voided = { ...chai1, orderNumber: 3, voided: true, lines: [{ ...chai1.lines[0], productId: 'samosa' }] };
   const result = buildProductPerformance({ shopId: 's', shopName: 'Synthetic', serverRevision: 4, events: [
-    row(1, { ...empty, orders: [chai1], stock: [{ productId: 'chai', quantity: 8, unitLabel: 'cup' }] }),
+    row(1, { ...empty, catalogue:[{ productId:'chai', name:'Masala Chai', category:'Tea', active:true, priceConfirmed:true, unitPricePaise:1000, unitLabel:'cup', purchaseUnitLabel:'crate', baseUnitsPerPurchaseUnit:24 }], orders: [chai1], stock: [{ productId: 'chai', quantity: 8, unitLabel: 'cup' }] }),
     row(2, { ...empty, orders: [chai1Returned], stock: [{ productId: 'chai', quantity: 7, unitLabel: 'cup' }, { productId: 'coffee', quantity: null }] }),
     row(3, { ...empty, orders: [chai2] }),
     row(4, { ...empty, orders: [voided] })
@@ -195,12 +195,29 @@ test('product performance uses latest order states, subtracts returns, excludes 
   assert.equal(chai.stockState, 'known');
   assert.equal(chai.stockQuantity, 7);
   assert.equal(chai.unitLabel, 'cup');
+  assert.equal(chai.productName, 'Masala Chai');
+  assert.equal(chai.purchaseUnitLabel, 'crate');
+  assert.equal(chai.baseUnitsPerPurchaseUnit, 24);
+  assert.equal(chai.unitPricePaise, 1000);
   assert.equal(result.products.find((item) => item.productId === 'coffee').unitLabel, null);
   assert.equal(result.products.find((item) => item.productId === 'coffee').stockState, 'unknown');
   assert.equal(result.products.find((item) => item.productId === 'samosa'), undefined);
   assert.equal(result.netDeliveredItemValuePaise, 8500);
   assert.match(result.evidence.itemValue, /not recognized profit/);
   assert.match(result.evidence.units, /must not be compared or summed/);
+  assert.match(result.evidence.catalogue, /accepted catalogue upsert/);
+});
+
+test('owner product projection includes accepted catalogue-only items without inventing stock or sales', () => {
+  const result = buildProductPerformance({ shopId:'s', shopName:'Synthetic', serverRevision:1, events:[row(1, { ...empty,
+    catalogue:[{ productId:'bun_maska', name:'Bun Maska', category:'Bakery', active:true, priceConfirmed:true, unitPricePaise:3000, unitLabel:'piece', purchaseUnitLabel:'tray', baseUnitsPerPurchaseUnit:8 }]
+  })] });
+  assert.equal(result.productCount, 1);
+  assert.deepEqual(result.products[0], {
+    productId:'bun_maska', productName:'Bun Maska', category:'Bakery', active:true, unitPricePaise:3000,
+    purchaseUnitLabel:'tray', baseUnitsPerPurchaseUnit:8, grossDeliveredUnits:0, refundedUnits:0, netDeliveredUnits:0,
+    netDeliveredItemValuePaise:0, orderCount:0, stockState:'unreported', stockQuantity:null, unitLabel:'piece'
+  });
 });
 
 test('product performance rejects unsafe delivered value and reports empty accepted data', () => {
@@ -216,7 +233,7 @@ test('product performance rejects unsafe delivered value and reports empty accep
 
 test('inventory snapshot keeps known, unknown, and unreported quantities distinct and deduplicates movements', () => {
   const events = [
-    row(1, { ...empty,
+    row(1, { ...empty, catalogue:[{ productId:'chai', name:'Chai', unitLabel:'cup', purchaseUnitLabel:'crate', baseUnitsPerPurchaseUnit:24 }],
       stock: [{ productId: 'chai', quantity: 12, unitLabel: 'cup' }, { productId: 'coffee', quantity: null }],
       stockMovements: [
         { movementId: 'm-1', productId: 'chai', quantityDelta: -2, orderNumber: 4, unitLabel: 'cup' },
@@ -235,13 +252,15 @@ test('inventory snapshot keeps known, unknown, and unreported quantities distinc
   assert.equal(result.unreportedQuantityCount, 1);
   assert.equal(result.products.find((item) => item.productId === 'chai').quantity, 10);
   assert.equal(result.products.find((item) => item.productId === 'chai').unitLabel, 'cup');
+  assert.equal(result.products.find((item) => item.productId === 'chai').productName, 'Chai');
+  assert.equal(result.products.find((item) => item.productId === 'chai').baseUnitsPerPurchaseUnit, 24);
   assert.equal(result.products.find((item) => item.productId === 'coffee').quantityState, 'unknown');
   assert.equal(result.products.find((item) => item.productId === 'sugar').quantityState, 'unreported');
   assert.equal(result.movementCount, 2);
   assert.equal(result.recentMovements[0].movementId, 'm-1');
   assert.equal(result.recentMovements[0].serverRevision, 2);
   assert.equal(result.recentMovements[0].unitLabel, 'cup');
-  assert.match(result.evidence.quantities, /pack-size conversions are not implemented/);
+  assert.match(result.evidence.quantities, /latest accepted catalogue upsert/);
   assert.match(result.evidence.reconciliation, /does not infer missing sales/);
 });
 

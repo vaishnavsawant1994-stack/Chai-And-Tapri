@@ -52,3 +52,10 @@ The observed cash+UPI split now has tests at the local sync-contract boundary: K
 ## Current-source emulator regression correction — 26 November 2026
 
 The earlier same-day full Android attempt failed after emulator/ADB loss (32 tests, 18 passed, 14 failed). A fresh serial-pinned run on the isolated API 37 AVD completed successfully: **152/152 passed, 0 failures, 0 errors, 0 skipped** in **10m08s**. Results: `android/app/build/outputs/androidTest-results/connected/TEST-Tapri_Recovery_Isolated(AVD) - 17.xml` and `android/app/build/reports/androidTests/connected/debug/index.html`. The earlier result is retained as troubleshooting history and is superseded as current-source suite status. Emulator tests do not establish physical headset/audio, shop field, independent security, production deployment or release readiness.
+
+
+## 26 November 2026 follow-up - CAT-052 catalogue to owner projection
+
+Product edits in Android now create sendable catalogue events with purchase-unit conversion metadata. Backend validation and role checks protect the catalogue contract; conversion changes are rejected after accepted product history. Owner product-performance and inventory projections use accepted catalogue names and units while retaining explicit unknown/unreported states. The detailed implementation report is [here](CAT-052-CATALOGUE-OWNER-PROJECTION-REPORT-2026-11-26.md).
+
+Current verification for this follow-up: prototype Node 52/52; backend Node 43/43 passed with 0 skips against disposable PostgreSQL 17; Kotlin JVM 105/105 passed; debug/instrumentation APK builds passed; lint passed with 0 errors and 197 warnings; focused API 37 instrumentation passed 1/1. PostgreSQL backend coverage used synthetic records and a disposable local container. Android-to-server live sync, owner browser visual verification, physical-device, field, production and independent-security qualification are not claimed.

@@ -592,6 +592,23 @@ class CounterModelTest {
         assertFalse(legacy.json!!.contains("unitLabel"))
     }
 
+    @Test fun catalogueUpsertSyncIncludesConfiguredPurchaseConversionAndSafeNullFields() {
+        val payload = SyncOutboxPayloadEncoder.catalogueProduct(TapriProduct(
+            "water_bottle", "Water Bottle", "Drinks", 2000, priceConfirmed = true,
+            aliases = listOf("water", "bottle"), reorderThreshold = 12, estimatedUnitCostPaise = 125,
+            scanCode = null, unitLabel = "bottle", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 24
+        ))
+        assertTrue(payload.sendable)
+        val json = payload.json.orEmpty()
+        assertTrue(json.contains("\"catalogue\":[{"))
+        assertTrue(json.contains("\"purchaseUnitLabel\":\"crate\""))
+        assertTrue(json.contains("\"baseUnitsPerPurchaseUnit\":24"))
+        assertTrue(json.contains("\"estimatedUnitCostPaise\":125"))
+        assertTrue(json.contains("\"scanCode\":null"))
+        assertFalse(json.contains("\"phone\""))
+        assertFalse(json.contains("\"email\""))
+    }
+
     @Test fun syncProjectionDeltaUsesAllowListedFieldsAndBlocksUnsupportedEntities() {
         val persistence = MemoryPersistence()
         val model = CounterModel(persistence)

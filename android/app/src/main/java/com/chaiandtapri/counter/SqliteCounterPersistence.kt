@@ -765,7 +765,7 @@ class SqliteCounterPersistence internal constructor(
                 val now = System.currentTimeMillis()
                 db.insertOrThrow("command_receipts", null, ContentValues().apply { put("command_id", commandId); put("result", "Product saved"); put("committed_at", now) })
                 db.insertOrThrow("audit_events", null, auditValues(commandId, commandId, "product.catalog_saved product_id=${product.productId} price_confirmed=${product.priceConfirmed} active=${product.active} unit=${product.unitLabel.trim()} purchase_unit=${product.purchaseUnitLabel.trim()} base_units_per_purchase_unit=${product.baseUnitsPerPurchaseUnit}", now))
-                insertSyncOutbox(db, commandId, now, SyncOutboxPayload(null, null, "catalog_contract_pending"))
+                insertSyncOutbox(db, commandId, now, SyncOutboxPayloadEncoder.catalogueProduct(product))
                 db.setTransactionSuccessful()
                 return true
             } finally { db.endTransaction() }
