@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## 26 November 2026 — owner branch lifecycle continuation
+
+OW-14 now includes audited replacement-device registration and branch rename in addition to branch creation/revocation. Migration 008 adds structured old/new-name details to append-only branch audit records. The rename route uses an expected-name stale-edit guard and does not alter financial or sync revision state. Latest local restricted-role PostgreSQL backend suite: **45/45**, 0 skipped, migrations 001–008; browser visual authorization remains pending. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). This does not establish full branch consolidation, transfers, archive, or production readiness.
+
 ## 26 November 2026 — OW-14 branch directory and creation slice
 
 Added business-scoped branch directory/create and lost-device revocation to the owner dashboard. Branch creation transactionally creates the shop, owner membership, device identity and audit event. Owners can retrieve device IDs/active state and revoke a lost device, ending its sessions; self-revocation is rejected. Each branch still requires separate sign-in. PostgreSQL 17 integration suite passed **45/45 with 0 skips** using the restricted runtime role, including business isolation, branch login and revocation. Node syntax and diff checks passed. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). Consolidated branch accounting, operational switching, transfers, visual review, deployment qualification and the remaining six-wave product work remain incomplete.

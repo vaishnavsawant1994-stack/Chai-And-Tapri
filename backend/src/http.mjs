@@ -105,6 +105,12 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,body.shopId);
         return json(res,201,await service.createBusinessBranch(actor,body));
       }
+      if(req.method==='PATCH'&&url.pathname==='/v1/dashboard/branches') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','targetShopId','expectedName','displayName'])) throw new ApiError(400,'invalid_branch_rename');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,200,await service.renameBusinessBranch(actor,body));
+      }
       if(req.method==='POST'&&url.pathname==='/v1/dashboard/devices/revoke') {
         const body=await readBody(req);
         if(!hasExactKeys(body,['shopId','targetShopId','deviceId'])) throw new ApiError(400,'invalid_device_identity');

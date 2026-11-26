@@ -695,6 +695,34 @@ export class SyncService {
     });
   }
 
+  async renameBusinessBranch(actor, { targetShopId, expectedName, displayName }) {
+    requireOwner(actor);
+    if (!UUID.test(targetShopId ?? '') || typeof expectedName !== 'string' || expectedName.trim().length < 2 || expectedName.trim().length > 120 ||
+        typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 120) {
+      throw new ApiError(400, 'invalid_branch_rename');
+    }
+    const nextName = displayName.trim();
+    const priorName = expectedName.trim();
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const target = await c.query(`SELECT display_name FROM shops
+        WHERE business_id=$1 AND shop_id=$2 FOR UPDATE`, [actor.business_id, targetShopId]);
+      if (!target.rowCount) throw new ApiError(404, 'business_branch_not_found');
+      if (target.rows[0].display_name !== priorName) throw new ApiError(409, 'branch_name_conflict');
+      if (priorName === nextName) return { shopId: targetShopId, displayName: priorName, state: 'unchanged' };
+      await c.query('UPDATE shops SET display_name=$3 WHERE business_id=$1 AND shop_id=$2', [actor.business_id, targetShopId, nextName]);
+      await c.query(`INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action,details)
+        VALUES($1,$2,$3,'branch_renamed',$4::jsonb)`, [actor.business_id, targetShopId, actor.user_id,
+        JSON.stringify({ previousName: priorName, displayName: nextName })]);
+      return { shopId: targetShopId, displayName: nextName, state: 'renamed' };
+    });
+  }
+
   async revokeBusinessDevice(actor, { targetShopId, deviceId }) {
     requireOwner(actor);
     if (!UUID.test(targetShopId ?? '') || !UUID.test(deviceId ?? '')) throw new ApiError(400, 'invalid_device_identity');

@@ -716,7 +716,21 @@ import { formatQuantity } from './quantity-format.mjs';
       });
       const rows = result.branches.map((branch) => {
         const row = document.createElement('tr');
-        appendCell(row, branch.displayName); appendCell(row, branch.shopId);
+        const nameCell = document.createElement('td');
+        nameCell.append(document.createTextNode(branch.displayName));
+        nameCell.append(actionButton('Rename', async () => {
+          const displayName = prompt('New branch name', branch.displayName);
+          if (displayName === null || displayName.trim() === branch.displayName) return;
+          try {
+            const updated = await request('/v1/dashboard/branches', {
+              method: 'PATCH', headers: { authorization: `Bearer ${session.token}` },
+              body: JSON.stringify({ shopId: activeShopId, targetShopId: branch.shopId, expectedName: branch.displayName, displayName })
+            });
+            setStatus($('branches-status'), `Branch ${updated.state}: ${updated.displayName}.`, 'success');
+            await loadBranches();
+          } catch (error) { setStatus($('branches-status'), showError(error), 'error'); }
+        }));
+        row.append(nameCell); appendCell(row, branch.shopId);
         const devicesCell = document.createElement('td');
         if (branch.devices.length) {
           const list = document.createElement('ul');

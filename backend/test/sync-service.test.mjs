@@ -131,6 +131,8 @@ test('business owner branch directory is isolated and creates a separately authe
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.registerBusinessDevice({...actor,role:'cashier'},{targetShopId:enrollment.shopId,label:'Denied device'}),
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
+    await assert.rejects(service.renameBusinessBranch({...actor,role:'cashier'},{targetShopId:enrollment.shopId,expectedName:'Main Shop',displayName:'Denied Rename'}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.createBusinessBranch(actor,{displayName:'x',deviceLabel:'No Device'}),
       (error)=>error instanceof ApiError&&error.status===400&&error.code==='invalid_branch_details');
     server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -158,6 +160,14 @@ test('business owner branch directory is isolated and creates a separately authe
     const duplicateBody=await fetch(`${base}/v1/dashboard/branches`,{method:'POST',...auth,headers:{...auth.headers,'content-type':'application/json'},body:JSON.stringify({shopId:enrollment.shopId,displayName:'Second Shop',deviceLabel:'Third Counter'})});
     assert.equal(duplicateBody.status,201,'distinct branches may use the same display name; IDs remain authoritative');
     const duplicate = await duplicateBody.json();
+    const renamed = await service.renameBusinessBranch(actor,{targetShopId:created.branch.shopId,expectedName:'Second Shop',displayName:'North Counter'});
+    assert.deepEqual(renamed,{shopId:created.branch.shopId,displayName:'North Counter',state:'renamed'});
+    assert.deepEqual(await service.renameBusinessBranch(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',displayName:'North Counter'}),
+      {shopId:created.branch.shopId,displayName:'North Counter',state:'unchanged'});
+    await assert.rejects(service.renameBusinessBranch(actor,{targetShopId:created.branch.shopId,expectedName:'Second Shop',displayName:'Stale Rename'}),
+      (error)=>error instanceof ApiError&&error.status===409&&error.code==='branch_name_conflict');
+    await assert.rejects(service.renameBusinessBranch(actor,{targetShopId:otherEnrollment.shopId,expectedName:'Other Main',displayName:'Not Yours'}),
+      (error)=>error instanceof ApiError&&error.status===404&&error.code==='business_branch_not_found');
     const login=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:created.deviceId});
     assert.equal(login.role,'owner');
     assert.equal(login.businessId,enrollment.businessId);
@@ -188,9 +198,10 @@ test('business owner branch directory is isolated and creates a separately authe
     const audit=await withTransaction(pool,async(c)=>{
       await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
       await c.query("SELECT set_config('app.current_user',$1,true)",[enrollment.userId]);
-      return c.query("SELECT action,device_id FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
+      return c.query("SELECT action,device_id,details FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
     });
-    assert.equal(audit.rows.length,4);
+    assert.equal(audit.rows.length,5);
+    assert.ok(audit.rows.some((event)=>event.action==='branch_renamed'&&event.details.previousName==='Second Shop'&&event.details.displayName==='North Counter'));
     assert.ok(audit.rows.some((event)=>event.action==='device_revoked'&&event.device_id===created.deviceId));
     assert.ok(audit.rows.some((event)=>event.action==='device_registered'&&event.device_id===replacement.deviceId));
     const hidden=await withTransaction(pool,async(c)=>{
