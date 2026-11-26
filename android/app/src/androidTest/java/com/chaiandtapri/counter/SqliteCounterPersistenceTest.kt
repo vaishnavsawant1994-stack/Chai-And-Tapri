@@ -3059,8 +3059,9 @@ class SqliteCounterPersistenceTest {
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
-            assertTrue(model.saveProduct(TapriProduct("ct18_ui_tea", "CT18 UI Tea", "Pantry", 1000, priceConfirmed = true)).startsWith("Product saved"))
-            assertTrue(model.confirmOpeningStock("ct18_ui_tea", 5, "synthetic procurement UI baseline", "ct18-ui-stock").contains("5 units"))
+            assertTrue(model.saveProduct(TapriProduct("ct18_ui_tea", "CT18 UI Tea", "Pantry", 1000, priceConfirmed = true,
+                unitLabel = "cup", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 12)).startsWith("Product saved"))
+            assertTrue(model.confirmOpeningStock("ct18_ui_tea", 5, "synthetic procurement UI baseline", "ct18-ui-stock").contains("Opening stock confirmed"))
             assertTrue(model.saveSupplier("ct18_ui_dealer", "CT18 UI Dealer", "ct18-ui-supplier").startsWith("Supplier saved"))
         }
         val activity = instrumentation.startActivitySync(Intent(context, ProcurementActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -3136,10 +3137,15 @@ class SqliteCounterPersistenceTest {
             click("Create purchase order draft")
             clickNodeOrClickableParent(findNode(prefix = "Coffee"))
             click("CT18 UI Tea")
-            setField("Ordered quantity", "4")
-            setField("Estimated unit cost in rupees", "5")
+            setField("Ordered quantity in crate", "4")
+            setField("Estimated cost per cup in rupees", "5")
             click("Save draft")
             assertStockAndPayable(stock = 5, payablePaise = 0)
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
+                assertEquals("Draft pack quantity should convert to stored base-unit quantity", 48,
+                    model.purchaseOrderDrafts().single().lines.single().orderedQuantity)
+                assertTrue(model.auditEvents().any { it.contains("purchase_units=ct18_ui_tea:4:crate:12:48:cup") })
+            }
 
             click("Mark ")
             click("Mark sent")
@@ -3147,7 +3153,7 @@ class SqliteCounterPersistenceTest {
 
             click("Receive delivery for ")
             setField("Supplier invoice reference", "CT18-INV-1")
-            setField("remaining 4", "2")
+            setField("remaining 48", "2")
             click("Post received stock")
             assertStockAndPayable(stock = 7, payablePaise = 1000)
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
@@ -3155,15 +3161,15 @@ class SqliteCounterPersistenceTest {
             }
 
             click("Receive delivery for ")
-            setField("remaining 2", "2")
+            setField("remaining 46", "46")
             click("Post received stock")
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
-                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
-                assertEquals(2000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                assertEquals(53, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(24000L, model.supplierPayablePaise("ct18_ui_dealer"))
                 val order = model.purchaseOrderDrafts().single()
                 assertEquals(PurchaseOrderStatus.SENT, order.status)
                 assertEquals("RECEIVED", model.purchaseOrderState(order))
-                assertEquals(4, model.purchaseOrderReceivedQuantities(order.purchaseOrderId)["ct18_ui_tea"])
+                assertEquals(48, model.purchaseOrderReceivedQuantities(order.purchaseOrderId)["ct18_ui_tea"])
                 assertEquals(2, model.purchaseHistory().count { it.purchaseOrderId == order.purchaseOrderId })
                 assertEquals("CT18-INV-1", model.purchaseHistory().first { it.supplierInvoiceReference != null }.supplierInvoiceReference)
                 assertEquals(2, model.stockMovements().count { it.reason == "purchase_receipt" })
@@ -3172,12 +3178,12 @@ class SqliteCounterPersistenceTest {
 
             click("Record supplier payment")
             setField("Existing supplier ID", "ct18_ui_dealer")
-            setField("Cash amount in rupees", "21")
+            setField("Cash amount in rupees", "0")
             click("Record payment")
-            assertTrue(findNode(prefix = "Payment must be positive").text.contains("No change made"))
+            assertTrue(findNode(prefix = "Enter a positive exact-paise amount.").text.contains("No payment recorded"))
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
-                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
-                assertEquals(2000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                assertEquals(53, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(24000L, model.supplierPayablePaise("ct18_ui_dealer"))
                 assertTrue(model.supplierPaymentHistory().isEmpty())
                 assertEquals(0, model.expenseHistory().size)
                 assertFalse(model.auditEvents().any { it.contains("supplier.payment_recorded") })
@@ -3188,8 +3194,8 @@ class SqliteCounterPersistenceTest {
             setField("Cash amount in rupees", "5")
             click("Record payment")
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
-                assertEquals(9, model.stockLevels()["ct18_ui_tea"])
-                assertEquals(1500L, model.supplierPayablePaise("ct18_ui_dealer"))
+                assertEquals(53, model.stockLevels()["ct18_ui_tea"])
+                assertEquals(23500L, model.supplierPayablePaise("ct18_ui_dealer"))
                 val payment = model.supplierPaymentHistory().single()
                 assertEquals(500, payment.amountPaise)
                 assertEquals("cash", payment.method)
@@ -3207,8 +3213,8 @@ class SqliteCounterPersistenceTest {
             click("Confirm return")
             findNode(prefix = "Purchase return recorded")
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
-                assertEquals("One returned unit is deducted exactly once", 8, model.stockLevels()["ct18_ui_tea"])
-                assertEquals("Return reduces payable without deleting the supplier payment", 1000L, model.supplierPayablePaise("ct18_ui_dealer"))
+                assertEquals("One returned unit is deducted exactly once", 52, model.stockLevels()["ct18_ui_tea"])
+                assertEquals("Return reduces payable without deleting the supplier payment", 23000L, model.supplierPayablePaise("ct18_ui_dealer"))
                 val returned = model.purchaseReturnHistory().single()
                 assertEquals(1, returned.lines.single().quantity)
                 assertEquals("ct18_ui_tea", returned.lines.single().productId)
@@ -3219,7 +3225,7 @@ class SqliteCounterPersistenceTest {
                 CounterSnapshotIntegrity.requireConsistent(SqliteCounterPersistence(context).use { it.load()!! })
             }
             click("View supplier details")
-            assertTrue(findNode(prefix = "Current payable:").text.contains("10.00"))
+            assertTrue(findNode(prefix = "Current payable:").text.contains("230.00"))
             assertTrue(findNode(prefix = "₹5.00 · Staff-declared cash").text.contains("Staff-declared cash"))
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

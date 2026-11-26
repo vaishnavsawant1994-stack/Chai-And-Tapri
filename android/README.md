@@ -397,3 +397,7 @@ Focused API 37 UI test passed 1/1: the real editor saved `cup`/`crate`/12 conver
 ## Connected product-to-receipt-to-sale flow — 26 November 2026
 
 One API 37 instrumentation test now traverses Product Editor → supplier setup → configured crate receipt → Quick Sale. The UI creates a `cup` product purchased in crates of 12, confirms opening stock, receives two crates through Procurement, and sells one cup. Encrypted-store assertions verify stock, supplier payable, sale payment classification, conversion audit and both stock movements. Focused result: 1/1 pass. This does not qualify the full modules or replace the separately recorded full-suite results. See the [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
+
+## Purchase-order pack conversion UI — 26 November 2026
+
+The focused API 37 Procurement test passes with purchase-unit conversion enabled: four crates become 48 cups in the draft/audit; the draft has no stock or payable effect; two base-unit partial receipts, invalid payment rejection, staff-declared settlement and a one-cup return reconcile through encrypted storage. Focused result: 1/1. This path does not send the order to suppliers or qualify full procurement. See [CT-17 report](../specs/CT-17-PURCHASE-ORDER-UNIT-CONVERSION-REPORT-2026-11-26.md).

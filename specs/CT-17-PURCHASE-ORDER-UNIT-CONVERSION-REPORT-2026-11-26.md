@@ -16,3 +16,9 @@ The original purchase quantity, pack label, conversion factor, converted quantit
 ## Limits
 
 This does not add supplier transmission, automated ordering, package-price invoice parsing, fractional pack factors, order editing, or stock lot tracking. Drafts stay local and are not evidence that an order was sent. Receiving continues in base units and the operator confirms actual received quantities. CT-17 and overall procurement remain partial.
+
+## Native UI follow-up — 26 November 2026
+
+The existing `procurementPurchaseOrderDraftAndTwoPartialReceiptsUseTheNativeScreen` test now creates a synthetic product configured as `cup` / `crate`, 12 cups per crate, and drives the actual procurement dialogs. It drafts an order for 4 crates, verifies the persisted order contains 48 cups and the audit preserves `4:crate:12:48:cup`, then confirms the draft has not changed stock or payables. After marking it sent, it records partial base-unit deliveries of 2 and 46 cups. The test checks stock and payable after each step, an invalid zero payment with no mutation, a ₹5 staff-declared cash payment, a one-cup return, and the final ₹230 payable plus ledger/integrity records.
+
+Current-source focused API 37 instrumentation passed **1/1** on `Tapri_Recovery_Clean_2026`; JUnit timestamp `2026-11-26T01:30:11Z`, 0 failures/errors/skips. Evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Clean_2026(AVD) - 17.xml`. This replaces the prior “UI not run” status for this exact synthetic test path only. No full suite was run for the test-only extension, and receiving still explicitly records base units.
