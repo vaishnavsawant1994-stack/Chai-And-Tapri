@@ -30,6 +30,14 @@ Together with the [direct receipt UI follow-up](#direct-procurement-ui-follow-up
 
 This is direct stock receipt conversion, not complete purchasing-unit support. Purchase-order lines still use base units. Supplier invoice package totals are not parsed: the operator enters cost per base unit. No fractional conversion factors are supported. Recipes, variable-yield production, batch/expiry lot tracking, catalog sync of conversion metadata, supplier-system integration, cross-device conflicts, manual usability and shop-floor accuracy remain open. The UI automation result needs a stable emulator rerun; this report does not claim UI qualification.
 
+## Connected Product Editor → Supplier → Receipt → Quick Sale follow-up — 26 November 2026
+
+Extended `catalogueUiCreatesConfirmedProductAndQuickSalePostsItsConfiguredPrice` to exercise a single connected workflow through the real Android screens: create a confirmed-price `cup` product purchased in `crate` units at 12 cups per crate; confirm five cups of opening stock; save its alias/favourite; create a supplier; select the new product in direct receipt; receive two crates at ₹1.25 per cup; then sell one cup through Quick Sale. After encrypted-store reopen, the test verifies 28 cups remaining, ₹30.00 supplier payable, ₹12.50 sale total, staff-declared cash, one 24-cup receipt movement, one sale movement, and the configured purchase conversion audit. The direct receipt and quick sale both flow through their existing transaction paths.
+
+Current-source focused API 37 instrumentation passed **1/1** on `Tapri_Recovery_Clean_2026` (JUnit timestamp `2026-11-26T01:21:43Z`; 0 failures/errors/skips). The integration attempt exposed two test-harness assumptions, now corrected: the receipt dialog initially selects the first product, and the synthetic owner session must stay active across activities. The passing test explicitly selects the new catalogue product and preserves the session until the complete workflow finishes. Evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Clean_2026(AVD) - 17.xml`.
+
+This qualifies one end-to-end synthetic UI path. It does not qualify the entire product catalogue, procurement module, multi-line receipt flow, supplier settlement, live shop usability, physical devices, or production accounting. No full suite was rerun for this test-only change; the latest full-suite result remains the separately documented 152/152 run for its stated source.
+
 ## Evidence and source
 
 Screenshots and emulator boot logs are under `test-evidence/2026-11-26/ct13-unit-conversion/` (ignored local evidence). Source tests cover conversion, costs, audit detail, duplicate command protection, integer overflow rollback, conversion freeze, and migration/reopen.

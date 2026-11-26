@@ -5667,9 +5667,11 @@ class SqliteCounterPersistenceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic connected product workflow owner")
         val catalogue = instrumentation.startActivitySync(
             Intent(context, ProductCatalogueActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
+        var procurementActivity: ProcurementActivity? = null
         try {
             fun find(text: String? = null, hint: String? = null): AccessibilityNodeInfo? {
                 val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
@@ -5683,11 +5685,33 @@ class SqliteCounterPersistenceTest {
                 return walk(root)
             }
             fun await(text: String? = null, hint: String? = null): AccessibilityNodeInfo {
-                repeat(100) { find(text, hint)?.let { return it }; Thread.sleep(100) }
-                throw AssertionError("Catalogue UI element not found: text=$text hint=$hint")
+                var visible = "<no active window>"
+                repeat(100) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    find(text, hint)?.let { return it }
+                    val labels = mutableListOf<String>()
+                    fun collect(node: AccessibilityNodeInfo?) {
+                        if (node == null) return
+                        val textValue = node.text?.toString().orEmpty()
+                        val hintValue = node.hintText?.toString().orEmpty()
+                        if (textValue.isNotBlank()) labels += "text=$textValue"
+                        if (hintValue.isNotBlank()) labels += "hint=$hintValue"
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                    }
+                    collect(root)
+                    visible = labels.joinToString(" | ")
+                    root?.let(::scrollActiveWindowForward)
+                    Thread.sleep(100)
+                }
+                throw AssertionError("Catalogue UI element not found: text=$text hint=$hint; visible=$visible")
             }
             fun tap(node: AccessibilityNodeInfo) {
-                assertTrue("Could not activate catalogue control ${node.text}", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                var target: AccessibilityNodeInfo? = node
+                while (target != null) {
+                    if (target.isClickable && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
+                    target = target.parent
+                }
+                throw AssertionError("Could not activate catalogue control ${node.text}")
             }
             fun set(hint: String, value: String) {
                 val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) }
@@ -5762,8 +5786,32 @@ class SqliteCounterPersistenceTest {
                 if (!aliasSaved) Thread.sleep(100)
             }
             assertTrue("Catalogue editor alias and favourite changes should persist", aliasSaved)
+
+            procurementActivity = instrumentation.startActivitySync(
+                Intent(context, ProcurementActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ) as ProcurementActivity
+            tap(await(text = "Add or update supplier"))
+            set("Stable ID (e.g. local_dealer)", "e2e_crate_dealer")
+            set("Supplier / dealer name", "E2E Crate Dealer")
+            tap(await(text = "Save supplier"))
+            tap(await(text = "Record direct stock receipt"))
+            tap(await(text = "Coffee (coffee)"))
+            tap(await(text = "E2E Lemon Chai (e2e_lemon_chai)"))
+            set("Received quantity in crate", "2")
+            set("Cost per cup in ₹ (integer paise)", "1.25")
+            tap(await(text = "Post receipt"))
+
+            CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { received ->
+                assertEquals(29, received.stockLevels()["e2e_lemon_chai"])
+                assertEquals(3000L, received.supplierPayablePaise("e2e_crate_dealer"))
+                assertEquals(24, received.stockMovements().single { it.reason == "purchase_receipt" }.quantityDelta)
+                assertTrue(received.auditEvents().any { it.contains("purchase_units=e2e_lemon_chai:2:crate:12:24:cup") })
+            }
+            instrumentation.runOnMainSync { procurementActivity?.finish() }
+            instrumentation.waitForIdleSync()
+            Thread.sleep(300)
         } finally {
-            instrumentation.runOnMainSync { catalogue.finish() }
+            instrumentation.runOnMainSync { procurementActivity?.finish(); catalogue.finish() }
             instrumentation.waitForIdleSync()
             Thread.sleep(300)
         }
@@ -5813,12 +5861,15 @@ class SqliteCounterPersistenceTest {
             val order = snapshot.orders.single { it.lines.any { line -> line.productId == "e2e_lemon_chai" } }
             assertEquals(1250, order.lines.sumOf { it.quantity * it.unitPricePaise })
             assertEquals(Payment.STAFF_DECLARED, order.payment)
-            assertEquals(4, snapshot.stock.getValue("e2e_lemon_chai"))
+            assertEquals(28, snapshot.stock.getValue("e2e_lemon_chai"))
             assertEquals("staff_declared", snapshot.paymentEntries.single { it.orderNumber == order.number && it.method == "cash" }.status)
             assertTrue(snapshot.auditEvents.any { it.contains("e2e_lemon_chai") })
+            assertEquals(3000L, snapshot.purchaseReceipts.single { it.supplierId == "e2e_crate_dealer" }.totalPaise)
             assertTrue(snapshot.stockMovements.any { it.productId == "e2e_lemon_chai" && it.reason == "quick_sale" && it.quantityDelta == -1 && it.orderNumber == order.number })
+            assertTrue(snapshot.stockMovements.any { it.productId == "e2e_lemon_chai" && it.reason == "purchase_receipt" && it.quantityDelta == 24 })
         } finally {
             instrumentation.runOnMainSync { sale.finish() }
+            LocalSessionState.clear()
             context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
         }
     }

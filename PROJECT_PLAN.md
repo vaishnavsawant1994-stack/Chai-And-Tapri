@@ -1310,3 +1310,7 @@ The dedicated API 37 recovery AVD passed the direct Procurement UI test for purc
 ## 26 November 2026 — Product Editor purchase-unit UI
 
 A focused API 37 flow now enters and persists `cup` sell/count unit, `crate` purchase unit and factor 12 in the actual product editor; it then confirms opening stock and verifies Quick Sale displays the configured `cup` quantity before the cash sale. Instrumentation passed **1/1**. This pairs with the separately passing direct receipt UI flow; neither qualifies the full catalogue/procurement modules. See [CT-13/14 report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
+
+## 26 November 2026 — Connected product-to-receipt-to-sale UI
+
+Extended the API 37 instrumentation path to create/configure a product in the Product Editor, create its supplier, receive two configured purchase units through Procurement, and sell one base unit through Quick Sale. Focused test passed **1/1**; reopened encrypted state verified 28 units remaining, ₹30.00 payable, ₹12.50 staff-declared cash sale, stock movements and conversion audit. This is one tested synthetic vertical slice, not full product/procurement or broad Android qualification. See [CT-13/14 report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).

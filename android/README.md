@@ -393,3 +393,7 @@ A dedicated API 37 rerun now passes `directProcurementScreenConvertsConfiguredCr
 ## CT-14 Product Editor purchase-unit configuration — 26 November 2026
 
 Focused API 37 UI test passed 1/1: the real editor saved `cup`/`crate`/12 conversion metadata, encrypted catalogue reopen retained it, and Quick Sale displayed the configured sell unit and sold at the configured price. See [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md). Full catalogue and procurement qualification remains open.
+
+## Connected product-to-receipt-to-sale flow — 26 November 2026
+
+One API 37 instrumentation test now traverses Product Editor → supplier setup → configured crate receipt → Quick Sale. The UI creates a `cup` product purchased in crates of 12, confirms opening stock, receives two crates through Procurement, and sells one cup. Encrypted-store assertions verify stock, supplier payable, sale payment classification, conversion audit and both stock movements. Focused result: 1/1 pass. This does not qualify the full modules or replace the separately recorded full-suite results. See the [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
