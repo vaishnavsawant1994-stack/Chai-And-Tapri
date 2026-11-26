@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopCatalogue, buildShopOverview, buildSupplierBalances } from '../src/dashboard.mjs';
 import { formatQuantity } from '../../owner-web/quantity-format.mjs';
 import { ApiError } from '../src/errors.mjs';
 import { authorizeProjectionForRole } from '../src/service.mjs';
@@ -218,6 +218,28 @@ test('owner product projection includes accepted catalogue-only items without in
     purchaseUnitLabel:'tray', baseUnitsPerPurchaseUnit:8, grossDeliveredUnits:0, refundedUnits:0, netDeliveredUnits:0,
     netDeliveredItemValuePaise:0, orderCount:0, stockState:'unreported', stockQuantity:null, unitLabel:'piece'
   });
+});
+
+test('shop catalogue snapshot exposes selling fields but omits cost data and sorts deterministically', () => {
+  const result = buildShopCatalogue({ shopId:'s', shopName:'Synthetic', serverRevision:2, events:[
+    row(1, { ...empty, catalogue:[
+      { productId:'chai', name:'Chai', category:'Tea', unitPricePaise:1000, active:true, favorite:true, priceConfirmed:true,
+        aliases:['tea'], scanCode:'123', unitLabel:'cup', purchaseUnitLabel:'crate', baseUnitsPerPurchaseUnit:24, estimatedUnitCostPaise:250 },
+      { productId:'inactive', name:'Apple Juice', category:'Drinks', unitPricePaise:0, active:false, favorite:false, priceConfirmed:false,
+        aliases:[], scanCode:null, unitLabel:'bottle', purchaseUnitLabel:'case', baseUnitsPerPurchaseUnit:12, estimatedUnitCostPaise:500 }
+    ] }),
+    row(2, { ...empty, catalogue:[{ productId:'chai', name:'Masala Chai', category:'Tea', unitPricePaise:1200, active:true,
+      favorite:false, priceConfirmed:true, aliases:['masala'], scanCode:null, unitLabel:'cup', purchaseUnitLabel:'crate',
+      baseUnitsPerPurchaseUnit:24, estimatedUnitCostPaise:300 }] })
+  ] });
+  assert.equal(result.serverRevision, 2);
+  assert.equal(result.catalogueCount, 2);
+  assert.equal(result.catalogue[1].name, 'Masala Chai');
+  assert.equal(result.catalogue[1].unitPricePaise, 1200);
+  assert.equal(result.catalogue[1].aliases[0], 'masala');
+  assert.equal(Object.hasOwn(result.catalogue[1], 'estimatedUnitCostPaise'), false);
+  assert.equal(Object.hasOwn(result.catalogue[1], 'cost'), false);
+  assert.match(result.evidence.stock, /no stock quantity/);
 });
 
 test('product performance rejects unsafe delivered value and reports empty accepted data', () => {

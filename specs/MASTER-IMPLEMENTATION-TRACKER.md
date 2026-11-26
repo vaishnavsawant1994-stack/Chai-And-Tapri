@@ -916,3 +916,9 @@ The isolated API 37 AVD completed a fresh `connectedDebugAndroidTest` run: **152
 Android product saves now create sendable encrypted outbox events with configured base/purchase units. Backend validation accepts catalogue upserts only from owner/manager roles, freezes unit conversion after accepted product use, and owner product/inventory projections show accepted names and conversions without fabricating sales or stock. See [CAT-052 report](CAT-052-CATALOGUE-OWNER-PROJECTION-REPORT-2026-11-26.md).
 
 Verification in this slice: prototype Node 52/52; backend Node 43/43 with 0 skips against disposable PostgreSQL 17; Kotlin JVM 105/105; debug and instrumentation APK builds passed; lint passed with 0 errors and 197 warnings; focused API 37 encrypted-outbox instrumentation passed 1/1. This is Android-to-server-to-owner projection only, not multi-device catalogue download. Physical device, production backend, visual dashboard, and release qualification remain pending.
+
+## CAT-052 Android catalogue pull and encrypted cache - 26 November 2026
+
+Added authenticated `GET /v1/sync/catalogue/{shopId}` for the latest accepted catalogue fields needed by shopkeeper screens. Android validates and caches the snapshot in the encrypted store during manual owner/staff sync and background outbox sync. It preserves pending/conflicted local edits, rejects stale/cross-shop data, advances the server cursor, and does not invent stock for downloaded products. Details: [CAT-052 shop catalogue pull report](CAT-052-SHOP-APP-CATALOGUE-PULL-REPORT-2026-11-26.md).
+
+Verification: prototype Node 52/52; backend Node 44/44 against disposable PostgreSQL 17 with 0 skips; Kotlin JVM 106/106; debug and instrumentation APK builds PASS; lint 0 errors / 201 warnings; focused API 37 cache/persistence instrumentation 1/1. No live Android-to-server device test or production deployment is claimed.

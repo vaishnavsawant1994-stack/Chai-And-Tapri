@@ -12,6 +12,7 @@ data class SyncHttpResponse(val statusCode: Int, val body: String)
 /** A transport boundary so request policy and journal behavior can be tested without a live service. */
 fun interface SyncHttpTransport {
     fun post(endpoint: String, bearerToken: String, body: String): SyncHttpResponse
+    fun get(endpoint: String, bearerToken: String): SyncHttpResponse = throw UnsupportedOperationException("GET is not supported by this sync transport.")
 }
 
 /** Uses platform TLS validation; cleartext, redirects, credentials in URLs, and unbounded bodies are rejected. */
@@ -24,7 +25,11 @@ class HttpsSyncHttpTransport(
         require(connectTimeoutMs > 0 && readTimeoutMs > 0 && maxResponseBytes > 0)
     }
 
-    override fun post(endpoint: String, bearerToken: String, body: String): SyncHttpResponse {
+    override fun post(endpoint: String, bearerToken: String, body: String): SyncHttpResponse = request("POST", endpoint, bearerToken, body)
+
+    override fun get(endpoint: String, bearerToken: String): SyncHttpResponse = request("GET", endpoint, bearerToken, null)
+
+    private fun request(method: String, endpoint: String, bearerToken: String, body: String?): SyncHttpResponse {
         require(bearerToken.length <= 4096 && bearerToken.none { it.isWhitespace() }) { "Bearer session is invalid." }
         val uri = URI(endpoint)
         require(uri.scheme.equals("https", true) && uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null) {
@@ -32,16 +37,16 @@ class HttpsSyncHttpTransport(
         }
         val connection = (URL(endpoint).openConnection() as? HttpsURLConnection)
             ?: throw IllegalArgumentException("Sync requires HTTPS.")
-        connection.requestMethod = "POST"
+        connection.requestMethod = method
         connection.connectTimeout = connectTimeoutMs
         connection.readTimeout = readTimeoutMs
         connection.instanceFollowRedirects = false
-        connection.doOutput = true
+        connection.doOutput = body != null
         if (bearerToken.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer $bearerToken")
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         connection.setRequestProperty("Accept", "application/json")
         try {
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (body != null) connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 ?: return SyncHttpResponse(code, "")
@@ -98,7 +103,7 @@ class ActorScopedSyncJournal(private val delegate: SyncJournal, private val acto
 
 data class SyncRunResult(val acknowledged: Int, val conflictEventId: String? = null, val serverRevision: Long, val blockedByActor: Boolean = false)
 
-class SyncProtocolException(message: String) : IllegalStateException(message)
+class SyncProtocolException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 class SyncRequestException(val statusCode: Int) : IllegalStateException("Sync endpoint returned HTTP $statusCode.")
 
 /** Pushes sendable events in order. Callers supply credentials from a protected session store. */

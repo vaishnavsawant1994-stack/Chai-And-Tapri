@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
-import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
+import { buildAuditHistory, buildCustomerBalances, buildDailySalesActivity, buildInventorySnapshot, buildOwnerInsights, buildProductPerformance, buildProfitReadiness, buildRecordedMoneyMovementSummary, buildShopCatalogue, buildShopOverview, buildSupplierBalances } from './dashboard.mjs';
 
 export { ApiError } from './errors.mjs';
 
@@ -254,6 +254,10 @@ export function applyProductCatalogueDelta(catalogue, payload, unitLabels, usedP
   for (const product of payload.catalogue ?? []) {
     const previous = catalogue.get(product.productId);
     const previousLabel = unitLabels.get(product.productId);
+    const scanCode = product.scanCode?.toLocaleLowerCase('en-US');
+    if (scanCode && [...catalogue.values()].some((candidate) => candidate.productId !== product.productId && candidate.scanCode?.toLocaleLowerCase('en-US') === scanCode)) {
+      throw new ApiError(409, 'product_scan_code_conflict');
+    }
     if (previousLabel !== undefined && previousLabel !== product.unitLabel) throw new ApiError(409, 'product_unit_label_conflict');
     const conversionChanged = previous && (previous.purchaseUnitLabel !== product.purchaseUnitLabel ||
       previous.baseUnitsPerPurchaseUnit !== product.baseUnitsPerPurchaseUnit || previous.unitLabel !== product.unitLabel);
@@ -639,6 +643,21 @@ export class SyncService {
       if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
       const journal = await c.query('SELECT server_revision,envelope,received_at FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
       return buildProductPerformance({
+        shopId: actor.shop_id,
+        shopName: shop.rows[0].display_name,
+        serverRevision: Number(shop.rows[0].server_revision),
+        events: journal.rows
+      });
+    });
+  }
+
+  async shopCatalogue(actor) {
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      const shop = await c.query('SELECT display_name,server_revision,business_id FROM shops WHERE shop_id=$1', [actor.shop_id]);
+      if (!shop.rowCount || shop.rows[0].business_id !== actor.business_id) throw new ApiError(403, 'shop_access_denied');
+      const journal = await c.query('SELECT server_revision,envelope FROM sync_events WHERE shop_id=$1 ORDER BY server_revision', [actor.shop_id]);
+      return buildShopCatalogue({
         shopId: actor.shop_id,
         shopName: shop.rows[0].display_name,
         serverRevision: Number(shop.rows[0].server_revision),

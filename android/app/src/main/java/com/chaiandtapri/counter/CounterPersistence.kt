@@ -245,6 +245,8 @@ interface CounterPersistence : AutoCloseable {
     fun hasStaffAccounts(): Boolean = listStaffAccounts().isNotEmpty()
     fun loadProducts(): List<TapriProduct> = emptyList()
     fun saveProduct(product: TapriProduct, commandId: String): Boolean = false
+    /** Atomically applies an authenticated full server catalogue while preserving pending local edits and stock ledgers. */
+    fun applyRemoteCatalogueSnapshot(snapshot: SyncCatalogueSnapshot): Boolean = false
     fun loadCustomerProfiles(): List<CustomerProfile> = emptyList()
     fun saveCustomerProfile(profile: CustomerProfile, commandId: String): Boolean = false
     fun updateCustomerProfile(profile: CustomerProfile, commandId: String): Boolean = false

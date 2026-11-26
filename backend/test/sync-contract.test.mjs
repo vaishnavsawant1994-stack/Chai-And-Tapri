@@ -47,7 +47,7 @@ const catalogueProduct = (overrides = {}) => ({
 });
 
 test('catalogue projection validates full pack metadata, denies cashier writes, and locks conversion after use', () => {
-  const payload = { ...emptyDelta(), catalogue:[catalogueProduct()] };
+  const payload = { ...emptyDelta(), catalogue:[catalogueProduct({ scanCode:'scan-1' })] };
   assert.equal(validateProjectionDelta(payload), true);
   assert.throws(() => authorizeProjectionForRole('cashier', payload), (error) => error instanceof ApiError && error.status === 403 && error.code === 'cashier_catalogue_permission_denied');
   assert.equal(authorizeProjectionForRole('manager', payload), true);
@@ -56,10 +56,11 @@ test('catalogue projection validates full pack metadata, denies cashier writes, 
   assert.equal(catalogue.get('crate_water').baseUnitsPerPurchaseUnit, 12);
   assert.equal(labels.get('crate_water'), 'bottle');
   used.add('crate_water');
-  applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ unitPricePaise:2100 })] }, labels, used);
+  applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ unitPricePaise:2100, scanCode:'scan-1' })] }, labels, used);
   assert.equal(catalogue.get('crate_water').unitPricePaise, 2100);
-  assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ baseUnitsPerPurchaseUnit:6 })] }, labels, used), (error) => error.code === 'product_conversion_conflict');
+  assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ baseUnitsPerPurchaseUnit:6, scanCode:'scan-1' })] }, labels, used), (error) => error.code === 'product_conversion_conflict');
   assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ unitLabel:'piece' })] }, labels, used), (error) => error.code === 'product_unit_label_conflict');
+  assert.throws(() => applyProductCatalogueDelta(catalogue, { catalogue:[catalogueProduct({ productId:'second_water', scanCode:'scan-1' })] }, labels, used), (error) => error.code === 'product_scan_code_conflict');
   invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ baseUnitsPerPurchaseUnit:0 })] });
   invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ aliases:'water' })] });
   invalid({ ...emptyDelta(), catalogue:[catalogueProduct({ extra:'unapproved' })] });

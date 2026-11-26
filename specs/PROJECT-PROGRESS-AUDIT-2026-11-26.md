@@ -59,3 +59,9 @@ The earlier same-day full Android attempt failed after emulator/ADB loss (32 tes
 Product edits in Android now create sendable catalogue events with purchase-unit conversion metadata. Backend validation and role checks protect the catalogue contract; conversion changes are rejected after accepted product history. Owner product-performance and inventory projections use accepted catalogue names and units while retaining explicit unknown/unreported states. The detailed implementation report is [here](CAT-052-CATALOGUE-OWNER-PROJECTION-REPORT-2026-11-26.md).
 
 Current verification for this follow-up: prototype Node 52/52; backend Node 43/43 passed with 0 skips against disposable PostgreSQL 17; Kotlin JVM 105/105 passed; debug/instrumentation APK builds passed; lint passed with 0 errors and 197 warnings; focused API 37 instrumentation passed 1/1. PostgreSQL backend coverage used synthetic records and a disposable local container. Android-to-server live sync, owner browser visual verification, physical-device, field, production and independent-security qualification are not claimed.
+
+## 26 November 2026 follow-up - shop app catalogue pull
+
+The authenticated sync API now provides a catalogue-only snapshot to owner and staff Android sync sessions. Manual and background sync cache validated snapshots in the encrypted local database; pending local catalogue edits survive, the server revision advances, and new products do not receive invented stock counts. [Implementation report](CAT-052-SHOP-APP-CATALOGUE-PULL-REPORT-2026-11-26.md).
+
+Verification: prototype Node 52/52; backend Node 44/44 on disposable PostgreSQL 17, no skips; Kotlin JVM 106/106; APK builds pass; lint 0 errors / 201 warnings; focused API 37 instrumentation 1/1. This verifies server integration and local cache behavior separately. An actual Android HTTPS round trip to a server and second-device workflow remain unverified.

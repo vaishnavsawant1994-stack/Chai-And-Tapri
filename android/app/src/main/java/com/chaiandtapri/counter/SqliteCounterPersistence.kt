@@ -772,6 +772,68 @@ class SqliteCounterPersistence internal constructor(
         } finally { permit.close() }
     }
 
+    override fun applyRemoteCatalogueSnapshot(snapshot: SyncCatalogueSnapshot): Boolean {
+        require(runCatching { UUID.fromString(snapshot.shopId).toString().equals(snapshot.shopId, ignoreCase = true) }.getOrDefault(false) && snapshot.serverRevision >= 0L)
+        require(snapshot.products.size <= 5000 && snapshot.products.map { it.productId }.distinct().size == snapshot.products.size)
+        require(snapshot.products.all { product ->
+            product.productId.matches(Regex("[a-z][a-z0-9_]{1,39}")) && product.name.length in 2..60 && product.category.length in 2..40 &&
+                product.unitPricePaise in 0..10_000_000 && product.baseUnitsPerPurchaseUnit in 1..100_000 &&
+                !(product.active && product.priceConfirmed && product.unitPricePaise == 0) &&
+                product.unitLabel.matches(Regex("[A-Za-z0-9][A-Za-z0-9 _-]{0,29}")) && product.purchaseUnitLabel.matches(Regex("[A-Za-z0-9][A-Za-z0-9 _-]{0,29}")) &&
+                (product.reorderThreshold == null || product.reorderThreshold in 1..100_000) && product.aliases.size <= 50 &&
+                product.aliases.all { it.length <= 40 && it.none(Char::isISOControl) } &&
+                (product.scanCode == null || (product.scanCode.isNotBlank() && product.scanCode.length <= 128 && product.scanCode.none(Char::isISOControl)))
+        })
+        val scanCodes = snapshot.products.mapNotNull { it.scanCode?.lowercase() }
+        require(scanCodes.distinct().size == scanCodes.size)
+        val permit = BusinessWriteBarrier.tryBeginCommit() ?: throw BusinessMaintenanceException()
+        try {
+            val db = writableDatabase
+            assertCipherActive(db)
+            db.beginTransaction()
+            try {
+                val metadata = db.rawQuery("SELECT value FROM metadata WHERE key='remote_catalogue_shop_id'", null).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                if (metadata != null && metadata != snapshot.shopId) return false
+                val previousRevision = db.rawQuery("SELECT value FROM metadata WHERE key='remote_catalogue_revision'", null).use { c -> if (c.moveToFirst()) c.getString(0).toLongOrNull() ?: 0L else 0L }
+                if (snapshot.serverRevision < previousRevision) return false
+
+                val pendingProductIds = mutableSetOf<String>()
+                db.rawQuery("SELECT payload_json FROM sync_outbox WHERE status<>'acknowledged' AND payload_json IS NOT NULL", null).use { c ->
+                    while (c.moveToNext()) runCatching {
+                        val products = org.json.JSONObject(c.getString(0)).optJSONArray("catalogue") ?: return@runCatching
+                        repeat(products.length()) { index -> products.optJSONObject(index)?.optString("productId")?.takeIf(String::isNotBlank)?.let(pendingProductIds::add) }
+                    }
+                }
+                snapshot.products.forEach { product ->
+                    if (product.productId in pendingProductIds) return@forEach
+                    val values = ContentValues().apply {
+                        put("product_id", product.productId); put("name", product.name); put("category", product.category)
+                        put("unit_price_paise", product.unitPricePaise); put("active", if (product.active) 1 else 0)
+                        put("favorite", if (product.favorite) 1 else 0); put("price_confirmed", if (product.priceConfirmed) 1 else 0)
+                        put("aliases", product.aliases.joinToString("|") { it.trim().lowercase() })
+                        if (product.reorderThreshold == null) putNull("reorder_threshold") else put("reorder_threshold", product.reorderThreshold)
+                        putNull("scan_code")
+                        product.scanCode?.let { put("scan_code", it) }
+                        put("unit_label", product.unitLabel); put("purchase_unit_label", product.purchaseUnitLabel)
+                        put("base_units_per_purchase_unit", product.baseUnitsPerPurchaseUnit)
+                    }
+                    val exists = db.rawQuery("SELECT 1 FROM product_catalog WHERE product_id=?", arrayOf(product.productId)).use { it.moveToFirst() }
+                    if (exists) {
+                        values.remove("product_id")
+                        check(db.update("product_catalog", values, "product_id=?", arrayOf(product.productId)) == 1) { "Could not update accepted server catalogue product." }
+                    } else {
+                        db.insertOrThrow("product_catalog", null, values)
+                    }
+                }
+                db.insertWithOnConflict("metadata", null, ContentValues().apply { put("key", "remote_catalogue_shop_id"); put("value", snapshot.shopId) }, CipherDatabase.CONFLICT_REPLACE)
+                db.insertWithOnConflict("metadata", null, ContentValues().apply { put("key", "remote_catalogue_revision"); put("value", snapshot.serverRevision.toString()) }, CipherDatabase.CONFLICT_REPLACE)
+                db.insertWithOnConflict("metadata", null, ContentValues().apply { put("key", "sync_server_revision"); put("value", snapshot.serverRevision.toString()) }, CipherDatabase.CONFLICT_REPLACE)
+                db.setTransactionSuccessful()
+                return true
+            } finally { db.endTransaction() }
+        } finally { permit.close() }
+    }
+
     override fun loadCustomerProfiles(): List<CustomerProfile> {
         val permit = BusinessWriteBarrier.tryBeginCommit() ?: throw BusinessMaintenanceException()
         try {

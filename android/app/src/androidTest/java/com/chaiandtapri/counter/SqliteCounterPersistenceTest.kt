@@ -43,6 +43,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -51,6 +52,58 @@ import org.junit.runner.RunWith
 /** Runs against Android's real SQLite implementation when an emulator/device is available. */
 @RunWith(AndroidJUnit4::class)
 class SqliteCounterPersistenceTest {
+    @Test fun remoteCatalogueSnapshotReconcilesAcceptedProductsAndPreservesPendingLocalEdits() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        LocalSessionState.establish("Synthetic catalogue cache owner")
+        val shopId = "00000000-0000-4000-8000-000000000002"
+        try {
+            SqliteCounterPersistence(context).use { persistence ->
+                assertTrue(persistence.saveProduct(TapriProduct("pending_item", "Local Draft", "Snacks", 900, priceConfirmed = true), "catalogue-pending-local"))
+                val identity = SyncEnvelopeIdentity("00000000-0000-4000-8000-000000000001", shopId, "00000000-0000-4000-8000-000000000003")
+                val responseBody = """{"shopId":"$shopId","shopName":"Synthetic Shop","serverRevision":5,"catalogueCount":2,"catalogue":[{"productId":"pending_item","name":"Remote Version","category":"Snacks","unitPricePaise":1000,"active":true,"favorite":false,"priceConfirmed":true,"aliases":[],"scanCode":null,"reorderThreshold":null,"unitLabel":"units","purchaseUnitLabel":"units","baseUnitsPerPurchaseUnit":1},{"productId":"remote_water","name":"Water","category":"Drinks","unitPricePaise":2000,"active":true,"favorite":false,"priceConfirmed":true,"aliases":["water"],"scanCode":null,"reorderThreshold":8,"unitLabel":"bottle","purchaseUnitLabel":"crate","baseUnitsPerPurchaseUnit":24}],"evidence":{"scope":"accepted","pricing":"paise","stock":"none","privacy":"cost omitted"}}"""
+                val transport = object : SyncHttpTransport {
+                    override fun post(endpoint: String, bearerToken: String, body: String) = error("POST is not used by catalogue pull.")
+                    override fun get(endpoint: String, bearerToken: String) = SyncHttpResponse(200, responseBody)
+                }
+                val client = SyncCatalogueClient(transport)
+                val snapshot = client.fetch("https://sync.example.test", identity, "synthetic-owner-token")
+                assertEquals(24, snapshot.products.single { it.productId == "remote_water" }.baseUnitsPerPurchaseUnit)
+                val costBearing = responseBody.replace("\"baseUnitsPerPurchaseUnit\":24", "\"baseUnitsPerPurchaseUnit\":24,\"estimatedUnitCostPaise\":200")
+                val invalidClient = SyncCatalogueClient(object : SyncHttpTransport {
+                    override fun post(endpoint: String, bearerToken: String, body: String) = error("POST is not used.")
+                    override fun get(endpoint: String, bearerToken: String) = SyncHttpResponse(200, costBearing)
+                })
+                assertThrows(SyncProtocolException::class.java) { invalidClient.fetch("https://sync.example.test", identity, "synthetic-owner-token") }
+                val wrongShop = responseBody.replace(shopId, "00000000-0000-4000-8000-000000000004")
+                val wrongShopClient = SyncCatalogueClient(object : SyncHttpTransport {
+                    override fun post(endpoint: String, bearerToken: String, body: String) = error("POST is not used.")
+                    override fun get(endpoint: String, bearerToken: String) = SyncHttpResponse(200, wrongShop)
+                })
+                assertThrows(SyncProtocolException::class.java) { wrongShopClient.fetch("https://sync.example.test", identity, "synthetic-owner-token") }
+                assertTrue(persistence.applyRemoteCatalogueSnapshot(snapshot))
+                val products = persistence.loadProducts().associateBy { it.productId }
+                assertEquals("Local Draft", products.getValue("pending_item").name)
+                assertEquals("Water", products.getValue("remote_water").name)
+                assertEquals(24, products.getValue("remote_water").baseUnitsPerPurchaseUnit)
+                assertEquals(null, products.getValue("remote_water").estimatedUnitCostPaise)
+                assertFalse(persistence.load()!!.stock.containsKey("remote_water"))
+                val newer = snapshot.copy(serverRevision = 6, products = snapshot.products.map {
+                    if (it.productId == "remote_water") it.copy(name = "Mineral Water", unitPricePaise = 2100) else it
+                })
+                assertTrue(persistence.applyRemoteCatalogueSnapshot(newer))
+                assertEquals("Local Draft", persistence.loadProducts().single { it.productId == "pending_item" }.name)
+                assertEquals("Mineral Water", persistence.loadProducts().single { it.productId == "remote_water" }.name)
+                assertEquals(6L, persistence.loadSyncCursor())
+                assertFalse(persistence.applyRemoteCatalogueSnapshot(snapshot.copy(serverRevision = 5)))
+                assertFalse(persistence.applyRemoteCatalogueSnapshot(snapshot.copy(shopId = "00000000-0000-4000-8000-000000000004", serverRevision = 7)))
+            }
+        } finally {
+            LocalSessionState.clear()
+            context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)
+        }
+    }
+
     @Test fun productCatalogueSaveCreatesSendableEncryptedOutboxWithPurchaseConversion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SqliteCounterPersistence.DATABASE_NAME)

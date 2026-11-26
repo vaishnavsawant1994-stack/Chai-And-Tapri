@@ -36,7 +36,7 @@ class CloudSyncActivity : Activity() {
     private fun buildScreen() {
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28, 32, 28, 32) }
         column.addView(label("Cloud Sync · CAT-052", 27f))
-        column.addView(label("Prototype account setup. Use a trusted HTTPS backend. This sends the entered account details to that server. Sync uploads only the allow-listed outbox contract; entries not covered by that contract stay blocked locally.", 15f))
+        column.addView(label("Prototype account setup. Use a trusted HTTPS backend. This sends the entered account details to that server. Sync uploads only the allow-listed outbox contract and downloads the accepted product catalogue for this shop. Stock quantities are not downloaded; each device must establish its own physical stock.", 15f))
         endpoint = field("Backend HTTPS URL", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI).also(column::addView)
         email = field("Owner email", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS).also(column::addView)
         password = field("Account password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, secure = true).also(column::addView)
@@ -181,7 +181,7 @@ class CloudSyncActivity : Activity() {
         if (busy) return
         setBusy(true, "Syncing allowed local events over HTTPS…")
         worker.execute {
-            val outcome = runCatching {
+            val outcome: Result<Triple<SyncRunResult, Int, Long>> = runCatching {
                 SyncOperationLock.withLock {
                     val session = SyncSessionVault(this).load() ?: error("No saved session. Create an account first.")
                     check(SyncOwnerPolicy.mayUpload(session)) {
@@ -190,21 +190,27 @@ class CloudSyncActivity : Activity() {
                     val actorId = session.localActorId ?: error("This saved session has no local operator binding. Sign in again while authenticated as the local owner before syncing.")
                     SqliteCounterPersistence(this).use { persistence ->
                         val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)
-                        val result = SyncRunner(journal, HttpsSyncHttpTransport()).push(
+                        val transport = HttpsSyncHttpTransport()
+                        val result = SyncRunner(journal, transport).push(
                             session.endpointBase, session.identity, session.bearerToken
                         )
-                        if (journal.pending(1).isEmpty() && journal.blockedByActor) result.copy(blockedByActor = true) else result
+                        val catalogue = SyncCatalogueClient(transport).fetch(session.endpointBase, session.identity, session.bearerToken)
+                        check(persistence.applyRemoteCatalogueSnapshot(catalogue)) {
+                            "The server catalogue was older than local accepted data or belonged to another shop. Local records were preserved."
+                        }
+                        val effectiveResult = if (journal.pending(1).isEmpty() && journal.blockedByActor) result.copy(blockedByActor = true) else result
+                        Triple(effectiveResult, catalogue.products.size, catalogue.serverRevision)
                     }
                 }
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 outcome.fold(
-                    { result -> status.text = (when {
+                    { (result, catalogueCount, catalogueRevision) -> status.text = (when {
                         result.conflictEventId != null -> "Sync stopped at a revision conflict for event ${result.conflictEventId}. Later events remain queued."
                         result.blockedByActor -> "Sync paused: the next queued action belongs to another or unlinked local operator. It was not uploaded under this account."
                         else -> "Sync finished. ${result.acknowledged} event(s) acknowledged. Server revision ${result.serverRevision}."
-                    }) + backgroundStatusSuffix() },
+                    }) + " Accepted shop catalogue refreshed: $catalogueCount product(s), server revision $catalogueRevision." + backgroundStatusSuffix() },
                     { error -> status.text = safeMessage(error) }
                 )
                 setBusy(false)

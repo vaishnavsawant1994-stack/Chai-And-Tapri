@@ -152,7 +152,7 @@ class StaffCloudAccessActivity : Activity() {
         if (busy) return
         setBusy(true, "Checking this operator's queued actions…")
         worker.execute {
-            val outcome = runCatching {
+            val outcome: Result<Triple<SyncRunResult, Int, Long>> = runCatching {
                 val permit = BusinessWriteBarrier.tryBeginBusinessOperation() ?: throw BusinessMaintenanceException()
                 try {
                     SyncOperationLock.withLock {
@@ -163,10 +163,16 @@ class StaffCloudAccessActivity : Activity() {
                         }
                         openCounterPersistence().use { persistence ->
                             val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actor)
-                            val result = SyncRunner(journal, HttpsSyncHttpTransport()).push(
+                            val transport = HttpsSyncHttpTransport()
+                            val result = SyncRunner(journal, transport).push(
                                 session.endpointBase, session.identity, session.bearerToken
                             )
-                            if (journal.pending(1).isEmpty() && journal.blockedByActor) result.copy(blockedByActor = true) else result
+                            val catalogue = SyncCatalogueClient(transport).fetch(session.endpointBase, session.identity, session.bearerToken)
+                            check(persistence.applyRemoteCatalogueSnapshot(catalogue)) {
+                                "The authenticated catalogue snapshot was stale or belonged to another shop. Local records were preserved."
+                            }
+                            val effectiveResult = if (journal.pending(1).isEmpty() && journal.blockedByActor) result.copy(blockedByActor = true) else result
+                            Triple(effectiveResult, catalogue.products.size, catalogue.serverRevision)
                         }
                     }
                 } finally { permit.close() }
@@ -174,11 +180,11 @@ class StaffCloudAccessActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 outcome.fold(
-                    { result -> render(when {
+                    { (result, catalogueCount, catalogueRevision) -> render((when {
                         result.conflictEventId != null -> "Sync stopped at a server revision conflict. Later events remain queued."
                         result.blockedByActor -> "Sync paused: another or unattributed operator is at the global queue head. Nothing was skipped or uploaded under this account."
                         else -> "Sync complete: ${result.acknowledged} event(s) acknowledged. Server revision ${result.serverRevision}."
-                    }) },
+                    }) + " Accepted shop catalogue refreshed: $catalogueCount product(s), revision $catalogueRevision.") },
                     { error -> render(safeMessage(error)) }
                 )
                 setBusy(false)

@@ -53,6 +53,11 @@ export function createApiServer(service) {
         const result=await service.submitEvents(actor,body.events);
         const conflict=result.results.some(x=>x.status==='conflict'); return json(res,conflict?409:200,result);
       }
+      const catalogueMatch=url.pathname.match(/^\/v1\/sync\/catalogue\/([0-9a-f-]{36})$/i);
+      if(req.method==='GET'&&catalogueMatch) {
+        const actor=await service.authenticate(token,catalogueMatch[1]);
+        return json(res,200,await service.shopCatalogue(actor));
+      }
       if(url.pathname==='/v1/staff/members'&&req.method==='GET') {
         const shopId=url.searchParams.get('shopId');
         const actor=await service.authenticate(token,shopId);

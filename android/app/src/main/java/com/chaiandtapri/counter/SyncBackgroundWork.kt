@@ -163,8 +163,13 @@ class SyncOutboxWorker(context: Context, parameters: WorkerParameters) : Corouti
                         if (!authorized && actorId == SyncOwnerPolicy.LOCAL_OWNER_ACTOR) throw SyncOwnerIdentityRequiredException()
                         if (!authorized) throw SyncActorMismatchException("Stored cloud role is not authorized for this local operator.")
                         val journal = ActorScopedSyncJournal(PersistenceSyncJournal(persistence), actorId)
-                        val run = SyncRunner(journal, HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 7_000))
+                        val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 7_000)
+                        val run = SyncRunner(journal, transport)
                             .push(session.endpointBase, session.identity, session.bearerToken, maxEvents = MAX_EVENTS_PER_RUN)
+                        val catalogue = SyncCatalogueClient(transport).fetch(session.endpointBase, session.identity, session.bearerToken)
+                        check(persistence.applyRemoteCatalogueSnapshot(catalogue)) {
+                            "The authenticated catalogue snapshot was stale or belonged to another shop. Local records were preserved."
+                        }
                         val more = journal.pending(1).isNotEmpty()
                         WorkerBatch(run, more, journal.blockedByActor)
                     }

@@ -150,6 +150,11 @@ test('owner catalogue upserts reach product and inventory views and freeze pack 
       payload:{ ...projectionDelta([]), catalogue:[product] } };
     assert.equal((await service.submitEvents(actor, [catalogueEvent])).results[0].status, 'accepted');
     assert.equal((await service.submitEvents(actor, [catalogueEvent])).results[0].status, 'duplicate');
+    const shopCatalogue = await service.shopCatalogue(actor);
+    assert.equal(shopCatalogue.catalogueCount, 1);
+    assert.equal(shopCatalogue.catalogue[0].name, 'Water Bottle');
+    assert.equal(shopCatalogue.catalogue[0].baseUnitsPerPurchaseUnit, 24);
+    assert.equal(Object.hasOwn(shopCatalogue.catalogue[0], 'estimatedUnitCostPaise'), false);
     const performance = await service.shopProductPerformance(actor);
     assert.equal(performance.products[0].productName, 'Water Bottle');
     assert.equal(performance.products[0].purchaseUnitLabel, 'crate');
@@ -334,7 +339,8 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
       repayments:[{repaymentId,customerId:opaqueCustomerId,amountPaise:200}],
       paymentEntries:[{entryId:randomUUID(),orderNumber:12,customerId:null,amountPaise:2000,method:'cash',status:'staff_declared',kind:'order_collection',relatedEntryId:null},
         {entryId:randomUUID(),orderNumber:null,customerId:opaqueCustomerId,amountPaise:200,method:'cash',status:'staff_declared',kind:'customer_repayment',relatedEntryId:null},
-        {entryId:randomUUID(),orderNumber:13,customerId:null,amountPaise:1700,method:'upi',status:'pending',kind:'payment_attempt',relatedEntryId:null}]}};
+        {entryId:randomUUID(),orderNumber:13,customerId:null,amountPaise:1700,method:'upi',status:'pending',kind:'payment_attempt',relatedEntryId:null}],
+      catalogue:[{productId:'chai',name:'Masala Chai',category:'Tea',unitPricePaise:1000,active:true,favorite:true,priceConfirmed:true,aliases:['chai','masala chai'],reorderThreshold:10,estimatedUnitCostPaise:400,scanCode:'chai-001',unitLabel:'cup',purchaseUnitLabel:'crate',baseUnitsPerPurchaseUnit:24}]}};
     const sync=await fetch(`${base}/v1/sync/events`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${enrollment.token}`},body:JSON.stringify({shopId:enrollment.shopId,events:[event]})});
     assert.equal(sync.status,200); assert.equal((await sync.json()).results[0].status,'accepted');
     const overview=await fetch(`${base}/v1/dashboard/overview?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
@@ -355,6 +361,16 @@ test('HTTP API syncs a synthetic shop, projects owner activity, and revokes its 
     assert.equal(performance.products[0].productId,'chai'); assert.equal(performance.products[0].netDeliveredUnits,2);
     assert.equal(performance.products[0].netDeliveredItemValuePaise,2000); assert.equal(performance.products[0].stockQuantity,4);
     assert.match(performance.evidence.itemValue,/not recognized profit/);
+    const catalogueResponse=await fetch(`${base}/v1/sync/catalogue/${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
+    assert.equal(catalogueResponse.status,200); const shopCatalogue=await catalogueResponse.json();
+    assert.equal(shopCatalogue.catalogueCount,1); assert.equal(shopCatalogue.serverRevision,1);
+    assert.equal(shopCatalogue.catalogue[0].name,'Masala Chai'); assert.equal(shopCatalogue.catalogue[0].unitPricePaise,1000);
+    assert.deepEqual(shopCatalogue.catalogue[0].aliases,['chai','masala chai']);
+    assert.equal(shopCatalogue.catalogue[0].baseUnitsPerPurchaseUnit,24);
+    assert.equal(Object.hasOwn(shopCatalogue.catalogue[0],'estimatedUnitCostPaise'),false);
+    assert.equal(Object.hasOwn(shopCatalogue.catalogue[0],'scanCode'),true);
+    const catalogueNoAuth=await fetch(`${base}/v1/sync/catalogue/${enrollment.shopId}`);
+    assert.equal(catalogueNoAuth.status,401);
     const supplierResponse=await fetch(`${base}/v1/dashboard/suppliers?shopId=${enrollment.shopId}`,{headers:{authorization:`Bearer ${enrollment.token}`}});
     assert.equal(supplierResponse.status,200); const supplierSummary=await supplierResponse.json();
     assert.equal(supplierSummary.supplierCount,1); assert.equal(supplierSummary.totalReceiptsPaise,5000);

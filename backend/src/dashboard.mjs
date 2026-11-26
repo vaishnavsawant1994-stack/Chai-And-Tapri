@@ -252,6 +252,42 @@ export function buildProductPerformance({ shopId, shopName, serverRevision, even
   };
 }
 
+/** Authenticated shopkeeper catalogue snapshot; excludes cost and owner-only accounting fields. */
+export function buildShopCatalogue({ shopId, shopName, serverRevision, events }) {
+  const products = new Map();
+  for (const row of events) {
+    const payload = row.envelope?.payload;
+    if (payload?.kind !== 'projection_delta.v1') continue;
+    for (const product of payload.catalogue ?? []) {
+      products.set(product.productId, {
+        productId: product.productId,
+        name: product.name,
+        category: product.category,
+        unitPricePaise: product.unitPricePaise,
+        active: product.active,
+        favorite: product.favorite,
+        priceConfirmed: product.priceConfirmed,
+        aliases: [...product.aliases],
+        scanCode: product.scanCode,
+        reorderThreshold: product.reorderThreshold,
+        unitLabel: product.unitLabel,
+        purchaseUnitLabel: product.purchaseUnitLabel,
+        baseUnitsPerPurchaseUnit: product.baseUnitsPerPurchaseUnit
+      });
+    }
+  }
+  const catalogue = [...products.values()].sort((a, b) => a.name.localeCompare(b.name) || a.productId.localeCompare(b.productId));
+  return {
+    shopId, shopName, serverRevision, catalogueCount: catalogue.length, catalogue,
+    evidence: {
+      scope: 'Latest accepted catalogue upserts for the authenticated shop only; unaccepted local edits are not included.',
+      pricing: 'Prices are canonical catalogue values in paise. A price is usable only when priceConfirmed is true and active is true.',
+      stock: 'This snapshot contains no stock quantity or availability claim.',
+      privacy: 'Estimated costs and financial/accounting fields are omitted.'
+    }
+  };
+}
+
 /** Current accepted stock snapshots and recent movements; quantities stay product-specific. */
 export function buildInventorySnapshot({ shopId, shopName, serverRevision, events, movementLimit = 100 }) {
   const stock = new Map();
