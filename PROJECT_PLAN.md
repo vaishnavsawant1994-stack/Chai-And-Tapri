@@ -1300,3 +1300,7 @@ Added product-level purchase-unit metadata and direct stock receipt conversion, 
 ## 26 November 2026 — CT-17 purchase-order pack quantities
 
 Purchase-order draft entry now accepts configured purchase units and stores converted base-unit quantities. The audit event retains original purchase quantity, conversion factor, converted quantity and base unit; draft save still has no stock/payable effect. Kotlin JVM 104/104; APK build tasks pass; lint 0 errors / 197 warnings. UI runtime verification remains unavailable after API 37 launcher/System UI ANRs during related procurement UI tests. Receiving stays base-unit explicit. See `specs/CT-17-PURCHASE-ORDER-UNIT-CONVERSION-REPORT-2026-11-26.md`.
+
+## 26 November 2026 — CAT-051B clean-install restore
+
+Completed a focused SAF clean-install recovery drill on the dedicated API 37 AVD. The backup was created through the Android UI, stored in shared Downloads, and restored through the UI after Gradle had uninstalled the app package and then installed a fresh package. Rich backup, UI export/restore, and fresh-install UI restore each passed 1/1. Synthetic orders, money/credit/refunds, stock, audit history and duplicate prevention were checked. See [CAT-051B clean-install report](specs/CAT-051B-CLEAN-INSTALL-RESTORE-REPORT-2026-11-26.md). This closes the same-AVD clean app-private data gate for the tested schema/flows; it does not close separate-device/person, hardware key-loss, hard power/storage failure, independent security review, or production backup gates.
