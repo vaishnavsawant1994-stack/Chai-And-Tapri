@@ -111,6 +111,12 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,body.shopId);
         return json(res,200,await service.renameBusinessBranch(actor,body));
       }
+      if(req.method==='POST'&&(url.pathname==='/v1/dashboard/branches/archive'||url.pathname==='/v1/dashboard/branches/restore')) {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','targetShopId','expectedName'])) throw new ApiError(400,'invalid_branch_archive');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,200,await service.setBusinessBranchArchived(actor,{...body,archived:url.pathname.endsWith('/archive')}));
+      }
       if(req.method==='POST'&&url.pathname==='/v1/dashboard/devices/revoke') {
         const body=await readBody(req);
         if(!hasExactKeys(body,['shopId','targetShopId','deviceId'])) throw new ApiError(400,'invalid_device_identity');

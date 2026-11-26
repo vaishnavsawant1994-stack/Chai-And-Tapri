@@ -1348,3 +1348,7 @@ The direct Procurement screen now has focused API 37 coverage for a two-line rec
 ## Wave 6 GitHub CI baseline — 26 November 2026
 
 Added `.github/workflows/ci.yml` for prototype tests, PostgreSQL 17 backend tests through a restricted runtime role, Kotlin/JVM tests, Android debug/test APK assembly and lint. GitHub run [45743870636](https://github.com/vaishnavsawant1994-stack/Chai-And-Tapri/actions/runs/45743870636) passed all three jobs: prototype 52/52, backend 44/44, and Android tasks successful. The hosted compile uses API 36 because the runner does not publish the project's local API 37 package; local default remains 37. The workflow does not run emulator instrumentation or deploy. Independent review, browser visual gate, physical Bluetooth/noisy-shop testing and production release remain open. See [Wave 6 CI report](specs/WAVE-6-GITHUB-CI-REPORT-2026-11-26.md).
+
+## 26 November 2026 — OW-14 archive/restore update
+
+OW-14 adds audited replacement-device registration, branch rename, and reversible archive/restore. Migration 009 adds archive state and audit events; archive retains records, ends sessions, and blocks sign-in until restored. The current and last active branch are protected. The restricted-role PostgreSQL backend suite passed **45/45**, 0 skipped, on migrations 001–009. Browser visual authorization remains pending. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). This does not establish branch consolidation, transfers, owner invitations, or production readiness.

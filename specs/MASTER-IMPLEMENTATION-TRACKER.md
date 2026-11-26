@@ -951,3 +951,7 @@ Implemented a business owner directory/create API and owner web workflow, using 
 # 26 November 2026 — OW-14 branch rename
 
 Added a business-owner rename action to the branch directory. The API requires the expected current name, uses a row lock to detect stale edits, returns a no-op without duplicate audit on same-name requests, and appends structured previous/new names for real changes. Migration 008 adds the JSON details field/action; runtime grants allow only the display-name update. Restricted-role PostgreSQL 17 suite: 45/45, 0 skipped across migrations 001–008; `node --check` and `git diff --check` pass. Browser visual review remains authorization-gated. Branch archival, consolidated reporting, transfers, owner invitations, and production gates remain incomplete. Details: [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md).
+
+## 26 November 2026 — OW-14 reversible branch archive
+
+Added audited branch archive and restore to the owner branch directory. Archived branches retain records, end active sessions, and reject login until restored; restore requires a fresh login. The current and last active branch cannot be archived. Shared transaction advisory locking serializes creation and archive decisions. Migration 009 extends branch state/audit. Restricted PostgreSQL 17 runtime-role suite passed 45/45, 0 skipped on migrations 001–009. Browser visual, deployed backend, cross-branch accounting, and owner invitation work remain open. Details: [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md).

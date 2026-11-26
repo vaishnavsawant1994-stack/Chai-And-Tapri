@@ -20,7 +20,7 @@ GRANT SELECT, INSERT, UPDATE ON sessions TO chai_tapri_api;
 GRANT SELECT, INSERT, UPDATE, DELETE ON auth_failures TO chai_tapri_api;
 GRANT SELECT, INSERT ON sync_events TO chai_tapri_api;
 GRANT SELECT, INSERT ON sync_conflicts TO chai_tapri_api;
-GRANT UPDATE (server_revision,display_name) ON shops TO chai_tapri_api;
+GRANT UPDATE (server_revision,display_name,archived_at) ON shops TO chai_tapri_api;
 GRANT UPDATE (revoked_at) ON devices TO chai_tapri_api;
 
 -- The application role never owns the tables. FORCE RLS policies on sync tables

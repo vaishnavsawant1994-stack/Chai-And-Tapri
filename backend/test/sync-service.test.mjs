@@ -133,6 +133,8 @@ test('business owner branch directory is isolated and creates a separately authe
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.renameBusinessBranch({...actor,role:'cashier'},{targetShopId:enrollment.shopId,expectedName:'Main Shop',displayName:'Denied Rename'}),
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
+    await assert.rejects(service.setBusinessBranchArchived({...actor,role:'cashier'},{targetShopId:enrollment.shopId,expectedName:'Main Shop',archived:true}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.createBusinessBranch(actor,{displayName:'x',deviceLabel:'No Device'}),
       (error)=>error instanceof ApiError&&error.status===400&&error.code==='invalid_branch_details');
     server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -168,6 +170,8 @@ test('business owner branch directory is isolated and creates a separately authe
       (error)=>error instanceof ApiError&&error.status===409&&error.code==='branch_name_conflict');
     await assert.rejects(service.renameBusinessBranch(actor,{targetShopId:otherEnrollment.shopId,expectedName:'Other Main',displayName:'Not Yours'}),
       (error)=>error instanceof ApiError&&error.status===404&&error.code==='business_branch_not_found');
+    await assert.rejects(service.setBusinessBranchArchived(actor,{targetShopId:enrollment.shopId,expectedName:'Main Shop',archived:true}),
+      (error)=>error instanceof ApiError&&error.status===409&&error.code==='current_branch_cannot_be_archived');
     const login=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:created.deviceId});
     assert.equal(login.role,'owner');
     assert.equal(login.businessId,enrollment.businessId);
@@ -192,6 +196,29 @@ test('business owner branch directory is isolated and creates a separately authe
     assert.equal((await service.authenticate(replacementLogin.token,created.branch.shopId)).device_id,replacement.deviceId);
     const replacementDirectory=(await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId);
     assert.equal(replacementDirectory.devices.find((device)=>device.deviceId===replacement.deviceId).revoked,false);
+    const archived = await service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',archived:true});
+    assert.equal(archived.state,'archived');
+    assert.equal(archived.revokedSessionCount,1);
+    await assert.rejects(service.authenticate(replacementLogin.token,created.branch.shopId),(error)=>error instanceof ApiError&&error.status===401);
+    await assert.rejects(service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:replacement.deviceId}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='shop_or_device_access_denied');
+    assert.equal((await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId).archived,true);
+    assert.equal((await service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',archived:true})).state,'already_archived');
+    await assert.rejects(service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'Stale Name',archived:false}),
+      (error)=>error instanceof ApiError&&error.status===409&&error.code==='branch_name_conflict');
+    const restored = await service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',archived:false});
+    assert.equal(restored.state,'restored');
+    assert.equal((await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId).archived,false);
+    const restoredLogin=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:replacement.deviceId});
+    assert.equal((await service.authenticate(restoredLogin.token,created.branch.shopId)).device_id,replacement.deviceId);
+    const duplicateLogin=await service.login({email:`branch-${suffix}@example.test`,password,shopId:duplicate.branch.shopId,deviceId:duplicate.deviceId});
+    const duplicateActor=await service.authenticate(duplicateLogin.token,duplicate.branch.shopId);
+    await service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',archived:true});
+    await service.setBusinessBranchArchived(actor,{targetShopId:duplicate.branch.shopId,expectedName:'Second Shop',archived:true});
+    await assert.rejects(service.setBusinessBranchArchived(duplicateActor,{targetShopId:enrollment.shopId,expectedName:'Main Shop',archived:true}),
+      (error)=>error instanceof ApiError&&error.status===409&&error.code==='last_active_branch_cannot_be_archived');
+    await service.setBusinessBranchArchived(actor,{targetShopId:created.branch.shopId,expectedName:'North Counter',archived:false});
+    await service.setBusinessBranchArchived(actor,{targetShopId:duplicate.branch.shopId,expectedName:'Second Shop',archived:false});
     await assert.rejects(service.revokeBusinessDevice(actor,{targetShopId:otherEnrollment.shopId,deviceId:otherDeviceId}),
       (error)=>error instanceof ApiError&&error.status===404&&error.code==='business_device_not_found');
     await assert.rejects(service.authenticate(enrollment.token,otherEnrollment.shopId),(error)=>error instanceof ApiError&&error.status===401);
@@ -200,10 +227,12 @@ test('business owner branch directory is isolated and creates a separately authe
       await c.query("SELECT set_config('app.current_user',$1,true)",[enrollment.userId]);
       return c.query("SELECT action,device_id,details FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
     });
-    assert.equal(audit.rows.length,5);
+    assert.equal(audit.rows.length,11);
     assert.ok(audit.rows.some((event)=>event.action==='branch_renamed'&&event.details.previousName==='Second Shop'&&event.details.displayName==='North Counter'));
     assert.ok(audit.rows.some((event)=>event.action==='device_revoked'&&event.device_id===created.deviceId));
     assert.ok(audit.rows.some((event)=>event.action==='device_registered'&&event.device_id===replacement.deviceId));
+    assert.ok(audit.rows.some((event)=>event.action==='branch_archived'&&event.details.displayName==='North Counter'));
+    assert.ok(audit.rows.some((event)=>event.action==='branch_restored'&&event.details.displayName==='North Counter'));
     const hidden=await withTransaction(pool,async(c)=>{
       await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
       await c.query("SELECT set_config('app.current_user',$1,true)",[otherEnrollment.userId]);

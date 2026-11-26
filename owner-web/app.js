@@ -770,7 +770,24 @@ import { formatQuantity } from './quantity-format.mjs';
         }));
         row.append(devicesCell);
         appendCell(row, String(branch.serverRevision)); appendCell(row, new Date(branch.createdAt).toLocaleString());
-        appendCell(row, branch.current ? 'Current session' : 'Separate sign-in required');
+        const sessionCell = document.createElement('td');
+        sessionCell.append(document.createTextNode(branch.archived ? 'Archived · sign-in disabled' : branch.current ? 'Current session' : 'Separate sign-in required'));
+        if (!branch.current) sessionCell.append(actionButton(branch.archived ? 'Restore branch' : 'Archive branch', async () => {
+          const action = branch.archived ? 'restore' : 'archive';
+          const message = branch.archived
+            ? `Restore ${branch.displayName}? Existing records remain available; previously revoked sessions will need a new sign-in.`
+            : `Archive ${branch.displayName}? Its active sessions will end and new sign-ins will be disabled. Records will be retained.`;
+          if (!confirm(message)) return;
+          try {
+            const updated = await request(`/v1/dashboard/branches/${action}`, {
+              method: 'POST', headers: { authorization: `Bearer ${session.token}` },
+              body: JSON.stringify({ shopId: activeShopId, targetShopId: branch.shopId, expectedName: branch.displayName })
+            });
+            setStatus($('branches-status'), `Branch ${updated.state}: ${updated.displayName}. ${updated.revokedSessionCount} session(s) ended.`, 'success');
+            await loadBranches();
+          } catch (error) { setStatus($('branches-status'), showError(error), 'error'); }
+        }, true));
+        row.append(sessionCell);
         return row;
       });
       if (!rows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No branches found.'); empty.colSpan = 6; empty.className = 'empty-row'; rows.push(row); }

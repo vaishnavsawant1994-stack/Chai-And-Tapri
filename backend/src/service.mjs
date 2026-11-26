@@ -397,7 +397,8 @@ export class SyncService {
       }
       await c.query("SELECT set_config('app.current_shop',$1,true)", [shopId]);
       const membership = await c.query(`SELECT m.business_id,m.shop_id,m.role,d.device_id FROM shop_memberships m JOIN devices d USING(business_id,shop_id)
-        WHERE m.user_id=$1 AND m.shop_id=$2 AND d.device_id=$3 AND d.revoked_at IS NULL`, [found.rows[0].user_id, shopId, deviceId]);
+        JOIN shops sh USING(business_id,shop_id)
+        WHERE m.user_id=$1 AND m.shop_id=$2 AND d.device_id=$3 AND d.revoked_at IS NULL AND sh.archived_at IS NULL`, [found.rows[0].user_id, shopId, deviceId]);
       if (!membership.rowCount) return { denied: true };
       await c.query('DELETE FROM auth_failures WHERE email_key=$1', [email]);
       const token = randomBytes(32).toString('base64url'); const row = membership.rows[0];
@@ -416,7 +417,9 @@ export class SyncService {
       const { rows } = await c.query(`SELECT s.user_id,s.business_id,s.shop_id,s.device_id,m.role FROM sessions s
         JOIN shop_memberships m USING(business_id,shop_id,user_id) JOIN devices d USING(shop_id,device_id)
         JOIN users u USING(user_id) WHERE s.token_hash=$1 AND s.shop_id=$2 AND s.revoked_at IS NULL AND s.expires_at>now()
-        AND d.revoked_at IS NULL AND u.disabled_at IS NULL`, [hash(token), shopId]);
+        AND d.revoked_at IS NULL AND u.disabled_at IS NULL AND EXISTS (
+          SELECT 1 FROM shops sh WHERE sh.business_id=s.business_id AND sh.shop_id=s.shop_id AND sh.archived_at IS NULL
+        )`, [hash(token), shopId]);
       return rows[0] ?? null;
     });
     if (!actor) throw new ApiError(401, 'unauthorized');
@@ -636,7 +639,7 @@ export class SyncService {
       const owner = await c.query(`SELECT 1 FROM business_memberships
         WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
       if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
-      const { rows } = await c.query(`SELECT shop_id,display_name,server_revision,created_at
+      const { rows } = await c.query(`SELECT shop_id,display_name,server_revision,created_at,archived_at
         FROM shops WHERE business_id=$1 ORDER BY lower(display_name),shop_id`, [actor.business_id]);
       const shopIds = rows.map((row) => row.shop_id);
       const deviceResult = shopIds.length ? await c.query(`SELECT shop_id,device_id,label,created_at,revoked_at
@@ -653,6 +656,7 @@ export class SyncService {
         businessId: actor.business_id,
         branches: rows.map((row) => ({ shopId: row.shop_id, displayName: row.display_name,
           serverRevision: Number(row.server_revision), createdAt: row.created_at, current: row.shop_id === actor.shop_id,
+          archived: Boolean(row.archived_at), archivedAt: row.archived_at ?? null,
           devices: devicesByShop.get(row.shop_id) ?? [] })),
         evidence: {
           scope: 'Shop directory for the authenticated business owner; branch list is scoped to the session business.',
@@ -673,6 +677,7 @@ export class SyncService {
       await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
       await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
       await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [actor.business_id]);
       const owner = await c.query(`SELECT 1 FROM business_memberships
         WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
       if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
@@ -720,6 +725,42 @@ export class SyncService {
         VALUES($1,$2,$3,'branch_renamed',$4::jsonb)`, [actor.business_id, targetShopId, actor.user_id,
         JSON.stringify({ previousName: priorName, displayName: nextName })]);
       return { shopId: targetShopId, displayName: nextName, state: 'renamed' };
+    });
+  }
+
+  async setBusinessBranchArchived(actor, { targetShopId, expectedName, archived }) {
+    requireOwner(actor);
+    if (!UUID.test(targetShopId ?? '') || typeof expectedName !== 'string' || expectedName.trim().length < 2 ||
+        expectedName.trim().length > 120 || typeof archived !== 'boolean') throw new ApiError(400, 'invalid_branch_archive');
+    if (targetShopId === actor.shop_id && archived) throw new ApiError(409, 'current_branch_cannot_be_archived');
+    const name = expectedName.trim();
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [actor.business_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const target = await c.query(`SELECT shop_id,display_name,archived_at FROM shops
+        WHERE business_id=$1 AND shop_id=$2 FOR UPDATE`, [actor.business_id, targetShopId]);
+      if (!target.rowCount) throw new ApiError(404, 'business_branch_not_found');
+      if (target.rows[0].display_name !== name) throw new ApiError(409, 'branch_name_conflict');
+      const wasArchived = target.rows[0].archived_at !== null;
+      if (wasArchived === archived) return { shopId: targetShopId, displayName: name, state: archived ? 'already_archived' : 'already_active', revokedSessionCount: 0 };
+      if (archived) {
+        const active = await c.query('SELECT count(*)::integer AS count FROM shops WHERE business_id=$1 AND archived_at IS NULL', [actor.business_id]);
+        if (Number(active.rows[0].count) <= 1) throw new ApiError(409, 'last_active_branch_cannot_be_archived');
+        await c.query('UPDATE shops SET archived_at=now() WHERE business_id=$1 AND shop_id=$2 AND archived_at IS NULL', [actor.business_id, targetShopId]);
+        const revoked = await c.query('UPDATE sessions SET revoked_at=now() WHERE business_id=$1 AND shop_id=$2 AND revoked_at IS NULL', [actor.business_id, targetShopId]);
+        await c.query(`INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action,details)
+          VALUES($1,$2,$3,'branch_archived',$4::jsonb)`, [actor.business_id, targetShopId, actor.user_id, JSON.stringify({ displayName: name })]);
+        return { shopId: targetShopId, displayName: name, state: 'archived', revokedSessionCount: revoked.rowCount };
+      }
+      await c.query('UPDATE shops SET archived_at=NULL WHERE business_id=$1 AND shop_id=$2 AND archived_at IS NOT NULL', [actor.business_id, targetShopId]);
+      await c.query(`INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action,details)
+        VALUES($1,$2,$3,'branch_restored',$4::jsonb)`, [actor.business_id, targetShopId, actor.user_id, JSON.stringify({ displayName: name })]);
+      return { shopId: targetShopId, displayName: name, state: 'restored', revokedSessionCount: 0 };
     });
   }
 
