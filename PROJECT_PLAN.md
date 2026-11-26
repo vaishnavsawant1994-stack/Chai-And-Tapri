@@ -1328,3 +1328,7 @@ Current evidence qualifies the tested emulator source and selected workflows onl
 ## Multi-product purchase receipt UI — 26 November 2026
 
 The direct Procurement screen now has focused API 37 coverage for a two-line receipt using two different pack conversions. One receipt posts 24 bottles and 18 packs, updates payable by 6,600 paise, and preserves a combined conversion audit with two movements. The focused test passed 1/1 after encrypted-store reopen. This is not a rerun of the full Android suite; the latest 156/156 broad regression predates this test-only extension. Procurement remains partial; see [CT-13/14 report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
+
+## Wave 6 GitHub CI baseline — 26 November 2026
+
+Added `.github/workflows/ci.yml` for prototype tests, PostgreSQL 17 backend tests through a restricted runtime role, Kotlin/JVM tests, Android debug/test APK assembly and lint. GitHub run [45743870636](https://github.com/vaishnavsawant1994-stack/Chai-And-Tapri/actions/runs/45743870636) passed all three jobs: prototype 52/52, backend 44/44, and Android tasks successful. The hosted compile uses API 36 because the runner does not publish the project's local API 37 package; local default remains 37. The workflow does not run emulator instrumentation or deploy. Independent review, browser visual gate, physical Bluetooth/noisy-shop testing and production release remain open. See [Wave 6 CI report](specs/WAVE-6-GITHUB-CI-REPORT-2026-11-26.md).

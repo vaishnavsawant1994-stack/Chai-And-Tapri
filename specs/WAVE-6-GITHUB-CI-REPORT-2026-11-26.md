@@ -2,7 +2,7 @@
 
 **Date:** 26 November 2026  
 **Repository:** `vaishnavsawant1994-stack/Chai-And-Tapri`  
-**Status:** CI workflow implemented; local-equivalent checks passed; GitHub-hosted run pending push.
+**Status:** CI workflow implemented and GitHub-hosted run passed.
 
 ## Delivered
 
@@ -32,6 +32,8 @@ Android task command: `gradlew.bat --no-daemon testDebugUnitTest assembleDebug a
 
 ## Qualification limits and follow-up
 
-GitHub hosted Android setup required iterative fixes: the initial run used an incorrect Gradle action path; the next encountered the retired SDK `tools` package; a later attempt found API 37 absent from the runner package index. The workflow now uses the supported Gradle action, requests only `platform-tools`, and compiles against API 36, which satisfies the current AndroidX/SQLCipher minimum compile SDK. The GitHub-hosted result remains pending. The local SDK installation has API 35 and API 37 but no standalone `sdkmanager`, so the CI-only API 36 variant could not be run locally. Default API 37 local builds have passed. Local Android instrumentation on the API 37 emulator is not part of this CI workflow because emulator UI suites are long-running and have experienced host/emulator instability. The existing focused/full emulator evidence remains separately documented. No physical Bluetooth microphone, noisy-shop, independent security review, deployment, or release qualification is claimed.
+Hosted run **45743870636** passed all three jobs for commit `c7a583b9110745682ffc9c9da88e7b3433efdb74`: prototype, backend/PostgreSQL, and Android JVM/build/lint. Run: [GitHub Actions](https://github.com/vaishnavsawant1994-stack/Chai-And-Tapri/actions/runs/45743870636). The backend job reports 44/44 and the prototype job 52/52. The Android job completed `testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug` successfully against compile SDK 36. The exact hosted Kotlin test count was not included in the console summary; the local API 37 report records 106 JVM tests.
 
-Next: push to `vaishnavsawant1994-stack/Chai-And-Tapri`, inspect the hosted Actions run, and fix any runner-specific failures. Then decide whether to add a manually dispatched emulator workflow after measuring hosted emulator stability and runtime.
+GitHub hosted Android setup required iterative fixes: an incorrect Gradle action path, the retired SDK `tools` package, API 37 being absent from the runner package index, and the wrapper's missing executable bit. These were corrected. The workflow now uses the supported Gradle action, requests only `platform-tools`, compiles against API 36, and the wrapper is executable. The local SDK installation has API 35 and API 37 but no standalone `sdkmanager`, so the CI-only API 36 variant could not be run locally. Default API 37 local builds have passed. Local Android instrumentation on the API 37 emulator is not part of this CI workflow because emulator UI suites are long-running and have experienced host/emulator instability. The existing focused/full emulator evidence remains separately documented. No physical Bluetooth microphone, noisy-shop, independent security review, deployment, or release qualification is claimed.
+
+Next: add a manually dispatched emulator workflow only after measuring hosted emulator stability and runtime. Keep physical microphone, field, independent-review, deployment and release gates separate.
