@@ -4477,7 +4477,10 @@ class SqliteCounterPersistenceTest {
         CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { model ->
             assertTrue(model.saveProduct(TapriProduct("ui_crate_water", "UI Crate Water", "Drinks", 2000,
                 priceConfirmed = true, unitLabel = "bottle", purchaseUnitLabel = "crate", baseUnitsPerPurchaseUnit = 12)).startsWith("Product saved"))
+            assertTrue(model.saveProduct(TapriProduct("ui_box_soda", "UI Box Soda", "Drinks", 2500,
+                priceConfirmed = true, unitLabel = "pack", purchaseUnitLabel = "box", baseUnitsPerPurchaseUnit = 6)).startsWith("Product saved"))
             assertTrue(model.confirmOpeningStock("ui_crate_water", 5, "counted bottles", "ui-crate-opening").startsWith("Opening stock"))
+            assertTrue(model.confirmOpeningStock("ui_box_soda", 3, "counted packs", "ui-box-opening").startsWith("Opening stock"))
             assertTrue(model.saveSupplier("ui_crate_dealer", "UI Crate Dealer", "ui-crate-supplier").startsWith("Supplier saved"))
         }
         val activity = instrumentation.startActivitySync(Intent(context, ProcurementActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -4519,12 +4522,30 @@ class SqliteCounterPersistenceTest {
             assertTrue(findNode(prefix = "1 crate = 12 bottle").text.contains("stock is recorded in bottle"))
             setField("Received quantity in crate", "2")
             setField("Cost per bottle", "1.25")
+            click("Add product line")
+            click("Coffee")
+            click("UI Box Soda")
+            assertTrue(findNode(prefix = "1 box = 6 pack").text.contains("stock is recorded in pack"))
+            setField("Received quantity in box", "3")
+            setField("Cost per pack", "2.00")
             click("Post receipt")
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { reopened ->
                 assertEquals(29, reopened.stockLevels()["ui_crate_water"])
-                assertEquals(3000L, reopened.supplierPayablePaise("ui_crate_dealer"))
-                assertTrue(reopened.auditEvents().any { it.contains("purchase_units=ui_crate_water:2:crate:12:24:bottle") })
-                assertEquals(24, reopened.stockMovements().single { it.reason == "purchase_receipt" }.quantityDelta)
+                assertEquals(21, reopened.stockLevels()["ui_box_soda"])
+                assertEquals(6600L, reopened.supplierPayablePaise("ui_crate_dealer"))
+                val purchaseAudit = reopened.auditEvents().filter { it.contains("purchase.received") }
+                assertEquals("One receipt should produce one audit event", 1, purchaseAudit.size)
+                assertTrue("Box conversion should be in receipt audit: $purchaseAudit",
+                    purchaseAudit.single().contains("purchase_units=ui_box_soda:3:box:6:18:pack"))
+                assertTrue("Crate conversion should be in the same receipt audit: $purchaseAudit",
+                    purchaseAudit.single().contains(",ui_crate_water:2:crate:12:24:bottle"))
+                val receipts = reopened.stockMovements().filter { it.reason == "purchase_receipt" }
+                assertEquals(2, receipts.size)
+                assertEquals(24, receipts.single { it.productId == "ui_crate_water" }.quantityDelta)
+                assertEquals(18, receipts.single { it.productId == "ui_box_soda" }.quantityDelta)
+                assertEquals(1, reopened.purchaseHistory().size)
+                assertEquals(2, reopened.purchaseHistory().single().lines.size)
+                CounterSnapshotIntegrity.requireConsistent(SqliteCounterPersistence(context).use { it.load()!! })
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish(); LocalSessionState.clear() }

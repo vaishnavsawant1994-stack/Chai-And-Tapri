@@ -1324,3 +1324,7 @@ The API 37 native Procurement test now drafts four crates (48 cups), confirms dr
 The Android current-source full `connectedDebugAndroidTest` suite passed **156/156, 0 failures, 0 ignored** on the serial-pinned API 37 emulator in 16m23s. Companion suites/builds: prototype Node **52/52**; backend Node **44/44** on a disposable restricted-role PostgreSQL 17 database, 0 skips; Kotlin JVM **106/106**; debug and instrumentation APK builds passed; lint **0 errors / 201 warnings**. Three stale expectations found in the first full attempt were corrected and the full rerun passed. See [master tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md) and the current CT-13/14 and CT-17 reports.
 
 Current evidence qualifies the tested emulator source and selected workflows only. Physical Bluetooth/audio, field trials, independent security review, browser visual authorization, deployed synchronization, full modules/screens and production release remain unqualified.
+
+## Multi-product purchase receipt UI — 26 November 2026
+
+The direct Procurement screen now has focused API 37 coverage for a two-line receipt using two different pack conversions. One receipt posts 24 bottles and 18 packs, updates payable by 6,600 paise, and preserves a combined conversion audit with two movements. The focused test passed 1/1 after encrypted-store reopen. This is not a rerun of the full Android suite; the latest 156/156 broad regression predates this test-only extension. Procurement remains partial; see [CT-13/14 report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).

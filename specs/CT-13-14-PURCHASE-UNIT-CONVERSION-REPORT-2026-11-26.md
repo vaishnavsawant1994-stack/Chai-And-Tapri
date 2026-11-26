@@ -51,3 +51,9 @@ Current-source API 37 instrumentation passed **1/1** for Product Editor → supp
 The native CT-17 Procurement test passed **1/1** with purchase-unit conversion enabled: four crates convert to a 48-cup draft and retain original quantity/factor in audit; draft state leaves stock/payable unchanged; two partial base-unit receipts update both; an invalid zero settlement is rejected; a ₹5 cash payment remains staff-declared; returning one cup restores the payable correctly. JUnit timestamp: `2026-11-26T01:30:11Z`.
 
 The complete current-source API 37 instrumentation suite then passed **156/156, 0 failed, 0 ignored** in 16m23s. This qualifies the tested emulator source only. CT-13/14 and CT-17 remain partial modules; no physical shop, real payment-provider, cross-device or production qualification is implied.
+
+## Multi-product direct receipt UI follow-up — 26 November 2026
+
+Extended `directProcurementScreenConvertsConfiguredCratesToBottleStock` to post one receipt with two products and different purchase-unit conversions: 2 crates × 12 bottles and 3 boxes × 6 packs. The real Procurement dialog required the operator to add a second line and select its product. After SQLCipher reopen, focused API 37 instrumentation passed **1/1** and verified 29 bottles, 21 packs, 6,600 paise payable, one receipt containing two lines, two separate stock movements, and one audited receipt event carrying both sorted conversion inputs. The JUnit file is `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Clean_2026(AVD) - 17.xml`.
+
+This extends the UI evidence from one line to two lines; it does not qualify the ten-line limit or the full procurement module. The 156/156 full suite was run before this test-only extension; it is retained as prior broad regression evidence, while this exact added two-line scenario has its focused 1/1 pass.

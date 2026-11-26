@@ -405,3 +405,7 @@ The focused API 37 Procurement test passes with purchase-unit conversion enabled
 ## Current-source regression — 26 November 2026
 
 Serial-pinned API 37 `connectedDebugAndroidTest` passed **156/156**, 0 failed/ignored, in 16m23s. This includes the connected product → supplier → converted receipt → Quick Sale workflow and the configured purchase-order pack conversion/partial receipt UI workflow. Prototype Node 52/52, backend PostgreSQL Node 44/44 (0 skipped), Kotlin JVM 106/106, APK builds passed, and lint reported 0 errors / 201 warnings. Focused and full reports are linked from `../specs/PROJECT-PROGRESS-AUDIT-2026-11-26.md`. These results do not qualify physical devices, noisy-shop speech, production backend/deployment or all 32 planned Android screens.
+
+## Multi-product direct receipt UI — 26 November 2026
+
+A focused API 37 rerun of `directProcurementScreenConvertsConfiguredCratesToBottleStock` passed 1/1 with two products in one receipt: 2 crates → 24 bottles and 3 boxes → 18 packs. SQLCipher reopen verified stock, combined payable, one receipt, two movements, and the combined audited conversion. The full 156/156 suite predates this test-only extension. See the [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md); complete procurement remains partial.
