@@ -409,3 +409,7 @@ Serial-pinned API 37 `connectedDebugAndroidTest` passed **156/156**, 0 failed/ig
 ## Multi-product direct receipt UI — 26 November 2026
 
 A focused API 37 rerun of `directProcurementScreenConvertsConfiguredCratesToBottleStock` passed 1/1 with two products in one receipt: 2 crates → 24 bottles and 3 boxes → 18 packs. SQLCipher reopen verified stock, combined payable, one receipt, two movements, and the combined audited conversion. The full 156/156 suite predates this test-only extension. See the [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md); complete procurement remains partial.
+
+## GitHub CI — 26 November 2026
+
+The repository workflow `.github/workflows/ci.yml` runs prototype Node tests, backend tests against a disposable PostgreSQL 17 service and restricted runtime role, and Android Kotlin/JVM, APK assembly, and lint checks on pushes and pull requests to `main`. It uploads unsigned debug/test APKs and reports. It does not run emulator instrumentation or deploy the application. Local-equivalent verification and its scope are in [the Wave 6 CI report](../specs/WAVE-6-GITHUB-CI-REPORT-2026-11-26.md); the first hosted workflow result remains pending push.

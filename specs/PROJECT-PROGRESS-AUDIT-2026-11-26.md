@@ -101,3 +101,7 @@ This update supersedes older Android full-suite counts for this source only. It 
 ## CT-13/14 multi-product receipt UI follow-up — 26 November 2026
 
 The direct receipt UI test now covers a two-line batch with distinct conversions in one purchase: 2 crates × 12 bottles and 3 boxes × 6 packs. The focused API 37 test passed **1/1**. It reopened encrypted storage and verified both base-unit stock balances, combined payable of 6,600 paise, two receipt movements, one two-line receipt, and one audit event containing both conversion inputs. This is the latest focused UI evidence for direct receipt; the broader 156/156 regression predates this test-only extension. The module remains partial.
+
+## Wave 6 CI baseline — 26 November 2026
+
+Added `.github/workflows/ci.yml` for prototype Node, backend/PostgreSQL integration, Kotlin/JVM, debug and instrumentation APK assembly, and lint. Local equivalents passed: Node 52/52; backend/PostgreSQL 44/44 with no skips using a restricted runtime role; Kotlin/JVM 106/106; APK tasks pass; lint 0 errors/201 warnings. Workflow YAML parses successfully. GitHub-hosted execution is pending push; emulator instrumentation is not in this workflow. Full detail and boundaries: [Wave 6 CI report](WAVE-6-GITHUB-CI-REPORT-2026-11-26.md).
