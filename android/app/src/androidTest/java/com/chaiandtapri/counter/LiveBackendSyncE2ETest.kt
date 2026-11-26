@@ -323,6 +323,8 @@ class LiveBackendSyncE2ETest {
             assertTrue(model!!.quickSale(listOf("e2e_chai" to 1), "cash", commandId = saleCommandId).startsWith("Quick sale"))
             val sendableEvents = persistence.loadPendingSyncEvents(20)
             val saleEvent = sendableEvents.singleOrNull { it.commandId == saleCommandId }
+            val saleEventPosition = sendableEvents.indexOfFirst { it.eventId == saleEvent?.eventId }
+            assertTrue("Sale must be present in the ordered sync outbox", saleEventPosition >= 0)
             val outboxState = persistence.writableDatabase.rawQuery("SELECT command_id,status,blocked_reason FROM sync_outbox ORDER BY created_at,event_id", null).use { cursor ->
                 buildList { while (cursor.moveToNext()) add("${cursor.getString(0)}=${cursor.getString(1)}:${if (cursor.isNull(2)) "" else cursor.getString(2)}") }.joinToString(" | ")
             }
@@ -344,7 +346,7 @@ class LiveBackendSyncE2ETest {
             }
             assertTrue("The test fault should simulate the lost response", firstAttempt.exceptionOrNull() is IOException)
             assertEquals("Sale remains the only unacknowledged local event", listOf(saleEvent!!.eventId), persistence.loadPendingSyncEvents(20).map { it.eventId })
-            assertEquals("Earlier stock event should have advanced the stored cursor", 1L, persistence.loadSyncCursor())
+            assertEquals("Events before the sale should have advanced the stored cursor", saleEventPosition.toLong(), persistence.loadSyncCursor())
             if (phase == "prepare_process_death") {
                 System.out.println("CAT052_TEST_PROCESS_NAME=${android.app.Application.getProcessName()}")
                 processDeathState.writeText(JSONObject()
@@ -366,19 +368,26 @@ class LiveBackendSyncE2ETest {
             assertEquals(2_500, restoredModel.allOrders().single().salePaise)
             assertEquals(9, restoredModel.stockLevels()["e2e_chai"])
             assertEquals(listOf(saleEvent.eventId), reopened!!.loadPendingSyncEvents(20).map { it.eventId })
-            assertEquals(1L, reopened!!.loadSyncCursor())
+            assertEquals(saleEventPosition.toLong(), reopened!!.loadSyncCursor())
 
             val retry = SyncRunner(PersistenceSyncJournal(reopened!!), transport).push(session.endpointBase, session.identity, session.bearerToken)
-            assertEquals(1, retry.acknowledged)
-            assertEquals(2L, retry.serverRevision)
+            assertEquals(sendableEvents.size - saleEventPosition, retry.acknowledged)
+            assertEquals(sendableEvents.size.toLong(), retry.serverRevision)
             assertTrue("Durable outbox should clear only after the duplicate acknowledgment", reopened!!.loadPendingSyncEvents(20).isEmpty())
-            assertEquals(2L, reopened!!.loadSyncCursor())
+            assertEquals(sendableEvents.size.toLong(), reopened!!.loadSyncCursor())
+
+            val remoteCatalogue = SyncCatalogueClient(transport).fetch(session.endpointBase, session.identity, session.bearerToken)
+            assertEquals(session.identity.shopId, remoteCatalogue.shopId)
+            assertEquals(sendableEvents.size.toLong(), remoteCatalogue.serverRevision)
+            assertEquals(listOf("e2e_chai"), remoteCatalogue.products.map { it.productId })
+            assertTrue("Authenticated server catalogue should merge into the encrypted local catalogue", reopened!!.applyRemoteCatalogueSnapshot(remoteCatalogue))
+            assertEquals(2_500, restoredModel.products().single { it.productId == "e2e_chai" }.unitPricePaise)
             restoredModel.close()
             reopened = null
 
             val overview = getJson("${session.endpointBase}/v1/dashboard/overview?shopId=${session.identity.shopId}", session.bearerToken)
-            assertEquals(2L, overview.getLong("serverRevision"))
-            assertEquals(2, overview.getInt("acceptedEventCount"))
+            assertEquals(sendableEvents.size.toLong(), overview.getLong("serverRevision"))
+            assertEquals(sendableEvents.size, overview.getInt("acceptedEventCount"))
             assertEquals(1, overview.getInt("recordedOrderCount"))
             assertEquals(2_500, overview.getLong("cashCollectedPaise"))
             val readiness = getJson("${session.endpointBase}/v1/dashboard/profit-readiness?shopId=${session.identity.shopId}&days=30", session.bearerToken)

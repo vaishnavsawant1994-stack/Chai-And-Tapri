@@ -1,4 +1,10 @@
 # Chai And Tapri OS
+
+## 26 November 2026 — CAT-052 Android HTTPS catalogue pull qualification
+
+The focused API 37 emulator E2E now exercises Android account registration, encrypted local data, event upload, simulated acknowledgment loss, SQLCipher reopen, idempotent retry, authenticated catalogue download/cache, and owner projection checks against a disposable PostgreSQL 17 service. The E2E passed **1/1**. Current rerun suites: prototype Node **52/52**, backend PostgreSQL Node **44/44** with restricted runtime login and 0 skips, Kotlin JVM **106/106**, APK build tasks PASS, lint **0 errors / 201 warnings**. Report: [CAT-052 Android HTTPS E2E](specs/CAT-052-ANDROID-HTTPS-CATALOGUE-PULL-E2E-REPORT-2026-11-26.md).
+
+The Android live-sync path is qualified for this one synthetic emulator scenario; synchronization as a deployed product remains incomplete. Full default Android instrumentation regression was not rerun in this slice. Multi-device conflicts, production hosting/secrets, independent security review, physical Bluetooth/audio, shop trials, and production release gates remain open.
 ## Latest continuation — CT-28 closing follow-up navigation — 26 November 2026
 
 Daily Closing now routes recorded open orders, pending UPI attempts, and customer receivables to their actual Android workflows (CT-08, CT-10, CT-23), only when each recorded exception exists. The focused API 37 UI test navigated to all three destinations and back, then verified the existing acknowledgement/estimate flow and that closing review did not mutate sales/payment/stock. Android instrumentation: **1/1 focused pass**; Kotlin/JVM **96/96**; debug/test APK builds PASS; lint **0 errors, 191 warnings**. Full connected regression was not rerun. CT-28 remains partial and is not a calendar-day accounting report. See [CT-28 follow-up report](specs/CT-28-DAILY-CLOSING-FOLLOW-UP-NAVIGATION-REPORT-2026-11-26.md).

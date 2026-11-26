@@ -64,4 +64,10 @@ Current verification for this follow-up: prototype Node 52/52; backend Node 43/4
 
 The authenticated sync API now provides a catalogue-only snapshot to owner and staff Android sync sessions. Manual and background sync cache validated snapshots in the encrypted local database; pending local catalogue edits survive, the server revision advances, and new products do not receive invented stock counts. [Implementation report](CAT-052-SHOP-APP-CATALOGUE-PULL-REPORT-2026-11-26.md).
 
-Verification: prototype Node 52/52; backend Node 44/44 on disposable PostgreSQL 17, no skips; Kotlin JVM 106/106; APK builds pass; lint 0 errors / 201 warnings; focused API 37 instrumentation 1/1. This verifies server integration and local cache behavior separately. An actual Android HTTPS round trip to a server and second-device workflow remain unverified.
+Verification: prototype Node 52/52; backend Node 44/44 on disposable PostgreSQL 17, no skips; Kotlin JVM 106/106; APK builds pass; lint 0 errors / 201 warnings; focused API 37 cache instrumentation 1/1. An Android HTTPS round trip was still unverified when this addendum was first written; the follow-up below supersedes that one gap.
+
+## 26 November 2026 follow-up — live Android HTTPS E2E
+
+The opt-in API 37 emulator test now registered against a disposable PostgreSQL 17 backend over HTTPS, created encrypted product/stock/sale records, exercised a committed event whose acknowledgment was lost, reopened SQLCipher, retried idempotently, fetched the authenticated server catalogue, merged it into the encrypted cache, and verified owner projections. Focused Android E2E **1/1 passed**. Full rerun counts for this continuation: prototype Node **52/52**; backend **44/44** on a restricted runtime login with 0 skips; Kotlin JVM **106/106**; debug/instrumentation APK builds PASS; lint **0 errors / 201 warnings**. See [CAT-052 Android HTTPS E2E report](CAT-052-ANDROID-HTTPS-CATALOGUE-PULL-E2E-REPORT-2026-11-26.md).
+
+The opt-in synthetic E2E is not a deployed backend, multi-device conflict test, full Android regression, independent security review, physical-device/Bluetooth/noisy-shop trial, or production qualification. Full six-wave product work remains active.

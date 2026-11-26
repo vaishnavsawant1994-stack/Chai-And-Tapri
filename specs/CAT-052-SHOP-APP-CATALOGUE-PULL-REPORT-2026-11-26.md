@@ -16,8 +16,8 @@
 - Debug APK and instrumentation APK builds: **PASS**.
 - Android lint: **PASS**, 0 errors, 201 warnings.
 - API 37 emulator catalogue parse/cache/persistence instrumentation: **1/1 passed**. The test exercises safe field allow-listing, wrong-shop and cost-bearing response rejection, local pending-edit preservation, newer snapshot update, stock-unreported behavior, revision cursor, stale revision rejection and shop-boundary rejection.
-- The backend end-to-end test uses synthetic records and a disposable local database. It is not Android-to-server live network evidence.
+- A focused API 37 Android emulator E2E now registers, uploads, survives a lost acknowledgment/retry, downloads the shop catalogue over authenticated HTTPS, caches it in SQLCipher, and checks server projections against a disposable PostgreSQL 17 database. See [CAT-052 Android HTTPS E2E report](CAT-052-ANDROID-HTTPS-CATALOGUE-PULL-E2E-REPORT-2026-11-26.md).
 
 ## Limits
 
-The catalogue snapshot is not inventory synchronization: new products have no locally confirmed stock and remain unavailable for sale until stock is physically recorded. No multi-device live Android-to-server-to-Android network test was run. The service is not deployed. Pagination for very large catalogues, external production security review, physical-device/field tests, and release readiness remain open.
+The catalogue snapshot is not inventory synchronization: new products have no locally confirmed stock and remain unavailable for sale until stock is physically recorded. No multi-device Android-to-server-to-Android network test was run. The service is not deployed. Pagination for very large catalogues, external production security review, physical-device/field tests, and release readiness remain open.
