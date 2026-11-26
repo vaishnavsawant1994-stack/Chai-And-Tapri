@@ -401,3 +401,7 @@ One API 37 instrumentation test now traverses Product Editor → supplier setup 
 ## Purchase-order pack conversion UI — 26 November 2026
 
 The focused API 37 Procurement test passes with purchase-unit conversion enabled: four crates become 48 cups in the draft/audit; the draft has no stock or payable effect; two base-unit partial receipts, invalid payment rejection, staff-declared settlement and a one-cup return reconcile through encrypted storage. Focused result: 1/1. This path does not send the order to suppliers or qualify full procurement. See [CT-17 report](../specs/CT-17-PURCHASE-ORDER-UNIT-CONVERSION-REPORT-2026-11-26.md).
+
+## Current-source regression — 26 November 2026
+
+Serial-pinned API 37 `connectedDebugAndroidTest` passed **156/156**, 0 failed/ignored, in 16m23s. This includes the connected product → supplier → converted receipt → Quick Sale workflow and the configured purchase-order pack conversion/partial receipt UI workflow. Prototype Node 52/52, backend PostgreSQL Node 44/44 (0 skipped), Kotlin JVM 106/106, APK builds passed, and lint reported 0 errors / 201 warnings. Focused and full reports are linked from `../specs/PROJECT-PROGRESS-AUDIT-2026-11-26.md`. These results do not qualify physical devices, noisy-shop speech, production backend/deployment or all 32 planned Android screens.

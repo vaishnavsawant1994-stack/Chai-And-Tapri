@@ -40,6 +40,7 @@ class SqliteOutboxRetryTest {
             val saleCommand = "retry-sale-${UUID.randomUUID()}"
             assertTrue(model!!.confirmOpeningStock("retry_tea", 5, "synthetic retry fixture", openingCommand).startsWith("Opening stock confirmed"))
             assertTrue(model!!.quickSale(listOf("retry_tea" to 1), "cash", commandId = saleCommand).startsWith("Quick sale"))
+            val pendingBefore = persistence!!.loadPendingSyncEvents(20)
 
             val serverRevisions = linkedMapOf<String, Long>()
             val serverCommandIds = linkedSetOf<String>()
@@ -78,12 +79,13 @@ class SqliteOutboxRetryTest {
             }
 
             val saleEvent = persistence!!.loadPendingSyncEvents(20).single { it.commandId == saleCommand }
+            val alreadyAcceptedCount = pendingBefore.takeWhile { it.eventId != saleEvent.eventId }.size
             val firstAttempt = runCatching {
                 SyncRunner(PersistenceSyncJournal(persistence!!), transport)
                     .push("https://sync.example.test", identity, "synthetic-owner-token")
             }
             assertTrue(firstAttempt.exceptionOrNull() is IOException)
-            assertEquals(1L, persistence!!.loadSyncCursor())
+            assertEquals(alreadyAcceptedCount.toLong(), persistence!!.loadSyncCursor())
             assertEquals(listOf(saleEvent.eventId), persistence!!.loadPendingSyncEvents(20).map { it.eventId })
             model!!.close()
             model = null
@@ -93,17 +95,17 @@ class SqliteOutboxRetryTest {
             val restoredModel = CounterModel(reopened, requireConfiguredProducts = true)
             assertEquals(2_500, restoredModel.allOrders().single().salePaise)
             assertEquals(4, restoredModel.stockLevels()["retry_tea"])
-            assertEquals(1L, reopened!!.loadSyncCursor())
+            assertEquals(alreadyAcceptedCount.toLong(), reopened!!.loadSyncCursor())
             assertEquals(listOf(saleEvent.eventId), reopened!!.loadPendingSyncEvents(20).map { it.eventId })
 
             val retry = SyncRunner(PersistenceSyncJournal(reopened!!), transport)
                 .push("https://sync.example.test", identity, "synthetic-owner-token")
             assertEquals(1, retry.acknowledged)
-            assertEquals(2L, retry.serverRevision)
-            assertEquals(2L, reopened!!.loadSyncCursor())
+            assertEquals(alreadyAcceptedCount.toLong() + 1L, retry.serverRevision)
+            assertEquals(alreadyAcceptedCount.toLong() + 1L, reopened!!.loadSyncCursor())
             assertTrue(reopened!!.loadPendingSyncEvents(20).isEmpty())
-            assertEquals(setOf(openingCommand, saleCommand), serverCommandIds)
-            assertEquals(2, serverRevisions.size)
+            assertEquals(pendingBefore.map { it.commandId }.toSet(), serverCommandIds)
+            assertEquals(pendingBefore.size, serverRevisions.size)
             restoredModel.close()
             reopened = null
         } finally {

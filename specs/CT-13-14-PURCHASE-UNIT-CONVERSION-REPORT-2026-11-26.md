@@ -41,3 +41,13 @@ This qualifies one end-to-end synthetic UI path. It does not qualify the entire 
 ## Evidence and source
 
 Screenshots and emulator boot logs are under `test-evidence/2026-11-26/ct13-unit-conversion/` (ignored local evidence). Source tests cover conversion, costs, audit detail, duplicate command protection, integer overflow rollback, conversion freeze, and migration/reopen.
+
+## Connected product-to-receipt-to-sale flow — 26 November 2026
+
+Current-source API 37 instrumentation passed **1/1** for Product Editor → supplier setup → converted crate receipt → Quick Sale. The synthetic product uses `cup` as base unit and `crate` as purchase unit (12 cups/crate). The UI confirms opening stock, creates the supplier, receives two crates at ₹1.25 per cup, then sells one cup. After SQLCipher reopen, assertions confirm 28 cups remaining, ₹30 payable, ₹12.50 sale, staff-declared cash, receipt/sale movements, and conversion audit. JUnit timestamp: `2026-11-26T01:21:43Z`.
+
+## Purchase-order pack conversion UI — 26 November 2026
+
+The native CT-17 Procurement test passed **1/1** with purchase-unit conversion enabled: four crates convert to a 48-cup draft and retain original quantity/factor in audit; draft state leaves stock/payable unchanged; two partial base-unit receipts update both; an invalid zero settlement is rejected; a ₹5 cash payment remains staff-declared; returning one cup restores the payable correctly. JUnit timestamp: `2026-11-26T01:30:11Z`.
+
+The complete current-source API 37 instrumentation suite then passed **156/156, 0 failed, 0 ignored** in 16m23s. This qualifies the tested emulator source only. CT-13/14 and CT-17 remain partial modules; no physical shop, real payment-provider, cross-device or production qualification is implied.

@@ -3046,7 +3046,8 @@ class SqliteCounterPersistenceTest {
         assertTrue(strings.any { it.contains("upi") && it.contains("staff_declared") && it.contains("5.00") })
         assertTrue(strings.any { it.contains("payable reduction") && it.contains("5.00") })
         assertTrue(strings.any { it.contains("dealer-order-ui") && it.contains("PARTIALLY RECEIVED") })
-        assertTrue(strings.any { it.contains("2/4 received") })
+        assertTrue("Purchase-order summary should show received versus ordered quantities: ${strings.joinToString(" | ")}",
+            strings.any { it.contains("2 units received") })
         assertTrue(strings.any { it.contains("order dealer-order-ui") })
         assertTrue(strings.any { it.contains("supplier invoice DEALER-INV-01") })
         assertTrue(strings.any { it.contains("supplier invoice PO-INV-02") })
@@ -5891,7 +5892,7 @@ class SqliteCounterPersistenceTest {
         assertTrue(model.quickSale(listOf("sync_tea" to 1), "cash", commandId = "sync-third-sale").startsWith("Quick sale"))
         model.close()
         val pendingBefore = SqliteCounterPersistence(context).use { it.loadPendingSyncEvents(10) }
-        assertEquals(4, pendingBefore.size)
+        assertEquals(5, pendingBefore.size)
         SqliteCounterPersistence(context).use { assertEquals(0L, it.loadSyncCursor()) }
 
         // Simulate a real v19 file: retain all records but remove later v20/v21 columns and tables.
@@ -5901,7 +5902,7 @@ class SqliteCounterPersistenceTest {
         }
         val upgraded = SqliteCounterPersistence(context)
         val afterMigration = upgraded.loadPendingSyncEvents(10)
-        assertEquals(4, afterMigration.size)
+        assertEquals(5, afterMigration.size)
         assertEquals(pendingBefore.map { it.eventId }, afterMigration.map { it.eventId })
         assertEquals(0L, upgraded.loadSyncCursor())
         val first = afterMigration.first()

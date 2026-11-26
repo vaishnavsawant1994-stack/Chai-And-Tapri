@@ -1318,3 +1318,9 @@ Extended the API 37 instrumentation path to create/configure a product in the Pr
 ## 26 November 2026 — Purchase-order pack conversion UI
 
 The API 37 native Procurement test now drafts four crates (48 cups), confirms draft-only state, records two partial deliveries, rejects an invalid zero settlement, records ₹5 staff-declared cash, and returns one cup. Focused instrumentation passed **1/1** and verifies final stock/payables, conversion audit and ledger integrity. Receiving quantities remain in base units. See [CT-17 report](specs/CT-17-PURCHASE-ORDER-UNIT-CONVERSION-REPORT-2026-11-26.md). This does not complete purchasing or supplier-management modules.
+
+## Current-source six-wave verification checkpoint — 26 November 2026
+
+The Android current-source full `connectedDebugAndroidTest` suite passed **156/156, 0 failures, 0 ignored** on the serial-pinned API 37 emulator in 16m23s. Companion suites/builds: prototype Node **52/52**; backend Node **44/44** on a disposable restricted-role PostgreSQL 17 database, 0 skips; Kotlin JVM **106/106**; debug and instrumentation APK builds passed; lint **0 errors / 201 warnings**. Three stale expectations found in the first full attempt were corrected and the full rerun passed. See [master tracker](specs/MASTER-IMPLEMENTATION-TRACKER.md) and the current CT-13/14 and CT-17 reports.
+
+Current evidence qualifies the tested emulator source and selected workflows only. Physical Bluetooth/audio, field trials, independent security review, browser visual authorization, deployed synchronization, full modules/screens and production release remain unqualified.
