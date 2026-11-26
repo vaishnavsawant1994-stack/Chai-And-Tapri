@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## 26 November 2026 — local checkout baseline verification
+
+Verified locally on the current checkout: prototype **52/52**; backend **44/44** against disposable PostgreSQL 17 with a restricted runtime role and **0 skipped**; Kotlin JVM **106/106**; debug and Android-test APK builds PASS; lint **0 errors / 201 warnings**. The latest recorded API 37 full instrumentation result is **156/156**, followed by a focused **1/1** two-line procurement UI test. That focused test-only extension has not had a subsequent full-suite run. The prior backend-only run without a database (37 passed, 7 skipped) is superseded by the PostgreSQL-backed run. These results qualify only the tested prototype flows; Android UI, physical hardware, real-shop, independent security and production gates remain separate.
+
 ## 26 November 2026 — CAT-052 Android HTTPS catalogue pull qualification
 
 The focused API 37 emulator E2E now exercises Android account registration, encrypted local data, event upload, simulated acknowledgment loss, SQLCipher reopen, idempotent retry, authenticated catalogue download/cache, and owner projection checks against a disposable PostgreSQL 17 service. The E2E passed **1/1**. Current rerun suites: prototype Node **52/52**, backend PostgreSQL Node **44/44** with restricted runtime login and 0 skips, Kotlin JVM **106/106**, APK build tasks PASS, lint **0 errors / 201 warnings**. Report: [CAT-052 Android HTTPS E2E](specs/CAT-052-ANDROID-HTTPS-CATALOGUE-PULL-E2E-REPORT-2026-11-26.md).

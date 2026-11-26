@@ -2,6 +2,10 @@
 
 **Updated:** 26 November 2026
 
+## Local checkout verification refresh
+
+On the current Git checkout, prototype tests passed **52/52**, backend integration passed **44/44** against disposable PostgreSQL 17 using the restricted runtime role (**0 skipped**), and Kotlin JVM passed **106/106**. Debug and Android-test APK builds passed; lint reports **0 errors / 201 warnings**. A backend run without `DATABASE_URL` reported 37 passed and 7 skipped; it was superseded by the database-backed run. The latest broad API 37 instrumentation evidence remains **156/156**; a subsequent test-only extension for a two-line receipt passed a focused **1/1**, with no later full-suite rerun. Historical failed emulator runs remain troubleshooting history, not the current qualification result. Physical device/audio, field, independent security review, authorized browser visual review, deployed backend and production release are still unqualified.
+
 This addendum records current verification evidence for the six-wave execution plan. It does not replace the complete module/screen inventory in `MASTER-IMPLEMENTATION-TRACKER.md` or imply release readiness.
 
 ## CAT-051B — process-death recovery
