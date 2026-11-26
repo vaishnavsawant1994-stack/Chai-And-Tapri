@@ -2,7 +2,7 @@
 
 ## 26 November 2026 — OW-14 branch directory and creation slice
 
-Added a business-owner-scoped branch directory/create API and owner-dashboard screen. Creating a branch transactionally creates its shop, owner shop membership, device identity, and audit event; switching to that branch requires a separate authenticated sign-in. PostgreSQL 17 integration suite passed **45/45 with 0 skips** using the restricted runtime role, including business isolation and branch login. Node syntax and diff checks passed. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). This does not provide consolidated branch accounting, operational branch switching, cross-branch transfers, deployment qualification, or visual browser qualification; the six-wave product remains incomplete.
+Added business-scoped branch directory/create and lost-device revocation to the owner dashboard. Branch creation transactionally creates the shop, owner membership, device identity and audit event. Owners can retrieve device IDs/active state and revoke a lost device, ending its sessions; self-revocation is rejected. Each branch still requires separate sign-in. PostgreSQL 17 integration suite passed **45/45 with 0 skips** using the restricted runtime role, including business isolation, branch login and revocation. Node syntax and diff checks passed. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). Consolidated branch accounting, operational switching, transfers, visual review, deployment qualification and the remaining six-wave product work remain incomplete.
 
 ## 26 November 2026 — CT-10 split-tender live sync qualification
 

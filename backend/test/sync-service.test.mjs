@@ -122,9 +122,12 @@ test('business owner branch directory is isolated and creates a separately authe
   let enrollment; let otherEnrollment; let server;
   try {
     enrollment=await service.register({email:`branch-${suffix}@example.test`,password,displayName:'Synthetic Owner',businessName:'Branch Business',shopName:'Main Shop',deviceId,deviceLabel:'Main Device'});
-    otherEnrollment=await service.register({email:`unrelated-${suffix}@example.test`,password,displayName:'Other Owner',businessName:'Other Business',shopName:'Other Main',deviceId:randomUUID(),deviceLabel:'Other Device'});
+    const otherDeviceId=randomUUID();
+    otherEnrollment=await service.register({email:`unrelated-${suffix}@example.test`,password,displayName:'Other Owner',businessName:'Other Business',shopName:'Other Main',deviceId:otherDeviceId,deviceLabel:'Other Device'});
     const actor=await service.authenticate(enrollment.token,enrollment.shopId);
     await assert.rejects(service.createBusinessBranch({...actor,role:'cashier'},{displayName:'Denied Branch',deviceLabel:'No Device'}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
+    await assert.rejects(service.revokeBusinessDevice({...actor,role:'cashier'},{targetShopId:enrollment.shopId,deviceId}),
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.createBusinessBranch(actor,{displayName:'x',deviceLabel:'No Device'}),
       (error)=>error instanceof ApiError&&error.status===400&&error.code==='invalid_branch_details');
@@ -153,21 +156,31 @@ test('business owner branch directory is isolated and creates a separately authe
     const duplicateBody=await fetch(`${base}/v1/dashboard/branches`,{method:'POST',...auth,headers:{...auth.headers,'content-type':'application/json'},body:JSON.stringify({shopId:enrollment.shopId,displayName:'Second Shop',deviceLabel:'Third Counter'})});
     assert.equal(duplicateBody.status,201,'distinct branches may use the same display name; IDs remain authoritative');
     const duplicate = await duplicateBody.json();
-    await admin.query('UPDATE devices SET revoked_at=now() WHERE business_id=$1 AND shop_id=$2 AND device_id=$3',[enrollment.businessId,duplicate.branch.shopId,duplicate.deviceId]);
-    const refreshedDirectory = await (await fetch(`${base}/v1/dashboard/branches?shopId=${enrollment.shopId}`,auth)).json();
-    assert.equal(refreshedDirectory.branches.find((branch)=>branch.shopId===duplicate.branch.shopId).devices[0].revoked,true);
     const login=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:created.deviceId});
     assert.equal(login.role,'owner');
     assert.equal(login.businessId,enrollment.businessId);
     const branchActor=await service.authenticate(login.token,created.branch.shopId);
     assert.equal(branchActor.user_id,enrollment.userId);
+    await assert.rejects(service.revokeBusinessDevice(actor,{targetShopId:enrollment.shopId,deviceId}),
+      (error)=>error instanceof ApiError&&error.status===409&&error.code==='current_device_cannot_be_revoked');
+    const revocation=await service.revokeBusinessDevice(actor,{targetShopId:created.branch.shopId,deviceId:created.deviceId});
+    assert.deepEqual(revocation,{shopId:created.branch.shopId,deviceId:created.deviceId,state:'revoked',revokedSessionCount:1});
+    await assert.rejects(service.authenticate(login.token,created.branch.shopId),(error)=>error instanceof ApiError&&error.status===401);
+    await assert.rejects(service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:created.deviceId}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='shop_or_device_access_denied');
+    assert.equal((await service.revokeBusinessDevice(actor,{targetShopId:created.branch.shopId,deviceId:created.deviceId})).state,'already_revoked');
+    const revokedDirectory=(await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId);
+    assert.equal(revokedDirectory.devices[0].revoked,true);
+    await assert.rejects(service.revokeBusinessDevice(actor,{targetShopId:otherEnrollment.shopId,deviceId:otherDeviceId}),
+      (error)=>error instanceof ApiError&&error.status===404&&error.code==='business_device_not_found');
     await assert.rejects(service.authenticate(enrollment.token,otherEnrollment.shopId),(error)=>error instanceof ApiError&&error.status===401);
     const audit=await withTransaction(pool,async(c)=>{
       await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
       await c.query("SELECT set_config('app.current_user',$1,true)",[enrollment.userId]);
-      return c.query("SELECT count(*)::int AS count FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
+      return c.query("SELECT action,device_id FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
     });
-    assert.equal(audit.rows[0].count,2);
+    assert.equal(audit.rows.length,3);
+    assert.ok(audit.rows.some((event)=>event.action==='device_revoked'&&event.device_id===created.deviceId));
     const hidden=await withTransaction(pool,async(c)=>{
       await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
       await c.query("SELECT set_config('app.current_user',$1,true)",[otherEnrollment.userId]);

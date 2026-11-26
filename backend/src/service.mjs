@@ -695,6 +695,35 @@ export class SyncService {
     });
   }
 
+  async revokeBusinessDevice(actor, { targetShopId, deviceId }) {
+    requireOwner(actor);
+    if (!UUID.test(targetShopId ?? '') || !UUID.test(deviceId ?? '')) throw new ApiError(400, 'invalid_device_identity');
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const target = await c.query(`SELECT shop_id,device_id,revoked_at FROM devices
+        WHERE business_id=$1 AND shop_id=$2 AND device_id=$3 FOR UPDATE`,
+      [actor.business_id, targetShopId, deviceId]);
+      if (!target.rowCount) throw new ApiError(404, 'business_device_not_found');
+      if (target.rows[0].revoked_at) return { shopId: targetShopId, deviceId, state: 'already_revoked', revokedSessionCount: 0 };
+      if (targetShopId === actor.shop_id && deviceId === actor.device_id) throw new ApiError(409, 'current_device_cannot_be_revoked');
+      const revoked = await c.query(`UPDATE devices SET revoked_at=now()
+        WHERE business_id=$1 AND shop_id=$2 AND device_id=$3 AND revoked_at IS NULL`,
+      [actor.business_id, targetShopId, deviceId]);
+      if (revoked.rowCount !== 1) throw new ApiError(409, 'business_device_state_conflict');
+      const sessions = await c.query(`UPDATE sessions SET revoked_at=now()
+        WHERE business_id=$1 AND shop_id=$2 AND device_id=$3 AND revoked_at IS NULL`,
+      [actor.business_id, targetShopId, deviceId]);
+      await c.query(`INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action,device_id)
+        VALUES($1,$2,$3,'device_revoked',$4)`, [actor.business_id, targetShopId, actor.user_id, deviceId]);
+      return { shopId: targetShopId, deviceId, state: 'revoked', revokedSessionCount: sessions.rowCount };
+    });
+  }
+
   async shopOwnerInsights(actor) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     return withTransaction(this.pool, async (c) => {

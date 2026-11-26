@@ -723,6 +723,21 @@ import { formatQuantity } from './quantity-format.mjs';
           for (const device of branch.devices) {
             const item = document.createElement('li');
             item.textContent = `${device.label}: ${device.deviceId} (${device.revoked ? 'revoked' : 'active'})`;
+            if (!device.revoked && branch.current && device.deviceId === session.deviceId) {
+              item.append(document.createTextNode(' · Current session'));
+            } else if (!device.revoked) {
+              item.append(actionButton('Revoke', async () => {
+                if (!confirm(`Revoke device ${device.label} (${device.deviceId}) and end its active sessions?`)) return;
+                try {
+                  const result = await request('/v1/dashboard/devices/revoke', {
+                    method: 'POST', headers: { authorization: `Bearer ${session.token}` },
+                    body: JSON.stringify({ shopId: activeShopId, targetShopId: branch.shopId, deviceId: device.deviceId })
+                  });
+                  setStatus($('branches-status'), `Device ${result.state}. ${result.revokedSessionCount} active session(s) revoked.`, 'success');
+                  await loadBranches();
+                } catch (error) { setStatus($('branches-status'), showError(error), 'error'); }
+              }, true));
+            }
             list.append(item);
           }
           devicesCell.append(list);
@@ -778,7 +793,7 @@ import { formatQuantity } from './quantity-format.mjs';
         }
         throw new Error('This dashboard is limited to the shop owner account.');
       }
-      session = result;
+      session = { ...result, deviceId: credentials.deviceId };
       activeShopId = result.shopId;
       setView('overview');
       loginPanel.classList.add('hidden');
