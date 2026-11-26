@@ -85,10 +85,10 @@ jobs:
         with:
           packages: platform-tools
       - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-37" "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Run Kotlin tests, build APKs, and lint
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug
+        run: ./gradlew --no-daemon -PciCompileSdk=36 testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug
       - name: Upload Android build and test reports
         if: always()
         uses: actions/upload-artifact@v4

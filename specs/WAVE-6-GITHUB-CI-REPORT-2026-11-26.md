@@ -10,7 +10,7 @@ Added `.github/workflows/ci.yml`, triggered for pushes and pull requests targeti
 
 - Browser prototype Node tests.
 - Backend Node and PostgreSQL integration tests against a disposable PostgreSQL 17 service. Migrations and repository runtime grants are applied, and application requests use a non-superuser runtime login.
-- Android Kotlin/JVM tests, debug APK and instrumentation APK assembly, lint, and artifact upload. This job does not start an emulator or run instrumentation tests.
+- Android Kotlin/JVM tests, debug APK and instrumentation APK assembly, lint, and artifact upload. The CI build uses compile SDK 36 because GitHub's SDK index did not provide the project's API 37 package during initial runs; local/default builds remain on API 37. This job does not start an emulator or run instrumentation tests.
 
 Permissions are read-only for repository contents. The workflow uploads only generated unsigned debug/test APKs and diagnostic reports. It does not deploy, publish, access production data, or contact an external sync service.
 
@@ -32,6 +32,6 @@ Android task command: `gradlew.bat --no-daemon testDebugUnitTest assembleDebug a
 
 ## Qualification limits and follow-up
 
-The workflow has not yet run on GitHub; its first hosted result must be checked after this change is pushed. Local Android instrumentation on the API 37 emulator is not part of this CI workflow because emulator UI suites are long-running and have experienced host/emulator instability. The existing focused/full emulator evidence remains separately documented. No physical Bluetooth microphone, noisy-shop, independent security review, deployment, or release qualification is claimed.
+GitHub hosted Android setup required iterative fixes: the initial run used an incorrect Gradle action path; the next encountered the retired SDK `tools` package; a later attempt found API 37 absent from the runner package index. The workflow now uses the supported Gradle action, requests only `platform-tools`, and compiles against API 36, which satisfies the current AndroidX/SQLCipher minimum compile SDK. The GitHub-hosted result remains pending. The local SDK installation has API 35 and API 37 but no standalone `sdkmanager`, so the CI-only API 36 variant could not be run locally. Default API 37 local builds have passed. Local Android instrumentation on the API 37 emulator is not part of this CI workflow because emulator UI suites are long-running and have experienced host/emulator instability. The existing focused/full emulator evidence remains separately documented. No physical Bluetooth microphone, noisy-shop, independent security review, deployment, or release qualification is claimed.
 
 Next: push to `vaishnavsawant1994-stack/Chai-And-Tapri`, inspect the hosted Actions run, and fix any runner-specific failures. Then decide whether to add a manually dispatched emulator workflow after measuring hosted emulator stability and runtime.

@@ -2,9 +2,10 @@ plugins {
     id("com.android.application")
 }
 val includeLiveSyncE2e = providers.gradleProperty("cat052LiveSyncE2e").orNull == "true"
+val ciCompileSdk = providers.gradleProperty("ciCompileSdk").orNull?.toInt()
 android {
     namespace = "com.chaiandtapri.counter"
-    compileSdk = 37
+    compileSdk = ciCompileSdk ?: 37
     defaultConfig {
         applicationId = "com.chaiandtapri.counter"
         minSdk = 31
