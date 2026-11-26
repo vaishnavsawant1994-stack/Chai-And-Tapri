@@ -129,6 +129,8 @@ test('business owner branch directory is isolated and creates a separately authe
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.revokeBusinessDevice({...actor,role:'cashier'},{targetShopId:enrollment.shopId,deviceId}),
       (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
+    await assert.rejects(service.registerBusinessDevice({...actor,role:'cashier'},{targetShopId:enrollment.shopId,label:'Denied device'}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
     await assert.rejects(service.createBusinessBranch(actor,{displayName:'x',deviceLabel:'No Device'}),
       (error)=>error instanceof ApiError&&error.status===400&&error.code==='invalid_branch_details');
     server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -171,6 +173,15 @@ test('business owner branch directory is isolated and creates a separately authe
     assert.equal((await service.revokeBusinessDevice(actor,{targetShopId:created.branch.shopId,deviceId:created.deviceId})).state,'already_revoked');
     const revokedDirectory=(await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId);
     assert.equal(revokedDirectory.devices[0].revoked,true);
+    const replacement=await service.registerBusinessDevice(actor,{targetShopId:created.branch.shopId,label:'Replacement Counter'});
+    assert.equal(replacement.state,'active');
+    assert.equal(replacement.label,'Replacement Counter');
+    assert.match(replacement.deviceId,/^[0-9a-f-]{36}$/i);
+    const replacementLogin=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:replacement.deviceId});
+    assert.equal(replacementLogin.role,'owner');
+    assert.equal((await service.authenticate(replacementLogin.token,created.branch.shopId)).device_id,replacement.deviceId);
+    const replacementDirectory=(await service.ownerBranches(actor)).branches.find((branch)=>branch.shopId===created.branch.shopId);
+    assert.equal(replacementDirectory.devices.find((device)=>device.deviceId===replacement.deviceId).revoked,false);
     await assert.rejects(service.revokeBusinessDevice(actor,{targetShopId:otherEnrollment.shopId,deviceId:otherDeviceId}),
       (error)=>error instanceof ApiError&&error.status===404&&error.code==='business_device_not_found');
     await assert.rejects(service.authenticate(enrollment.token,otherEnrollment.shopId),(error)=>error instanceof ApiError&&error.status===401);
@@ -179,8 +190,9 @@ test('business owner branch directory is isolated and creates a separately authe
       await c.query("SELECT set_config('app.current_user',$1,true)",[enrollment.userId]);
       return c.query("SELECT action,device_id FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
     });
-    assert.equal(audit.rows.length,3);
+    assert.equal(audit.rows.length,4);
     assert.ok(audit.rows.some((event)=>event.action==='device_revoked'&&event.device_id===created.deviceId));
+    assert.ok(audit.rows.some((event)=>event.action==='device_registered'&&event.device_id===replacement.deviceId));
     const hidden=await withTransaction(pool,async(c)=>{
       await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
       await c.query("SELECT set_config('app.current_user',$1,true)",[otherEnrollment.userId]);

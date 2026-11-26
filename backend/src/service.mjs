@@ -724,6 +724,30 @@ export class SyncService {
     });
   }
 
+  async registerBusinessDevice(actor, { targetShopId, label }) {
+    requireOwner(actor);
+    if (!UUID.test(targetShopId ?? '') || typeof label !== 'string' || label.trim().length < 1 || label.trim().length > 80) {
+      throw new ApiError(400, 'invalid_device_registration');
+    }
+    const deviceId = randomUUID();
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const branch = await c.query('SELECT shop_id FROM shops WHERE business_id=$1 AND shop_id=$2',
+        [actor.business_id, targetShopId]);
+      if (!branch.rowCount) throw new ApiError(404, 'business_branch_not_found');
+      await c.query('INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)',
+        [deviceId, actor.business_id, targetShopId, label.trim(), actor.user_id]);
+      await c.query(`INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action,device_id)
+        VALUES($1,$2,$3,'device_registered',$4)`, [actor.business_id, targetShopId, actor.user_id, deviceId]);
+      return { shopId: targetShopId, deviceId, label: label.trim(), state: 'active', evidence: 'Use this device ID with the branch shop ID and owner credentials for a new sign-in. The ID is not a credential.' };
+    });
+  }
+
   async shopOwnerInsights(actor) {
     if (actor.role !== 'owner') throw new ApiError(403, 'owner_access_required');
     return withTransaction(this.pool, async (c) => {

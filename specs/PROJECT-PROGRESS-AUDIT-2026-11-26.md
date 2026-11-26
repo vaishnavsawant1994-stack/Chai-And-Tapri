@@ -4,7 +4,7 @@
 
 ## OW-14 branch-management continuation — 26 November 2026
 
-Added a restricted business-owner branch directory/create flow and device revocation to the backend and owner web dashboard. Migrations 005–006 add business owner principals and branch/device audit events. Branches are created transactionally; owners can revoke a lost branch device, which ends its active sessions. Branch sign-in remains separate and the dashboard never changes shops implicitly. Verification against disposable PostgreSQL 17 with the restricted runtime role: backend **45/45 passed, 0 skipped**. The owner dashboard route/static tests are included. Browser visual review and unrelated Android/prototype suites were not rerun for this slice. See [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). Branch creation is not full multi-shop operations or consolidated reporting.
+Added a restricted business-owner branch directory/create flow, device revocation and replacement-device registration to the backend and owner web dashboard. Migrations 005 through 007 add business owner principals and branch/device audit events. Branches are created transactionally; owners can revoke a lost branch device and register a replacement. Branch sign-in remains separate and the dashboard never changes shops implicitly. Verification against disposable PostgreSQL 17 with the restricted runtime role: backend **45/45 passed, 0 skipped**. The owner dashboard route/static tests are included. Browser visual review and unrelated Android/prototype suites were not rerun for this slice. See [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). Branch creation is not full multi-shop operations or consolidated reporting.
 
 ## Local checkout verification refresh
 

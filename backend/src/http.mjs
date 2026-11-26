@@ -111,6 +111,12 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,body.shopId);
         return json(res,200,await service.revokeBusinessDevice(actor,body));
       }
+      if(req.method==='POST'&&url.pathname==='/v1/dashboard/devices') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','targetShopId','label'])) throw new ApiError(400,'invalid_device_registration');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,201,await service.registerBusinessDevice(actor,body));
+      }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/overview') {
         const shopId=url.searchParams.get('shopId');
         const actor=await service.authenticate(token,shopId);

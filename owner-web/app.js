@@ -742,6 +742,18 @@ import { formatQuantity } from './quantity-format.mjs';
           }
           devicesCell.append(list);
         } else devicesCell.textContent = 'No registered devices';
+        devicesCell.append(actionButton('Register device', async () => {
+          const label = prompt('Label for this branch device', 'Replacement device');
+          if (label === null) return;
+          try {
+            const result = await request('/v1/dashboard/devices', {
+              method: 'POST', headers: { authorization: `Bearer ${session.token}` },
+              body: JSON.stringify({ shopId: activeShopId, targetShopId: branch.shopId, label })
+            });
+            setStatus($('branches-status'), `Device registered for ${branch.displayName}. Device ID: ${result.deviceId}. Use it with the branch shop ID and owner credentials.`, 'success');
+            await loadBranches();
+          } catch (error) { setStatus($('branches-status'), showError(error), 'error'); }
+        }));
         row.append(devicesCell);
         appendCell(row, String(branch.serverRevision)); appendCell(row, new Date(branch.createdAt).toLocaleString());
         appendCell(row, branch.current ? 'Current session' : 'Separate sign-in required');
