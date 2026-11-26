@@ -1307,3 +1307,6 @@ Completed a focused SAF clean-install recovery drill on the dedicated API 37 AVD
 ## 26 November 2026 — CT-13/14 purchase receipt UI qualification follow-up
 
 The dedicated API 37 recovery AVD passed the direct Procurement UI test for purchase-unit conversion (**1/1**). Two supplier crates converted to 24 base bottles, with correct stock, payable and audit persistence after encrypted database reopen. The earlier ANR failures on other headless AVDs remain documented but no longer block this exact screen flow. Procurement and CT-13/14 remain partial; see [report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
+## 26 November 2026 — Product Editor purchase-unit UI
+
+A focused API 37 flow now enters and persists `cup` sell/count unit, `crate` purchase unit and factor 12 in the actual product editor; it then confirms opening stock and verifies Quick Sale displays the configured `cup` quantity before the cash sale. Instrumentation passed **1/1**. This pairs with the separately passing direct receipt UI flow; neither qualifies the full catalogue/procurement modules. See [CT-13/14 report](specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).

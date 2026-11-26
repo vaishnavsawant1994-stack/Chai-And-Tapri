@@ -415,3 +415,6 @@ On a dedicated API 37 recovery AVD, the current-source app exported an encrypted
 ## CT-13/14 focused Procurement screen follow-up — 26 November 2026
 
 The current direct purchase-unit conversion UI flow passed 1/1 on the dedicated API 37 AVD. The real screen posted two crates as 24 bottles and persisted correct stock, supplier payable and conversion audit through encrypted database reopen. See [CT-13/14 report](CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md). This closes only this UI scenario; complete procurement, manual shop use and physical/field qualification remain open.
+## CT-14 Product Editor unit configuration follow-up — 26 November 2026
+
+A current API 37 instrumentation test passed 1/1 for entering and saving `cup`/`crate`/12 conversion metadata through the real Product Editor, reopening encrypted catalogue data, and confirming Quick Sale displays the base unit during a cash sale. This is one connected UI slice, not full Product Editor or catalogue qualification. See [CT-13/14 report](CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).

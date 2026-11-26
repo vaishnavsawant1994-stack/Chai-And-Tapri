@@ -5698,6 +5698,9 @@ class SqliteCounterPersistenceTest {
             set("Stable product ID, e.g. bun_maska", "e2e_lemon_chai")
             set("Product name", "E2E Lemon Chai")
             set("Category", "Chai")
+            set("Sell / count unit (e.g. cup, bottle, piece, pack)", "cup")
+            set("Purchase unit (e.g. carton, dozen, box; blank = same)", "crate")
+            set("Base units per purchase unit (1 if same)", "12")
             set("Actual selling price in ₹", "12.50")
             tap(await(text = "I confirm this is the shop's actual price"))
             tap(await(text = "Save"))
@@ -5737,7 +5740,11 @@ class SqliteCounterPersistenceTest {
             collect(instrumentation.uiAutomation.rootInActiveWindow)
             assertTrue("Catalogue UI physical count should commit durably; UI=${currentLabels.joinToString(" | ")}", countSaved)
             CounterModel(SqliteCounterPersistence(context), requireConfiguredProducts = true).use { verified ->
-                assertTrue("Catalogue UI should persist the owner's confirmed product price", verified.products().single { it.productId == "e2e_lemon_chai" }.priceConfirmed)
+                val product = verified.products().single { it.productId == "e2e_lemon_chai" }
+                assertTrue("Catalogue UI should persist the owner's confirmed product price", product.priceConfirmed)
+                assertEquals("cup", product.unitLabel)
+                assertEquals("crate", product.purchaseUnitLabel)
+                assertEquals(12, product.baseUnitsPerPurchaseUnit)
                 assertTrue("Catalogue UI should persist the explicit opening-stock confirmation", verified.isStockConfirmed("e2e_lemon_chai"))
                 assertEquals(5, verified.stockLevels()["e2e_lemon_chai"])
             }
@@ -5790,7 +5797,7 @@ class SqliteCounterPersistenceTest {
             }
             assertTrue("Quick Sale should accept product alias search", search.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, searchArgs))
             tapSale("E2E Lemon Chai")
-            awaitSaleNode("1 units × E2E Lemon Chai")
+            awaitSaleNode("1 cup × E2E Lemon Chai")
             tapSale("Checkout")
             awaitSaleNode("Record payment")
             tapSale("Cash received")

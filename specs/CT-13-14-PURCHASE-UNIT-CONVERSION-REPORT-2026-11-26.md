@@ -20,6 +20,12 @@ The previously blocked `directProcurementScreenConvertsConfiguredCratesToBottleS
 
 This supersedes the earlier unqualified UI result caused by two other headless AVDs displaying launcher/System UI ANRs before Procurement opened. Evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Clean_2026(AVD) - 17.xml` (1 test, 0 failures/errors/skips). No full Android suite or physical shop workflow was run in this follow-up.
 
+## Product Editor unit configuration follow-up — 26 November 2026
+
+The `catalogueUiCreatesConfirmedProductAndQuickSalePostsItsConfiguredPrice` API 37 UI test now creates the synthetic product with sell/count unit `cup`, purchase unit `crate`, and factor 12. It verifies those exact fields persist in the encrypted catalogue, records the opening stock, edits aliases/favourite, then checks Quick Sale renders `1 cup × E2E Lemon Chai` and posts the canonical configured price with the expected stock/payment/audit effects. The focused current-source instrumentation passed **1/1** on `Tapri_Recovery_Clean_2026` at 00:33:33 UTC on 26 November 2026. JUnit evidence: `android/app/build/outputs/androidTest-results/connected/debug/TEST-Tapri_Recovery_Clean_2026(AVD) - 17.xml`.
+
+Together with the [direct receipt UI follow-up](#direct-procurement-ui-follow-up--26-november-2026), Product Editor → stock confirmation → receipt → Quick Sale now has individually tested UI paths for integer pack conversion. This is not a single uninterrupted UI scenario and does not qualify the full catalogue/procurement modules.
+
 ## Scope and limits
 
 This is direct stock receipt conversion, not complete purchasing-unit support. Purchase-order lines still use base units. Supplier invoice package totals are not parsed: the operator enters cost per base unit. No fractional conversion factors are supported. Recipes, variable-yield production, batch/expiry lot tracking, catalog sync of conversion metadata, supplier-system integration, cross-device conflicts, manual usability and shop-floor accuracy remain open. The UI automation result needs a stable emulator rerun; this report does not claim UI qualification.

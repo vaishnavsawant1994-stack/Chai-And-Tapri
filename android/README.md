@@ -390,3 +390,6 @@ The dedicated API 37 recovery AVD completed the actual encrypted SAF export, app
 ## CT-13/14 direct purchase-unit receipt UI — 26 November 2026
 
 A dedicated API 37 rerun now passes `directProcurementScreenConvertsConfiguredCratesToBottleStock` 1/1. The actual Procurement screen accepted 2 crates × 12 bottles, posted 24 bottles, updated the supplier payable and left an audit trail after SQLCipher reopen. The earlier headless launcher ANR remains as historical troubleshooting but no longer blocks this exact scenario. The rest of procurement and CT-13/14 are partial. See [report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
+## CT-14 Product Editor purchase-unit configuration — 26 November 2026
+
+Focused API 37 UI test passed 1/1: the real editor saved `cup`/`crate`/12 conversion metadata, encrypted catalogue reopen retained it, and Quick Sale displayed the configured sell unit and sold at the configured price. See [CT-13/14 report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md). Full catalogue and procurement qualification remains open.
