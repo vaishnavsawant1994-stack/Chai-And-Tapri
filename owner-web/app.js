@@ -717,11 +717,22 @@ import { formatQuantity } from './quantity-format.mjs';
       const rows = result.branches.map((branch) => {
         const row = document.createElement('tr');
         appendCell(row, branch.displayName); appendCell(row, branch.shopId);
+        const devicesCell = document.createElement('td');
+        if (branch.devices.length) {
+          const list = document.createElement('ul');
+          for (const device of branch.devices) {
+            const item = document.createElement('li');
+            item.textContent = `${device.label}: ${device.deviceId} (${device.revoked ? 'revoked' : 'active'})`;
+            list.append(item);
+          }
+          devicesCell.append(list);
+        } else devicesCell.textContent = 'No registered devices';
+        row.append(devicesCell);
         appendCell(row, String(branch.serverRevision)); appendCell(row, new Date(branch.createdAt).toLocaleString());
         appendCell(row, branch.current ? 'Current session' : 'Separate sign-in required');
         return row;
       });
-      if (!rows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No branches found.'); empty.colSpan = 5; empty.className = 'empty-row'; rows.push(row); }
+      if (!rows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No branches found.'); empty.colSpan = 6; empty.className = 'empty-row'; rows.push(row); }
       $('branch-rows').replaceChildren(...rows);
       $('branches-evidence').textContent = result.evidence.limitation;
       setStatus($('branches-status'), `${result.branches.length} branch(es) in this business.`, 'success');

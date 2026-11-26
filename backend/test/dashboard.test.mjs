@@ -517,7 +517,7 @@ test('owner overview route requires authentication and serves only owner static 
     async shopStaffMembers(actor) { return { shopId: actor.shop_id, members: [] }; },
     async shopStaffInvitations(actor) { return { shopId: actor.shop_id, invitations: [] }; },
     async shopStaffAudit(actor) { return { shopId: actor.shop_id, events: [] }; },
-    async ownerBranches(actor) { return { businessId: actor.business_id, branches: [{ shopId: actor.shop_id, displayName: 'Synthetic Tapri', current: true, serverRevision: 0, createdAt: '2026-11-26T00:00:00Z' }], evidence: { limitation: 'separate branch session required' } }; },
+    async ownerBranches(actor) { return { businessId: actor.business_id, branches: [{ shopId: actor.shop_id, displayName: 'Synthetic Tapri', current: true, serverRevision: 0, createdAt: '2026-11-26T00:00:00Z', devices: [] }], evidence: { limitation: 'separate branch session required' } }; },
     async createBusinessBranch(actor, body) { return { businessId: actor.business_id, branch: { shopId: 'shop-2', displayName: body.displayName, current: false, serverRevision: 0, createdAt: '2026-11-26T00:00:00Z' }, deviceId: 'device-2' }; },
     async createStaffInvitation(actor, body) { return { invitationId: 'invite-1', email: body.email, role: body.role, invitationToken: 'x'.repeat(43) }; },
     async acceptStaffInvitation() { return { shopId: 'shop-1', role: 'cashier' }; },
@@ -594,6 +594,7 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/staff\/audit/);
   assert.match(scriptText, /\/v1\/dashboard\/branches/);
   assert.match(scriptText, /branch-create-form/);
+  assert.match(scriptText, /device\.revoked \? 'revoked' : 'active'/);
   assert.match(scriptText, /one-time staff invitation/i);
   assert.match(scriptText, /buildOwnerReportCsv/);
   const exporter = await fetch(`${base}/owner/report-export.mjs`);

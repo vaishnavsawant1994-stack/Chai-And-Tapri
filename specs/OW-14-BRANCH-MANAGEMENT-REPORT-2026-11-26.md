@@ -2,7 +2,7 @@
 
 ## Delivered slice
 
-Added business-level owner membership and a branch directory/create API with an owner-web interface. Branch creation atomically creates a shop, owner shop membership, device identity, and branch audit record. The dashboard displays branch identity, server revision, creation time, and whether the current session belongs to it. A newly created branch requires a separate login using the existing owner account plus the generated shop/device IDs; the dashboard does not silently switch branches.
+Added business-level owner membership and a branch directory/create API with an owner-web interface. Branch creation atomically creates a shop, owner shop membership, device identity, and branch audit record. The owner directory shows branch identity, server revision, creation time, active/revoked device IDs and whether the current session belongs to it. A branch requires a separate login using the existing owner account plus its shop/device IDs; the dashboard does not silently switch branches. Device IDs are identifiers, not credentials.
 
 The endpoint returns branch identity only. It does not aggregate branch financial data or implement branch-to-branch transfers. Operational screens remain scoped to the currently authenticated shop. Device IDs are identifiers rather than substitutes for authentication; access still requires the owner credentials and a valid branch device identity.
 
@@ -11,7 +11,7 @@ Migration `005_business_branch_ownership.sql` adds `business_memberships`, backf
 ## Qualification
 
 - Disposable PostgreSQL 17 with migrations `001`–`005` and restricted runtime role: backend suite **45/45 passed**, 0 skipped.
-- Integration coverage: owner-only authorization, validation failure, atomic shop/membership/device/audit creation, separate branch owner login, business-directory isolation, RLS hiding another owner's principal, and authenticated route behavior.
+- Integration coverage: owner-only authorization, validation failure, transactional shop/membership/device/audit creation, separate branch owner login, active/revoked device state, business-directory/device isolation, RLS hiding another owner's principal, and authenticated route behavior.
 - Owner dashboard HTTP/static asset tests verify the branch UI and endpoints; browser visual review was not run.
 - `node --check` passed for changed JS modules; `git diff --check` passed.
 - Other repository suites were not rerun for this dashboard/backend-only slice and retain their separately dated evidence.

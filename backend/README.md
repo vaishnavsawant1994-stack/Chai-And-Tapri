@@ -1,4 +1,4 @@
-﻿# CAT-052 local sync journal prototype
+# CAT-052 local sync journal prototype
 
 ## Current isolated integration verification - 22 November 2026
 
@@ -66,4 +66,4 @@ Final evidence log for the PostgreSQL rerun after owner UI changes: `../test-evi
 
 ## OW-14 branch directory slice — 26 November 2026
 
-Migration 005 establishes a business-level owner principal and append-only branch creation audit table. `GET /v1/dashboard/branches?shopId=<current-shop-uuid>` returns branch IDs, labels, revisions and timestamps for the authenticated business owner. `POST /v1/dashboard/branches` accepts exactly `{shopId, displayName, deviceLabel}` and transactionally creates the shop, owner membership, device identity and audit record. Use the returned shop/device IDs with the owner account for a separate branch login. A branch directory is not a consolidated ledger: current dashboard views remain scoped to one authenticated shop, and the service does not implement branch transfers or combined reporting. Current disposable PostgreSQL 17 backend suite: 45/45 pass, 0 skips. See [OW-14 report](../specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md).
+Migration 005 establishes a business-level owner principal and append-only branch creation audit table. `GET /v1/dashboard/branches?shopId=<current-shop-uuid>` returns branch IDs, labels, revisions, timestamps, and registered device IDs, labels, and active state for the authenticated business owner. `POST /v1/dashboard/branches` accepts exactly `{shopId, displayName, deviceLabel}` and transactionally creates the shop, owner membership, device identity and audit record. Use the shop/device IDs with the owner account for a separate branch login; device IDs are not credentials. A branch directory is not a consolidated ledger: current dashboard views remain scoped to one authenticated shop, and the service does not implement branch transfers or combined reporting. Current disposable PostgreSQL 17 backend suite: 45/45 pass, 0 skips. See [OW-14 report](../specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md).

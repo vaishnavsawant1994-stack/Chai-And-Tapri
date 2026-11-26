@@ -638,13 +638,25 @@ export class SyncService {
       if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
       const { rows } = await c.query(`SELECT shop_id,display_name,server_revision,created_at
         FROM shops WHERE business_id=$1 ORDER BY lower(display_name),shop_id`, [actor.business_id]);
+      const shopIds = rows.map((row) => row.shop_id);
+      const deviceResult = shopIds.length ? await c.query(`SELECT shop_id,device_id,label,created_at,revoked_at
+        FROM devices WHERE business_id=$1 AND shop_id=ANY($2::uuid[])
+        ORDER BY shop_id,lower(label),device_id`, [actor.business_id, shopIds]) : { rows: [] };
+      const devicesByShop = new Map();
+      for (const device of deviceResult.rows) {
+        const list = devicesByShop.get(device.shop_id) ?? [];
+        list.push({ deviceId: device.device_id, label: device.label, createdAt: device.created_at,
+          revoked: device.revoked_at !== null });
+        devicesByShop.set(device.shop_id, list);
+      }
       return {
         businessId: actor.business_id,
         branches: rows.map((row) => ({ shopId: row.shop_id, displayName: row.display_name,
-          serverRevision: Number(row.server_revision), createdAt: row.created_at, current: row.shop_id === actor.shop_id })),
+          serverRevision: Number(row.server_revision), createdAt: row.created_at, current: row.shop_id === actor.shop_id,
+          devices: devicesByShop.get(row.shop_id) ?? [] })),
         evidence: {
           scope: 'Shop directory for the authenticated business owner; branch list is scoped to the session business.',
-          limitation: 'This endpoint exposes branch identity and sync revision only, not branch financial data. Each branch needs its own registered device session for operational or financial views.'
+          limitation: 'This endpoint exposes branch and device identifiers to the authenticated business owner, not branch financial data. Device IDs are identifiers, not credentials; owner authentication is still required. Each branch needs its own device session for operational or financial views.'
         }
       };
     });
