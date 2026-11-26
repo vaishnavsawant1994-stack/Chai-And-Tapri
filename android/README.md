@@ -387,3 +387,6 @@ Added owner-configurable product sell/count unit labels across catalogue, Quick 
 ## CAT-051B same-AVD clean-install recovery — 26 November 2026
 
 The dedicated API 37 recovery AVD completed the actual encrypted SAF export, app-package removal/fresh install, and SAF restore path. The backup persisted outside private app storage. Focused rich-data, UI export/restore and clean-install restore tests each passed 1/1; restored sales/refunds/credit/repayments/payments/stock/audit/idempotency were asserted. See [CAT-051B clean-install report](../specs/CAT-051B-CLEAN-INSTALL-RESTORE-REPORT-2026-11-26.md). This is same-AVD recovery qualification, not cross-device/person recovery, physical key-loss/power/storage qualification, independent review, or production readiness.
+## CT-13/14 direct purchase-unit receipt UI — 26 November 2026
+
+A dedicated API 37 rerun now passes `directProcurementScreenConvertsConfiguredCratesToBottleStock` 1/1. The actual Procurement screen accepted 2 crates × 12 bottles, posted 24 bottles, updated the supplier payable and left an audit trail after SQLCipher reopen. The earlier headless launcher ANR remains as historical troubleshooting but no longer blocks this exact scenario. The rest of procurement and CT-13/14 are partial. See [report](../specs/CT-13-14-PURCHASE-UNIT-CONVERSION-REPORT-2026-11-26.md).
