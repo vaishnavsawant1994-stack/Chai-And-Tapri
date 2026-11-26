@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## 26 November 2026 — CT-10 split-tender live sync qualification
+
+The observed-cash + observed-UPI split now has a focused live Android API 37 → loopback HTTPS → restricted PostgreSQL 17 → owner projection E2E. It passed 1/1: a 1,500-paise order reconciled to 500 paise cash and 1,000 paise staff-declared UPI, zero pending UPI, six acknowledged ordered events, and one posted order. UPI remains unverified by a provider. See [CT-10 E2E report](specs/CT-10-OBSERVED-CASH-UPI-LIVE-E2E-REPORT-2026-11-26.md). This does not complete CAT-052 or qualify production, multiple devices, shop use, payment integration, or security.
+
 ## 26 November 2026 — local checkout baseline verification
 
 Verified locally on the current checkout: prototype **52/52**; backend **44/44** against disposable PostgreSQL 17 with a restricted runtime role and **0 skipped**; Kotlin JVM **106/106**; debug and Android-test APK builds PASS; lint **0 errors / 201 warnings**. The latest recorded API 37 full instrumentation result is **156/156**, followed by a focused **1/1** two-line procurement UI test. That focused test-only extension has not had a subsequent full-suite run. The prior backend-only run without a database (37 passed, 7 skipped) is superseded by the PostgreSQL-backed run. These results qualify only the tested prototype flows; Android UI, physical hardware, real-shop, independent security and production gates remain separate.

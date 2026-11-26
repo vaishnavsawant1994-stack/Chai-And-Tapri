@@ -6,6 +6,16 @@ This directory contains the native Android shopkeeper application. It now connec
 
 The focused opt-in `LiveBackendSyncE2ETest#realBackendStoresAndroidEventAndMakesLostAcknowledgmentRetryIdempotent` passed on the API 37 emulator against a disposable loopback PostgreSQL 17 backend. It registers a synthetic account, records encrypted local product/stock/sale events, tests a committed event with a lost acknowledgment and idempotent retry after SQLCipher reopen, then fetches the authenticated catalogue snapshot and applies it to the encrypted catalogue cache. The test now derives expected cursor/revisions from the actual outbox, including catalogue events. For local emulator TLS use ADB reverse and a certificate-valid `https://localhost:<port>` endpoint; the test certificate is not valid for `10.0.2.2`. Results: focused Android E2E 1/1, Kotlin JVM 106/106, prototype Node 52/52, backend PostgreSQL 44/44, APK builds PASS, lint 0 errors / 201 warnings. See [report](../specs/CAT-052-ANDROID-HTTPS-CATALOGUE-PULL-E2E-REPORT-2026-11-26.md). This is not physical-device, production backend, multi-device, Bluetooth or shop-field qualification.
 
+## CT-10 cash + observed UPI live projection E2E — 26 November 2026
+
+`LiveBackendSyncE2ETest#androidCashObservedUpiSplitReconcilesInLiveOwnerProjection` passed 1/1 on API 37 against a disposable loopback PostgreSQL 17 backend. Android created and handed over a 1,500-paise synthetic order, recorded 500 paise cash plus 1,000 paise observed UPI in one split command, uploaded six ordered events, and verified the owner overview/cashflow showed each declared tender separately with zero pending UPI. The exact XML and SQL aggregate are recorded under ignored `test-evidence/2026-11-26/ct10-live-split-e2e/`. UPI remains staff-declared, not provider-verified. Instrumentation test assets include a dedicated reproducible self-signed localhost P12/PEM pair with the test-only password `tapri-e2e-only`; never use that private key outside isolated local tests. See [CT-10 E2E report](../specs/CT-10-OBSERVED-CASH-UPI-LIVE-E2E-REPORT-2026-11-26.md).
+
+For a focused rerun, start the isolated test HTTPS server with `backend/test/serve-android-sync-e2e.mjs`, a disposable migrated PostgreSQL database, `SYNC_E2E_PFX_PATH=android/app/src/androidTest/assets/tls/sync-test-server-reproducible.p12`, and `SYNC_E2E_PFX_PASSPHRASE=tapri-e2e-only`; then set `ANDROID_SERIAL` to the intended emulator and `adb reverse tcp:8793 tcp:8793`. Run:
+
+```powershell
+.\gradlew.bat --% --no-daemon -Pcat052LiveSyncE2e=true -Pandroid.testInstrumentationRunnerArguments.class=com.chaiandtapri.counter.LiveBackendSyncE2ETest#androidCashObservedUpiSplitReconcilesInLiveOwnerProjection -Pandroid.testInstrumentationRunnerArguments.syncE2eEndpoint=https://localhost:8793 connectedDebugAndroidTest
+```
+
 ## Superseding current-source regression — 24 November 2026
 
 **Latest 25 November result:** the serial-pinned API 37 instrumentation suite now passes **138/138** (12m57s), including the new CT-27 authenticated shift start/handover UI journey. This supersedes the 137-test count below. The run used `android/scripts/run-isolated-connected-tests.cmd emulator-5554`; see the current [qualification report](../specs/ANDROID-REGRESSION-QUALIFICATION-2026-11-24.md).

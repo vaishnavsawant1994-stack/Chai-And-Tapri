@@ -31,7 +31,7 @@ import javax.net.ssl.TrustManagerFactory
 class LiveBackendSyncE2ETest {
     private fun configureTestTrust() {
         val context = InstrumentationRegistry.getInstrumentation().context
-        val certificate = context.assets.open("tls/sync-test-server.pem").use {
+        val certificate = context.assets.open("tls/sync-test-server-reproducible.pem").use {
             CertificateFactory.getInstance("X.509").generateCertificate(it)
         }
         val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
@@ -526,6 +526,71 @@ class LiveBackendSyncE2ETest {
             context.getSharedPreferences("chai_tapri_secure_key_envelope.$keyNamespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
             runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(keyNamespace) }
             runCatching { SyncSessionVault(context, keyNamespace).clear() }
+            HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
+        }
+    }
+
+    @Test fun androidCashObservedUpiSplitReconcilesInLiveOwnerProjection() {
+        val endpointBase = InstrumentationRegistry.getArguments().getString("syncE2eEndpoint")
+        assumeTrue("Provide syncE2eEndpoint for the isolated split-tender drill.", !endpointBase.isNullOrBlank())
+        val priorSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val suffix = UUID.randomUUID().toString().replace("-", "")
+        val databaseName = "split_tender_e2e_$suffix.db"
+        val namespace = "split_tender_e2e_$suffix"
+        var persistence: SqliteCounterPersistence? = null
+        var model: CounterModel? = null
+        var owner: SyncSession? = null
+        try {
+            configureTestTrust()
+            val transport = HttpsSyncHttpTransport(connectTimeoutMs = 5_000, readTimeoutMs = 5_000)
+            val ownerSession = SyncAccountClient(transport).register(
+                endpointBase!!,
+                SyncRegistration("split-owner-$suffix@example.test", "Synthetic-Only-Password-2026!", "Synthetic Owner", "Synthetic Split Business", "Synthetic Split Shop", UUID.randomUUID().toString(), "API 37 Split E2E")
+            )
+            owner = ownerSession
+            instrumentation.runOnMainSync { LocalSessionState.establish("Synthetic split tender owner") }
+            persistence = SqliteCounterPersistence(context, databaseName, namespace)
+            model = CounterModel(persistence!!, requireConfiguredProducts = true)
+            assertTrue(model!!.saveProduct(TapriProduct("split_e2e_tea", "Synthetic Split Tea", "Tea", 1_500, active = true, favorite = true, priceConfirmed = true)).startsWith("Product saved"))
+            assertTrue(model!!.confirmOpeningStock("split_e2e_tea", 3, "synthetic split tender setup", "split-stock-$suffix").contains("Opening stock confirmed"))
+            assertTrue(model!!.apply("split-order-$suffix", ProposedCommand("create", null, "Create synthetic split order", "split_e2e_tea", 1)).startsWith("Order #"))
+            val order = model!!.allOrders().single()
+            assertTrue(model!!.apply("split-ready-$suffix", ProposedCommand("ready", order.number, "Mark synthetic order ready", expectedRevision = order.revision)).contains("ready"))
+            val ready = model!!.allOrders().single()
+            assertTrue(model!!.apply("split-given-$suffix", ProposedCommand("given", ready.number, "Hand over synthetic order", expectedRevision = ready.revision)).contains("sale recorded"))
+            val given = model!!.allOrders().single()
+            assertTrue(model!!.recordCashUpiReceivedSplit(given.number, 500, "split-payment-$suffix", given.revision).contains("both staff-declared"))
+            assertEquals(0, model!!.allOrders().single().duePaise)
+            assertEquals(2, model!!.paymentHistory().count { it.orderNumber == given.number && it.status == "staff_declared" })
+
+            val queuedEvents = persistence!!.loadPendingSyncEvents(20).size
+            assertTrue("The scenario should exercise multiple ordered business events", queuedEvents >= 3)
+            val sync = SyncRunner(PersistenceSyncJournal(persistence!!), transport).push(ownerSession.endpointBase, ownerSession.identity, ownerSession.bearerToken)
+            assertEquals(queuedEvents, sync.acknowledged)
+            assertTrue("All generated setup and split-tender events must be acknowledged", persistence!!.loadPendingSyncEvents(20).isEmpty())
+
+            val overview = getJson("${ownerSession.endpointBase}/v1/dashboard/overview?shopId=${ownerSession.identity.shopId}", ownerSession.bearerToken)
+            assertEquals(queuedEvents, overview.getInt("acceptedEventCount"))
+            assertEquals(1, overview.getInt("recordedOrderCount"))
+            assertEquals(500L, overview.getLong("cashCollectedPaise"))
+            assertEquals(1_000L, overview.getLong("staffDeclaredUpiPaise"))
+            assertEquals(0L, overview.getLong("upiPendingPaise"))
+            val cashflow = getJson("${ownerSession.endpointBase}/v1/dashboard/cashflow?shopId=${ownerSession.identity.shopId}&days=7", ownerSession.bearerToken)
+            assertEquals(500L, cashflow.getJSONObject("totals").getLong("declaredCashInPaise"))
+            assertEquals(1_000L, cashflow.getJSONObject("totals").getLong("declaredUpiInPaise"))
+            assertTrue(cashflow.getJSONObject("evidence").getString("inflows").contains("not asserted"))
+            SyncAccountClient(transport).logout(ownerSession)
+        } finally {
+            model?.close()
+            persistence?.close()
+            instrumentation.runOnMainSync { LocalSessionState.clear() }
+            context.deleteDatabase(databaseName)
+            context.getSharedPreferences("chai_tapri_secure_key_envelope.$namespace", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+            runCatching { SecureDatabaseKeyManager.removeWrappingKeyForTests(namespace) }
+            runCatching { SyncSessionVault(context, namespace).clear() }
+            runCatching { owner?.let { SyncAccountClient(HttpsSyncHttpTransport()).logout(it) } }
             HttpsURLConnection.setDefaultSSLSocketFactory(priorSocketFactory)
         }
     }

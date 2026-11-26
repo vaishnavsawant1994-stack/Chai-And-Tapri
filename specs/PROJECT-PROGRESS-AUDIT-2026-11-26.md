@@ -6,6 +6,10 @@
 
 On the current Git checkout, prototype tests passed **52/52**, backend integration passed **44/44** against disposable PostgreSQL 17 using the restricted runtime role (**0 skipped**), and Kotlin JVM passed **106/106**. Debug and Android-test APK builds passed; lint reports **0 errors / 201 warnings**. A backend run without `DATABASE_URL` reported 37 passed and 7 skipped; it was superseded by the database-backed run. The latest broad API 37 instrumentation evidence remains **156/156**; a subsequent test-only extension for a two-line receipt passed a focused **1/1**, with no later full-suite rerun. Historical failed emulator runs remain troubleshooting history, not the current qualification result. Physical device/audio, field, independent security review, authorized browser visual review, deployed backend and production release are still unqualified.
 
+### CT-10 live split tender update
+
+The new focused Android-to-local-PostgreSQL HTTPS scenario passed **1/1** on API 37. It proved that the accepted business records and owner projections separately report 500 paise staff-declared cash and 1,000 paise staff-declared UPI, with no pending UPI and no duplicate order. See [the CT-10 live E2E report](CT-10-OBSERVED-CASH-UPI-LIVE-E2E-REPORT-2026-11-26.md). This is one synthetic flow, not deployed or production sync qualification.
+
 This addendum records current verification evidence for the six-wave execution plan. It does not replace the complete module/screen inventory in `MASTER-IMPLEMENTATION-TRACKER.md` or imply release readiness.
 
 ## CAT-051B — process-death recovery
