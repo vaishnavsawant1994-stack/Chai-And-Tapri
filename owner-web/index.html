@@ -67,6 +67,7 @@
           <button id="conflicts-tab" class="nav-tab" type="button" aria-current="false">Sync conflicts</button>
           <button id="shifts-tab" class="nav-tab" type="button" aria-current="false">Shift &amp; drawer sessions</button>
           <button id="staff-tab" class="nav-tab" type="button" aria-current="false">Staff access</button>
+          <button id="branches-tab" class="nav-tab" type="button" aria-current="false">Branches</button>
         </nav>
         <section id="overview-view">
         <div id="metrics" class="metrics" aria-live="polite"></div>
@@ -244,6 +245,32 @@
             <div class="table-wrap"><table><thead><tr><th scope="col">Time (server)</th><th scope="col">Action</th><th scope="col">Actor ID</th><th scope="col">Target ID</th><th scope="col">Role change</th></tr></thead><tbody id="staff-audit-rows"></tbody></table></div>
             <p id="staff-audit-status" class="status" role="status" aria-live="polite"></p>
           </section>
+        </section>
+        <section id="branches-view" class="hidden" aria-labelledby="branches-heading">
+          <div class="section-heading"><div><p class="eyebrow">BUSINESS DIRECTORY</p><h2 id="branches-heading">Branches</h2></div></div>
+          <p class="scope-note">Create a branch within this business. Each branch has a separate shop session and does not automatically share sales, inventory or financial reports.</p>
+          <section class="panel" aria-labelledby="branch-create-heading">
+            <h3 id="branch-create-heading">Add a branch</h3>
+            <form id="branch-create-form">
+              <div class="field-pair">
+                <label>Branch name<input id="branch-display-name" required minlength="2" maxlength="120" autocomplete="organization"></label>
+                <label>Device label<input id="branch-device-label" required maxlength="80" value="Owner dashboard device" autocomplete="off"></label>
+              </div>
+              <button id="branch-create-submit" class="primary" type="submit">Create branch</button>
+            </form>
+            <p id="branch-create-status" class="status" role="status" aria-live="polite"></p>
+            <div id="branch-create-result" class="panel hidden" aria-live="polite">
+              <strong>Branch created</strong>
+              <p>Save these identifiers. Sign in separately with the owner account to open this branch.</p>
+              <dl><dt>Shop ID</dt><dd><code id="created-branch-shop-id"></code></dd><dt>Device ID</dt><dd><code id="created-branch-device-id"></code></dd></dl>
+            </div>
+          </section>
+          <section class="panel evidence-panel" aria-labelledby="branch-list-heading">
+            <h3 id="branch-list-heading">Business branches</h3>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Branch</th><th scope="col">Shop ID</th><th scope="col">Revision</th><th scope="col">Created</th><th scope="col">Session</th></tr></thead><tbody id="branch-rows"></tbody></table></div>
+            <p id="branches-status" class="status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="panel evidence-panel"><h3>Current scope</h3><p id="branches-evidence" class="scope-note"></p></section>
         </section>
       </section>
       <footer><span>Warm Tea Theme</span><span>Financial figures are shown with their evidence and sync limits.</span></footer>

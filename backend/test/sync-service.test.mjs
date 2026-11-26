@@ -13,12 +13,16 @@ async function cleanupEnrollment(pool, enrollment) {
   if (!enrollment) return;
   await withTransaction(pool,async(c)=>{
     await c.query("SELECT set_config('app.current_shop',$1,true)",[enrollment.shopId]);
-    await c.query('DELETE FROM sessions WHERE shop_id=$1',[enrollment.shopId]);
-    await c.query('DELETE FROM devices WHERE shop_id=$1',[enrollment.shopId]);
-    await c.query('DELETE FROM shop_memberships WHERE shop_id=$1',[enrollment.shopId]);
-    await c.query('DELETE FROM sync_conflicts WHERE shop_id=$1',[enrollment.shopId]);
-    await c.query('DELETE FROM sync_events WHERE shop_id=$1',[enrollment.shopId]);
-    await c.query('DELETE FROM shops WHERE shop_id=$1',[enrollment.shopId]);
+    await c.query('DELETE FROM sessions WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM sync_conflicts WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM sync_events WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM shop_staff_audit WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM staff_invitations WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM business_branch_audit WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM shop_memberships WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM devices WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM shops WHERE business_id=$1',[enrollment.businessId]);
+    await c.query('DELETE FROM business_memberships WHERE business_id=$1',[enrollment.businessId]);
     await c.query('DELETE FROM businesses WHERE business_id=$1',[enrollment.businessId]);
     await c.query('DELETE FROM users WHERE user_id=$1',[enrollment.userId]);
   });
@@ -105,6 +109,63 @@ test('authenticated tenant sync journal preserves idempotency and exposes revisi
     await assert.rejects(pool.query('DELETE FROM sync_events WHERE shop_id=$1',[enrollment.shopId]),(e)=>e.code==='42501','runtime role must not delete immutable event history');
     await service.logout(enrollment.token);
     await assert.rejects(service.authenticate(enrollment.token,enrollment.shopId),(e)=>e instanceof ApiError&&e.status===401);
+  } finally {
+    if(server) await new Promise(resolve=>server.close(resolve));
+    await cleanupEnrollment(admin,enrollment); await cleanupEnrollment(admin,otherEnrollment);
+    await pool.end(); await admin.end();
+  }
+});
+
+test('business owner branch directory is isolated and creates a separately authenticated branch atomically', { skip: !connection }, async () => {
+  const pool=createPool(connection); const admin=createAdminPool(); const service=new SyncService(pool);
+  const suffix=randomUUID(); const password='Synthetic-Only-Password-2026!'; const deviceId=randomUUID();
+  let enrollment; let otherEnrollment; let server;
+  try {
+    enrollment=await service.register({email:`branch-${suffix}@example.test`,password,displayName:'Synthetic Owner',businessName:'Branch Business',shopName:'Main Shop',deviceId,deviceLabel:'Main Device'});
+    otherEnrollment=await service.register({email:`unrelated-${suffix}@example.test`,password,displayName:'Other Owner',businessName:'Other Business',shopName:'Other Main',deviceId:randomUUID(),deviceLabel:'Other Device'});
+    const actor=await service.authenticate(enrollment.token,enrollment.shopId);
+    await assert.rejects(service.createBusinessBranch({...actor,role:'cashier'},{displayName:'Denied Branch',deviceLabel:'No Device'}),
+      (error)=>error instanceof ApiError&&error.status===403&&error.code==='owner_access_required');
+    await assert.rejects(service.createBusinessBranch(actor,{displayName:'x',deviceLabel:'No Device'}),
+      (error)=>error instanceof ApiError&&error.status===400&&error.code==='invalid_branch_details');
+    server=createApiServer(service); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const base=`http://127.0.0.1:${server.address().port}`;
+    const auth={headers:{authorization:`Bearer ${enrollment.token}`}};
+    assert.equal((await fetch(`${base}/v1/dashboard/branches?shopId=${enrollment.shopId}`)).status,401);
+    const createdResponse=await fetch(`${base}/v1/dashboard/branches`,{method:'POST',...auth,headers:{...auth.headers,'content-type':'application/json'},body:JSON.stringify({shopId:enrollment.shopId,displayName:'Second Shop',deviceLabel:'Second Counter'})});
+    assert.equal(createdResponse.status,201);
+    const created=await createdResponse.json();
+    assert.equal(created.branch.displayName,'Second Shop');
+    assert.match(created.branch.shopId,/^[0-9a-f-]{36}$/i);
+    assert.match(created.deviceId,/^[0-9a-f-]{36}$/i);
+    const listed=await fetch(`${base}/v1/dashboard/branches?shopId=${enrollment.shopId}`,auth);
+    assert.equal(listed.status,200);
+    const directory=await listed.json();
+    assert.equal(directory.branches.length,2);
+    assert.equal(directory.branches.find((branch)=>branch.shopId===enrollment.shopId).current,true);
+    assert.equal(directory.branches.find((branch)=>branch.shopId===created.branch.shopId).current,false);
+    assert.equal(directory.branches.some((branch)=>branch.shopId===otherEnrollment.shopId),false);
+    assert.equal(JSON.stringify(directory).includes('Other Business'),false);
+    const duplicateBody=await fetch(`${base}/v1/dashboard/branches`,{method:'POST',...auth,headers:{...auth.headers,'content-type':'application/json'},body:JSON.stringify({shopId:enrollment.shopId,displayName:'Second Shop',deviceLabel:'Third Counter'})});
+    assert.equal(duplicateBody.status,201,'distinct branches may use the same display name; IDs remain authoritative');
+    const login=await service.login({email:`branch-${suffix}@example.test`,password,shopId:created.branch.shopId,deviceId:created.deviceId});
+    assert.equal(login.role,'owner');
+    assert.equal(login.businessId,enrollment.businessId);
+    const branchActor=await service.authenticate(login.token,created.branch.shopId);
+    assert.equal(branchActor.user_id,enrollment.userId);
+    await assert.rejects(service.authenticate(enrollment.token,otherEnrollment.shopId),(error)=>error instanceof ApiError&&error.status===401);
+    const audit=await withTransaction(pool,async(c)=>{
+      await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
+      await c.query("SELECT set_config('app.current_user',$1,true)",[enrollment.userId]);
+      return c.query("SELECT count(*)::int AS count FROM business_branch_audit WHERE business_id=$1 AND actor_user_id=$2",[enrollment.businessId,enrollment.userId]);
+    });
+    assert.equal(audit.rows[0].count,2);
+    const hidden=await withTransaction(pool,async(c)=>{
+      await c.query("SELECT set_config('app.current_business',$1,true)",[enrollment.businessId]);
+      await c.query("SELECT set_config('app.current_user',$1,true)",[otherEnrollment.userId]);
+      return c.query('SELECT count(*)::int AS count FROM business_memberships WHERE business_id=$1',[enrollment.businessId]);
+    });
+    assert.equal(hidden.rows[0].count,0,'RLS hides another owner principal');
   } finally {
     if(server) await new Promise(resolve=>server.close(resolve));
     await cleanupEnrollment(admin,enrollment); await cleanupEnrollment(admin,otherEnrollment);
@@ -301,11 +362,13 @@ test('owner staff invitations create least-privilege memberships and removal rev
       await c.query('DELETE FROM sessions WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM shop_staff_audit WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM staff_invitations WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM business_branch_audit WHERE business_id=$1',[owner.businessId]);
       await c.query('DELETE FROM devices WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM shop_memberships WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM sync_conflicts WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM sync_events WHERE shop_id=$1',[owner.shopId]);
       await c.query('DELETE FROM shops WHERE shop_id=$1',[owner.shopId]);
+      await c.query('DELETE FROM business_memberships WHERE business_id=$1',[owner.businessId]);
       await c.query('DELETE FROM businesses WHERE business_id=$1',[owner.businessId]);
       await c.query('DELETE FROM users WHERE user_id=ANY($1::uuid[])',[[owner.userId,...(staffUserId?[staffUserId]:[])]]);
     });

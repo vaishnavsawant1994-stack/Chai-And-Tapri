@@ -57,7 +57,8 @@ import { formatQuantity } from './quantity-format.mjs';
     const conflicts = view === 'conflicts';
     const shifts = view === 'shifts';
     const staff = view === 'staff';
-    $('refresh-button').textContent = overview ? 'Refresh' : insights ? 'Refresh insights' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : conflicts ? 'Refresh sync conflicts' : shifts ? 'Refresh shifts' : 'Refresh staff access';
+    const branches = view === 'branches';
+    $('refresh-button').textContent = overview ? 'Refresh' : insights ? 'Refresh insights' : products ? 'Refresh products' : inventory ? 'Refresh inventory' : suppliers ? 'Refresh suppliers' : customers ? 'Refresh customer balances' : activity ? 'Refresh sales activity' : cashflow ? 'Refresh money movements' : profit ? 'Refresh profit readiness' : audit ? 'Refresh event history' : conflicts ? 'Refresh sync conflicts' : shifts ? 'Refresh shifts' : staff ? 'Refresh staff access' : 'Refresh branches';
     $('overview-view').classList.toggle('hidden', !overview);
     $('insights-view').classList.toggle('hidden', !insights);
     $('products-view').classList.toggle('hidden', !products);
@@ -71,6 +72,7 @@ import { formatQuantity } from './quantity-format.mjs';
     $('conflicts-view').classList.toggle('hidden', !conflicts);
     $('shifts-view').classList.toggle('hidden', !shifts);
     $('staff-view').classList.toggle('hidden', !staff);
+    $('branches-view').classList.toggle('hidden', !branches);
     $('overview-tab').classList.toggle('active', overview);
     $('overview-tab').setAttribute('aria-current', overview ? 'page' : 'false');
     $('insights-tab').classList.toggle('active', insights);
@@ -97,6 +99,8 @@ import { formatQuantity } from './quantity-format.mjs';
     $('shifts-tab').setAttribute('aria-current', shifts ? 'page' : 'false');
     $('staff-tab').classList.toggle('active', staff);
     $('staff-tab').setAttribute('aria-current', staff ? 'page' : 'false');
+    $('branches-tab').classList.toggle('active', branches);
+    $('branches-tab').setAttribute('aria-current', branches ? 'page' : 'false');
   }
 
   function captureReport(view, title, scopeId, metricsId, evidenceIds) {
@@ -702,12 +706,40 @@ import { formatQuantity } from './quantity-format.mjs';
     } finally { $('refresh-button').disabled = false; }
   }
 
+  async function loadBranches() {
+    if (!session || !activeShopId) return;
+    $('refresh-button').disabled = true;
+    setStatus($('branches-status'), 'Loading branches…');
+    try {
+      const result = await request(`/v1/dashboard/branches?shopId=${encodeURIComponent(activeShopId)}`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      const rows = result.branches.map((branch) => {
+        const row = document.createElement('tr');
+        appendCell(row, branch.displayName); appendCell(row, branch.shopId);
+        appendCell(row, String(branch.serverRevision)); appendCell(row, new Date(branch.createdAt).toLocaleString());
+        appendCell(row, branch.current ? 'Current session' : 'Separate sign-in required');
+        return row;
+      });
+      if (!rows.length) { const row = document.createElement('tr'); const empty = appendCell(row, 'No branches found.'); empty.colSpan = 5; empty.className = 'empty-row'; rows.push(row); }
+      $('branch-rows').replaceChildren(...rows);
+      $('branches-evidence').textContent = result.evidence.limitation;
+      setStatus($('branches-status'), `${result.branches.length} branch(es) in this business.`, 'success');
+    } catch (error) {
+      setStatus($('branches-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required|business_owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { $('refresh-button').disabled = false; }
+  }
+
   function signOutLocally() {
     session = null;
     activeShopId = null;
     reportSnapshots.clear();
     $('staff-invite-token').textContent = '';
     $('staff-invite-result').classList.add('hidden');
+    $('branch-create-result').classList.add('hidden');
+    $('created-branch-shop-id').textContent = '';
+    $('created-branch-device-id').textContent = '';
     $('export-report-button').disabled = true;
     setView('overview');
     dashboardPanel.classList.add('hidden');
@@ -761,6 +793,7 @@ import { formatQuantity } from './quantity-format.mjs';
     else if (!$('conflicts-view').classList.contains('hidden')) loadConflicts();
     else if (!$('shifts-view').classList.contains('hidden')) loadShifts();
     else if (!$('staff-view').classList.contains('hidden')) loadStaff();
+    else if (!$('branches-view').classList.contains('hidden')) loadBranches();
     else loadOverview();
   });
   $('export-report-button').addEventListener('click', () => {
@@ -797,6 +830,30 @@ import { formatQuantity } from './quantity-format.mjs';
   $('audit-older-button').addEventListener('click', () => loadAuditHistory({ append: true }));
   $('shifts-tab').addEventListener('click', () => { setView('shifts'); loadShifts(); });
   $('staff-tab').addEventListener('click', () => { setView('staff'); loadStaff(); });
+  $('branches-tab').addEventListener('click', () => { setView('branches'); loadBranches(); });
+  $('branch-create-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!session || !activeShopId) return;
+    const button = $('branch-create-submit'); button.disabled = true;
+    $('branch-create-result').classList.add('hidden');
+    setStatus($('branch-create-status'), 'Creating branch…');
+    try {
+      const result = await request('/v1/dashboard/branches', {
+        method: 'POST', headers: { authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ shopId: activeShopId, displayName: $('branch-display-name').value.trim(), deviceLabel: $('branch-device-label').value.trim() })
+      });
+      $('created-branch-shop-id').textContent = result.branch.shopId;
+      $('created-branch-device-id').textContent = result.deviceId;
+      $('branch-create-result').classList.remove('hidden');
+      setStatus($('branch-create-status'), 'Branch and device identity created. Store the identifiers securely; the dashboard will remain on the current branch.', 'success');
+      $('branch-create-form').reset();
+      $('branch-device-label').value = 'Owner dashboard device';
+      await loadBranches();
+    } catch (error) {
+      setStatus($('branch-create-status'), showError(error), 'error');
+      if (/unauthorized|shop_access_denied|owner_access_required|business_owner_access_required/.test(showError(error))) signOutLocally();
+    } finally { button.disabled = false; }
+  });
   $('staff-invite-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!session || !activeShopId) return;

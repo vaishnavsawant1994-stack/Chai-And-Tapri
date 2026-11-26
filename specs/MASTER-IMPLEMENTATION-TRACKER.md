@@ -944,3 +944,7 @@ This verifies automated current-source coverage only. It does not qualify all pl
 ## CT-13/14 two-line direct receipt UI — 26 November 2026
 
 Focused API 37 test `directProcurementScreenConvertsConfiguredCratesToBottleStock` now posts two differently configured product lines together and passes **1/1**. It confirms 24 bottles plus 18 packs, combined 6,600-paise payable, two stock movements, one two-line receipt and one audit event containing both sorted conversion inputs. This focused test-only extension does not have a subsequent full-suite run; the last broad run passed 156/156 before the two-line extension. The full procurement module is still partial.
+
+## OW-14 branch directory/create slice — 26 November 2026
+
+Implemented a business owner directory/create API and owner web workflow, using migration 005 for business-level owner membership and an append-only branch creation audit record. Restricted-role PostgreSQL 17 integration suite passed 45/45 with no skips. Branches require separate authenticated sessions; financial consolidation and operational branch switching are not included. Browser visual testing remains pending. See [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md).

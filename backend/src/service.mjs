@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { withTransaction } from './db.mjs';
 import { ApiError } from './errors.mjs';
@@ -363,6 +363,9 @@ export class SyncService {
       const user = await c.query('INSERT INTO users(email,display_name,password_salt,password_hash,password_parameters) VALUES($1,$2,$3,$4,$5) RETURNING user_id', [email, displayName.trim(), salt, passwordHash, { algorithm: 'scrypt', N: 16384, r: 8, p: 1, keyLength: 64 }]);
       const business = await c.query('INSERT INTO businesses(display_name) VALUES($1) RETURNING business_id', [businessName.trim()]);
       const shop = await c.query('INSERT INTO shops(business_id,display_name) VALUES($1,$2) RETURNING shop_id', [business.rows[0].business_id, shopName.trim()]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [business.rows[0].business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [user.rows[0].user_id]);
+      await c.query("INSERT INTO business_memberships(business_id,user_id,role) VALUES($1,$2,'owner')", [business.rows[0].business_id, user.rows[0].user_id]);
       await c.query("SELECT set_config('app.current_shop',$1,true)", [shop.rows[0].shop_id]);
       await c.query("INSERT INTO shop_memberships(business_id,shop_id,user_id,role) VALUES($1,$2,$3,'owner')", [business.rows[0].business_id, shop.rows[0].shop_id, user.rows[0].user_id]);
       await c.query('INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)', [deviceId, business.rows[0].business_id, shop.rows[0].shop_id, deviceLabel.trim(), user.rows[0].user_id]);
@@ -621,6 +624,62 @@ export class SyncService {
         serverRevision: Number(shop.rows[0].server_revision),
         events: journal.rows
       });
+    });
+  }
+
+  async ownerBranches(actor) {
+    requireOwner(actor);
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const { rows } = await c.query(`SELECT shop_id,display_name,server_revision,created_at
+        FROM shops WHERE business_id=$1 ORDER BY lower(display_name),shop_id`, [actor.business_id]);
+      return {
+        businessId: actor.business_id,
+        branches: rows.map((row) => ({ shopId: row.shop_id, displayName: row.display_name,
+          serverRevision: Number(row.server_revision), createdAt: row.created_at, current: row.shop_id === actor.shop_id })),
+        evidence: {
+          scope: 'Shop directory for the authenticated business owner; branch list is scoped to the session business.',
+          limitation: 'This endpoint exposes branch identity and sync revision only, not branch financial data. Each branch needs its own registered device session for operational or financial views.'
+        }
+      };
+    });
+  }
+
+  async createBusinessBranch(actor, { displayName, deviceLabel }) {
+    requireOwner(actor);
+    if (typeof displayName !== 'string' || displayName.trim().length < 2 || displayName.trim().length > 120 ||
+        typeof deviceLabel !== 'string' || deviceLabel.trim().length < 1 || deviceLabel.trim().length > 80) {
+      throw new ApiError(400, 'invalid_branch_details');
+    }
+    const deviceId = randomUUID();
+    return withTransaction(this.pool, async (c) => {
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [actor.shop_id]);
+      await c.query("SELECT set_config('app.current_business',$1,true)", [actor.business_id]);
+      await c.query("SELECT set_config('app.current_user',$1,true)", [actor.user_id]);
+      const owner = await c.query(`SELECT 1 FROM business_memberships
+        WHERE business_id=$1 AND user_id=$2 AND role='owner'`, [actor.business_id, actor.user_id]);
+      if (!owner.rowCount) throw new ApiError(403, 'business_owner_access_required');
+      const branch = await c.query(`INSERT INTO shops(business_id,display_name)
+        VALUES($1,$2) RETURNING shop_id,display_name,server_revision,created_at`, [actor.business_id, displayName.trim()]);
+      const row = branch.rows[0];
+      await c.query("SELECT set_config('app.current_shop',$1,true)", [row.shop_id]);
+      await c.query("INSERT INTO shop_memberships(business_id,shop_id,user_id,role) VALUES($1,$2,$3,'owner')",
+        [actor.business_id, row.shop_id, actor.user_id]);
+      await c.query('INSERT INTO devices(device_id,business_id,shop_id,label,registered_by) VALUES($1,$2,$3,$4,$5)',
+        [deviceId, actor.business_id, row.shop_id, deviceLabel.trim(), actor.user_id]);
+      await c.query("INSERT INTO business_branch_audit(business_id,shop_id,actor_user_id,action) VALUES($1,$2,$3,'branch_created')",
+        [actor.business_id, row.shop_id, actor.user_id]);
+      return {
+        businessId: actor.business_id,
+        branch: { shopId: row.shop_id, displayName: row.display_name, serverRevision: Number(row.server_revision), createdAt: row.created_at, current: false },
+        deviceId,
+        evidence: 'A device identity and owner membership were created transactionally. Use the owner account credentials with this new shop ID and device ID to establish a separate branch session.'
+      };
     });
   }
 

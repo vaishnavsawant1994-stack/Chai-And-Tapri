@@ -11,6 +11,7 @@ GRANT CONNECT ON DATABASE :"database_name" TO chai_tapri_api;
 GRANT USAGE ON SCHEMA public TO chai_tapri_api;
 
 GRANT SELECT, INSERT ON businesses, users, shops, shop_memberships, devices TO chai_tapri_api;
+GRANT SELECT, INSERT ON business_memberships, business_branch_audit TO chai_tapri_api;
 GRANT UPDATE (role), DELETE ON shop_memberships TO chai_tapri_api;
 GRANT INSERT ON devices TO chai_tapri_api;
 GRANT SELECT, INSERT, UPDATE ON staff_invitations TO chai_tapri_api;

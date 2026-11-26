@@ -2,6 +2,10 @@
 
 **Updated:** 26 November 2026
 
+## OW-14 branch-management continuation — 26 November 2026
+
+Added a restricted business-owner branch directory and create flow to the backend and owner web dashboard. Migration 005 adds business owner principals and branch-creation audit events; a branch is created with a shop record, owner membership, device identity, and audit row in one transaction. The new branch is opened with a separate login; the active dashboard never changes shop implicitly. Verification against disposable PostgreSQL 17 with the restricted runtime role: backend **45/45 passed, 0 skipped**. The owner dashboard route/static tests are included. Browser visual review and unrelated Android/prototype suites were not rerun for this slice. See [OW-14 report](OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). Branch creation is not full multi-shop operations or consolidated reporting.
+
 ## Local checkout verification refresh
 
 On the current Git checkout, prototype tests passed **52/52**, backend integration passed **44/44** against disposable PostgreSQL 17 using the restricted runtime role (**0 skipped**), and Kotlin JVM passed **106/106**. Debug and Android-test APK builds passed; lint reports **0 errors / 201 warnings**. A backend run without `DATABASE_URL` reported 37 passed and 7 skipped; it was superseded by the database-backed run. The latest broad API 37 instrumentation evidence remains **156/156**; a subsequent test-only extension for a two-line receipt passed a focused **1/1**, with no later full-suite rerun. Historical failed emulator runs remain troubleshooting history, not the current qualification result. Physical device/audio, field, independent security review, authorized browser visual review, deployed backend and production release are still unqualified.

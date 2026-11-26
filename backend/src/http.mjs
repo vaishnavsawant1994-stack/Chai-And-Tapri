@@ -95,6 +95,16 @@ export function createApiServer(service) {
         const actor=await service.authenticate(token,url.searchParams.get('shopId'));
         return json(res,200,await service.removeStaffMember(actor,memberMatch[1]));
       }
+      if(req.method==='GET'&&url.pathname==='/v1/dashboard/branches') {
+        const actor=await service.authenticate(token,url.searchParams.get('shopId'));
+        return json(res,200,await service.ownerBranches(actor));
+      }
+      if(req.method==='POST'&&url.pathname==='/v1/dashboard/branches') {
+        const body=await readBody(req);
+        if(!hasExactKeys(body,['shopId','displayName','deviceLabel'])) throw new ApiError(400,'invalid_branch_details');
+        const actor=await service.authenticate(token,body.shopId);
+        return json(res,201,await service.createBusinessBranch(actor,body));
+      }
       if(req.method==='GET'&&url.pathname==='/v1/dashboard/overview') {
         const shopId=url.searchParams.get('shopId');
         const actor=await service.authenticate(token,shopId);

@@ -1,5 +1,9 @@
 # Chai And Tapri OS
 
+## 26 November 2026 — OW-14 branch directory and creation slice
+
+Added a business-owner-scoped branch directory/create API and owner-dashboard screen. Creating a branch transactionally creates its shop, owner shop membership, device identity, and audit event; switching to that branch requires a separate authenticated sign-in. PostgreSQL 17 integration suite passed **45/45 with 0 skips** using the restricted runtime role, including business isolation and branch login. Node syntax and diff checks passed. See [OW-14 report](specs/OW-14-BRANCH-MANAGEMENT-REPORT-2026-11-26.md). This does not provide consolidated branch accounting, operational branch switching, cross-branch transfers, deployment qualification, or visual browser qualification; the six-wave product remains incomplete.
+
 ## 26 November 2026 — CT-10 split-tender live sync qualification
 
 The observed-cash + observed-UPI split now has a focused live Android API 37 → loopback HTTPS → restricted PostgreSQL 17 → owner projection E2E. It passed 1/1: a 1,500-paise order reconciled to 500 paise cash and 1,000 paise staff-declared UPI, zero pending UPI, six acknowledged ordered events, and one posted order. UPI remains unverified by a provider. See [CT-10 E2E report](specs/CT-10-OBSERVED-CASH-UPI-LIVE-E2E-REPORT-2026-11-26.md). This does not complete CAT-052 or qualify production, multiple devices, shop use, payment integration, or security.

@@ -517,6 +517,8 @@ test('owner overview route requires authentication and serves only owner static 
     async shopStaffMembers(actor) { return { shopId: actor.shop_id, members: [] }; },
     async shopStaffInvitations(actor) { return { shopId: actor.shop_id, invitations: [] }; },
     async shopStaffAudit(actor) { return { shopId: actor.shop_id, events: [] }; },
+    async ownerBranches(actor) { return { businessId: actor.business_id, branches: [{ shopId: actor.shop_id, displayName: 'Synthetic Tapri', current: true, serverRevision: 0, createdAt: '2026-11-26T00:00:00Z' }], evidence: { limitation: 'separate branch session required' } }; },
+    async createBusinessBranch(actor, body) { return { businessId: actor.business_id, branch: { shopId: 'shop-2', displayName: body.displayName, current: false, serverRevision: 0, createdAt: '2026-11-26T00:00:00Z' }, deviceId: 'device-2' }; },
     async createStaffInvitation(actor, body) { return { invitationId: 'invite-1', email: body.email, role: body.role, invitationToken: 'x'.repeat(43) }; },
     async acceptStaffInvitation() { return { shopId: 'shop-1', role: 'cashier' }; },
     async revokeStaffInvitation(actor, invitationId) { return { invitationId, state: 'revoked' }; },
@@ -561,6 +563,9 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(pageText, /Staff access/);
   assert.match(pageText, /id="staff-invite-form"/);
   assert.match(pageText, /id="staff-audit-rows"/);
+  assert.match(pageText, /id="branches-view"/);
+  assert.match(pageText, /id="branch-create-form"/);
+  assert.match(pageText, /id="branch-rows"/);
   assert.match(pageText, /id="audit-rows"/);
   assert.match(pageText, /id="export-report-button"/);
   assert.match(pageText, /id="insights-view"/);
@@ -587,6 +592,8 @@ test('owner overview route requires authentication and serves only owner static 
   assert.match(scriptText, /\/v1\/staff\/members/);
   assert.match(scriptText, /\/v1\/staff\/invitations/);
   assert.match(scriptText, /\/v1\/staff\/audit/);
+  assert.match(scriptText, /\/v1\/dashboard\/branches/);
+  assert.match(scriptText, /branch-create-form/);
   assert.match(scriptText, /one-time staff invitation/i);
   assert.match(scriptText, /buildOwnerReportCsv/);
   const exporter = await fetch(`${base}/owner/report-export.mjs`);
@@ -677,11 +684,20 @@ test('owner overview route requires authentication and serves only owner static 
   assert.deepEqual((await fetch(`${base}/v1/staff/members?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } }).then(r => r.json())).members, []);
   assert.deepEqual((await fetch(`${base}/v1/staff/invitations?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } }).then(r => r.json())).invitations, []);
   assert.deepEqual((await fetch(`${base}/v1/staff/audit?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } }).then(r => r.json())).events, []);
+  assert.equal((await fetch(`${base}/v1/dashboard/branches?shopId=shop-1`)).status, 401);
+  const branches = await fetch(`${base}/v1/dashboard/branches?shopId=shop-1`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(branches.status, 200);
+  assert.equal((await branches.json()).branches[0].current, true);
+  const branchCreated = await fetch(`${base}/v1/dashboard/branches`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', displayName: 'Second Shop', deviceLabel: 'Owner device' }) });
+  assert.equal(branchCreated.status, 201);
+  assert.equal((await branchCreated.json()).deviceId, 'device-2');
+  const invalidBranchShape = await fetch(`${base}/v1/dashboard/branches`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', displayName: 'Second Shop', deviceLabel: 'Owner device', owner: true }) });
+  assert.equal(invalidBranchShape.status, 400);
   const createdInvite = await fetch(`${base}/v1/staff/invitations`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', email: 'staff@example.test', role: 'cashier' }) });
   assert.equal(createdInvite.status, 201);
   assert.equal((await createdInvite.json()).invitationToken.length, 43);
   const invalidInviteShape = await fetch(`${base}/v1/staff/invitations`, { method: 'POST', headers: { authorization: 'Bearer owner-token', 'content-type': 'application/json' }, body: JSON.stringify({ shopId: 'shop-1', email: 'staff@example.test', role: 'owner', permission: 'all' }) });
   assert.equal(invalidInviteShape.status, 400);
-  assert.equal(calls.length, 28);
+  assert.equal(calls.length, 31);
   assert.ok(calls.every((call) => call.shopId === 'shop-1'));
 });
